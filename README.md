@@ -68,54 +68,114 @@ Creating custom demos for enterprise customers traditionally requires:
 
 ### Prerequisites
 
-- Node.js 18+ and npm
-- Access to Elastic Cloud cluster
-- Google Workspace account (optional)
-- Claude API key (for AI features)
+- Python 3.8+
+- Access to Elastic Cloud cluster with API key
+- GitHub account with Personal Access Token (for state persistence)
+- Anthropic or OpenAI API key (for AI features)
 
 ### Installation
+
+#### 1. Clone and Setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/elastic/demo-builder.git
 cd demo-builder
 
-# Install dependencies
-npm install
+# Run the setup script (recommended)
+./setup.sh
 
-# Set up environment variables
+# Or manual setup:
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 cp .env.example .env
-# Edit .env with your credentials
-
-# Start the development server
-npm run dev
 ```
+
+#### 2. Create GitHub Personal Access Token
+
+For demo state persistence, create a GitHub PAT:
+
+1. Go to GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+2. Click "Generate new token"
+3. Configure:
+   - **Expiration**: 90 days (recommended)
+   - **Repository access**: Select `elastic/demo-builder`
+   - **Permissions**:
+     - **Contents**: `Read` and `Write` (required)
+     - **Metadata**: `Read` (auto-selected)
+4. Generate and copy the token immediately
+
+#### 3. Configure Environment
+
+Edit `.env` with your credentials:
+
+```bash
+# Elasticsearch Configuration
+ELASTICSEARCH_HOST=your-elastic-cloud-url
+ELASTICSEARCH_API_KEY=your-api-key
+
+# LLM Configuration
+ANTHROPIC_API_KEY=your-anthropic-key
+# OR
+OPENAI_API_KEY=your-openai-key
+
+# GitHub Configuration (for state persistence)
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+GITHUB_REPO=elastic/demo-builder
+GITHUB_BRANCH=main
+```
+
+#### 4. Start the Application
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Run basic version
+streamlit run app.py
+
+# Or run enhanced version with validation
+streamlit run app_enhanced.py
+```
+
+The app will open at `http://localhost:8501`
 
 ### Creating Your First Demo
 
-1. **Start the Demo Wizard**
-   ```bash
-   npm run create-demo
-   ```
+1. **Open the Demo Builder**
+   - Navigate to `http://localhost:8501` after starting the app
+   - You'll see a conversation interface and progress tracker
 
 2. **Provide Customer Context**
-   - Company name and website
-   - Target team/department
-   - Business challenges to address
+   - Enter company name and website
+   - Specify target team/department
+   - Describe business challenges or pain points
 
-3. **Review Generated Scenario**
-   - AI researches company and suggests relevant use cases
-   - Approve or customize the scenario
+3. **AI-Assisted Scenario Generation**
+   - The system researches the company
+   - Suggests relevant use cases
+   - Designs appropriate datasets and queries
 
-4. **Generate and Validate**
-   - System creates sample data
-   - Generates ES|QL queries
-   - Validates all queries work
+4. **Validation & Testing**
+   - Watch real-time task progress in the UI
+   - Data is uploaded to Elasticsearch
+   - ES|QL queries are validated automatically
+   - See validation results before demo
 
-5. **Deploy Demo Environment**
-   - Provisions Elastic cluster
-   - Creates agent with tools
-   - Generates presentation materials
+5. **Export Demo Package**
+   - Download demo guide (Markdown)
+   - Get ES|QL queries and agent configuration
+   - Access sample data files
+   - All materials ready for your presentation
+
+### Demo State Persistence
+
+The platform saves your progress to GitHub, allowing you to:
+- Resume demos later by entering the Demo ID
+- Share demos with team members
+- Track iterations and improvements
+- Build a library of successful demos
 
 ---
 
