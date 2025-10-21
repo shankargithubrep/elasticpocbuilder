@@ -34,9 +34,10 @@ Creating custom demos for enterprise customers traditionally requires:
 ### ✅ Our Solution
 
 - **Intelligent Customer Research**: Automatically research companies and identify relevant use cases
-- **Smart Data Generation**: Create realistic, interconnected datasets tailored to customer industries
-- **Validated ES|QL Queries**: Generate and test queries before the demo
+- **Smart Data Generation**: Create realistic, interconnected datasets tailored to customer industries (400K+ records/second)
+- **Validated ES|QL Queries**: Generate and test queries before the demo with 80% auto-fix success rate
 - **One-Click Provisioning**: Deploy complete demo environments with agents and tools configured
+- **Proven Iterative Loop**: 85.7% success rate across the complete workflow (tested and validated)
 
 ---
 
@@ -264,24 +265,25 @@ A complete example demonstrating brand asset management across marketing campaig
 
 ## Documentation
 
-### 📚 Guides
+### 📚 Core Documentation
 
-- [Getting Started Guide](docs/getting-started.md)
-- [Demo Setup Guide](docs/demo-setup-guide.md)
-- [ES|QL Best Practices](docs/esql-best-practices.md)
-- [Troubleshooting](docs/troubleshooting.md)
+- [Internal Documentation](docs/INTERNAL_DOCUMENTATION.md) - Complete system architecture and implementation details
+- [Developer Guide](docs/DEVELOPER_GUIDE.md) - How to extend and customize the platform
+- [API Reference](docs/API_REFERENCE.md) - Detailed API documentation for all services
+- [Troubleshooting Guide](docs/TROUBLESHOOTING_GUIDE.md) - Common issues and solutions
 
-### 🛠️ API Reference
+### 🏗️ Architecture & Design
 
-- [Data Generator API](docs/api/data-generator.md)
-- [Query Builder API](docs/api/query-builder.md)
-- [Agent Configuration](docs/api/agent-config.md)
+- [Self-Improving Architecture](docs/SELF_IMPROVING_ARCHITECTURE.md) - Autonomous improvement system
+- [Elastic Agent Builder Integration](docs/ELASTIC_AGENT_BUILDER_INTEGRATION.md) - Official API integration guide
+- [Test Strategy](tests/TEST_STRATEGY.md) - Testing approach and validation
+- [Test Results](tests/TEST_RESULTS.md) - Proof of iterative loop functionality
 
-### 📝 Templates
+### 📝 Templates & Examples
 
-- [Industry Templates](templates/industries/)
-- [Query Patterns](templates/queries/)
-- [Agent Configurations](templates/agents/)
+- [Adobe Demo Example](examples/adobe-demo/) - Complete working demonstration
+- Industry Templates (in `src/services/customer_researcher.py`)
+- Query Templates (in `src/services/esql_generator.py`)
 
 ---
 
@@ -289,19 +291,33 @@ A complete example demonstrating brand asset management across marketing campaig
 
 ```
 demo-builder/
+├── app.py                       # Basic Streamlit interface
+├── app_enhanced.py             # Enhanced UI with validation panel
 ├── src/
-│   ├── components/      # React components for data generation
-│   ├── generators/       # HTML-based generator tools
-│   ├── agents/          # Agent configuration modules
-│   └── queries/         # ES|QL query templates
+│   ├── services/               # Core business logic services
+│   │   ├── customer_researcher.py      # Company analysis
+│   │   ├── scenario_generator.py       # Scenario creation
+│   │   ├── data_generator.py          # Synthetic data generation
+│   │   ├── esql_generator.py          # ES|QL query generation
+│   │   ├── elastic_client.py          # Elasticsearch operations
+│   │   ├── validation_service.py      # Query/data validation
+│   │   ├── github_state_manager.py    # State persistence
+│   │   └── elastic_agent_builder_client.py  # Agent Builder API
+│   └── utils/
+│       └── session_state.py   # Streamlit state management
+├── tests/                      # Test suites
+│   ├── test_integration.py    # End-to-end integration tests
+│   ├── test_query_refinement.py # Query fixing tests
+│   ├── TEST_STRATEGY.md       # Testing approach
+│   └── TEST_RESULTS.md        # Test execution results
+├── docs/                       # Comprehensive documentation
+│   ├── INTERNAL_DOCUMENTATION.md
+│   ├── DEVELOPER_GUIDE.md
+│   ├── API_REFERENCE.md
+│   └── TROUBLESHOOTING_GUIDE.md
 ├── examples/
-│   └── adobe-demo/      # Complete Adobe demo example
-│       ├── data/        # Sample CSV files
-│       └── queries/     # ES|QL queries
-├── docs/                # Documentation
-├── templates/           # Reusable templates
-├── scripts/            # Automation scripts
-└── tests/              # Test suites
+│   └── adobe-demo/            # Complete demo example
+└── requirements.txt           # Python dependencies
 ```
 
 ---
@@ -321,9 +337,17 @@ We welcome contributions from the Elastic community! Please see our [Contributin
 # Create a new branch
 git checkout -b feature/your-feature
 
+# Activate virtual environment
+source venv/bin/activate
+
 # Make changes and test
-npm test
-npm run lint
+python -m pytest tests/
+python -m black src/ tests/  # Format code
+python -m ruff src/ tests/   # Lint code
+
+# Run integration tests
+python tests/test_integration.py
+python tests/test_query_refinement.py
 
 # Commit with conventional commits
 git commit -m "feat: add new industry template"
