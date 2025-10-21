@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSV Generator</title>
+    <style>
+        body { font-family: Arial; padding: 40px; background: #1a1a2e; color: white; }
+        button { 
+            background: #7c3aed; 
+            color: white; 
+            padding: 15px 30px; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            margin: 10px;
+            display: block;
+            width: 300px;
+        }
+        button:hover { background: #6d28d9; }
+        #status { 
+            color: #4ade80; 
+            margin-top: 20px; 
+            font-weight: bold;
+            display: none;
+        }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { color: #a78bfa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dataset Generator</h1>
+        <p>Click buttons to generate and download CSV files:</p>
+        
+        <button onclick="gen('campaign')">📊 Download campaign_performance.csv</button>
+        <button onclick="gen('usage')">📁 Download asset_usage_events.csv</button>
+        
+        <div id="status">✓ Downloaded successfully!</div>
+    </div>
+
+    <script>
+        function gen(type) {
+            const btn = event.target;
+            btn.textContent = 'Generating...';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                if (type === 'campaign') {
+                    download(makeCampaign(), 'campaign_performance.csv');
+                } else {
+                    download(makeUsage(), 'asset_usage_events.csv');
+                }
+                btn.disabled = false;
+                btn.textContent = btn.textContent.replace('Generating...', type === 'campaign' ? '📊 Download campaign_performance.csv' : '📁 Download asset_usage_events.csv');
+                document.getElementById('status').style.display = 'block';
+                setTimeout(() => document.getElementById('status').style.display = 'none', 3000);
+            }, 100);
+        }
+
+        function download(csv, name) {
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = name;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function makeCampaign() {
+            const ids = Array.from({length: 289}, (_, i) => `BA-${1001 + i}`);
+            const camps = ["Year-End Review 2024", "NextGen Launch", "Future Forward 2025", "Project Nova", "Innovate & Elevate", "Brand Unification 2023", "Summer Splash Sale", "Q3 Growth Initiative", "Spring Refresh", "Digital Transform 2024", "Global Expansion", "Product Launch Q4", "Holiday Campaign 2024", "Sustainability Initiative", "Tech Summit 2025"];
+            const regs = ['Global', 'EMEA', 'APAC', 'North America', 'LATAM'];
+            const chans = ['Social Media', 'Email', 'Web', 'Display Ads', 'Video', 'Print'];
+            const auds = ['Enterprise', 'SMB', 'Consumer', 'Developer', 'Creative Professional'];
+            
+            let rows = ['Performance ID,Campaign Name,Asset ID,Date,Channel,Region,Audience Segment,Impressions,Clicks,Conversions,Engagement Rate,Conversion Rate,Spend,Revenue'];
+            let pid = 1;
+            
+            camps.forEach(camp => {
+                const dur = 30 + Math.floor(Math.random() * 60);
+                const start = new Date(2024, 0, 1 + Math.random() * 365);
+                const assets = [];
+                const num = 3 + Math.floor(Math.random() * 6);
+                while (assets.length < num) {
+                    const a = ids[Math.floor(Math.random() * ids.length)];
+                    if (!assets.includes(a)) assets.push(a);
+                }
+                
+                for (let d = 0; d < dur; d++) {
+                    const date = new Date(start);
+                    date.setDate(date.getDate() + d);
+                    
+                    assets.forEach(aid => {
+                        const nc = 1 + Math.floor(Math.random() * 3);
+                        for (let c = 0; c < nc; c++) {
+                            const chan = chans[Math.floor(Math.random() * chans.length)];
+                            const reg = regs[Math.floor(Math.random() * regs.length)];
+                            const aud = auds[Math.floor(Math.random() * auds.length)];
+                            const base = chan === 'Social Media' ? 50000 : chan === 'Display Ads' ? 100000 : chan === 'Email' ? 20000 : 30000;
+                            const imp = Math.floor(base * (0.5 + Math.random()));
+                            const clk = Math.floor(imp * (0.01 + Math.random() * 0.05));
+                            const cnv = Math.floor(clk * (0.02 + Math.random() * 0.08));
+                            const eng = (clk / imp * 100).toFixed(2);
+                            const cvr = (cnv / clk * 100).toFixed(2);
+                            const spd = (imp * (0.002 + Math.random() * 0.008)).toFixed(2);
+                            const rev = (cnv * (50 + Math.random() * 200)).toFixed(2);
+                            
+                            rows.push(`CP-${pid++},${camp},${aid},${date.toISOString().split('T')[0]},${chan},${reg},${aud},${imp},${clk},${cnv},${eng},${cvr},${spd},${rev}`);
+                        }
+                    });
+                }
+            });
+            
+            return rows.join('\n');
+        }
+
+        function makeUsage() {
+            const ids = Array.from({length: 289}, (_, i) => `BA-${1001 + i}`);
+            const acts = ['Download', 'View', 'Share', 'Edit Request', 'Approval Submitted', 'Approved', 'Rejected', 'Comment Added'];
+            const depts = ['Marketing', 'Creative', 'Sales', 'Product', 'Regional Marketing', 'Brand Management', 'Digital'];
+            const devs = ['Desktop', 'Mobile', 'Tablet'];
+            
+            let events = [];
+            let eid = 1;
+            
+            ids.forEach(aid => {
+                const num = 10 + Math.floor(Math.random() * 90);
+                for (let i = 0; i < num; i++) {
+                    const ts = new Date(2024, 0, 1 + Math.random() * 545);
+                    const act = acts[Math.floor(Math.random() * acts.length)];
+                    const dept = depts[Math.floor(Math.random() * depts.length)];
+                    const dev = devs[Math.floor(Math.random() * devs.length)];
+                    const uid = `user-${1000 + Math.floor(Math.random() * 500)}`;
+                    let dur = '';
+                    if (act === 'View') dur = 15 + Math.floor(Math.random() * 600);
+                    else if (act === 'Edit Request') dur = 300 + Math.floor(Math.random() * 3600);
+                    
+                    events.push({
+                        ts: ts.getTime(),
+                        row: `AE-${eid++},${aid},${ts.toISOString()},${act},${uid},${dept},${dev},${dur},session-${Math.floor(Math.random() * 10000)}`
+                    });
+                }
+            });
+            
+            events.sort((a, b) => a.ts - b.ts);
+            return 'Event ID,Asset ID,Timestamp,Action Type,User ID,Department,Device Type,Duration Seconds,Session ID\n' + events.map(e => e.row).join('\n');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elastic Agent Builder - Dataset Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(to bottom right, #0f172a, #581c87, #0f172a);
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="p-8">
+    <div class="max-w-7xl mx-auto">
+        <div class="text-center mb-12">
+            <h1 class="text-5xl font-bold text-white mb-4">Elastic Agent Builder Demo</h1>
+            <p class="text-xl text-purple-200 mb-2">Adobe Brand Assets Analytics Demo</p>
+            <p class="text-slate-300">Generate sample datasets for your Elasticsearch demo</p>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6 mb-12">
+            <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-purple-300/20">
+                <h2 class="text-2xl font-bold text-white mb-4">📊 Campaign Performance</h2>
+                <p class="text-slate-200 mb-4">~11,000 records tracking campaign metrics</p>
+                <ul class="text-sm text-slate-300 space-y-2 mb-6">
+                    <li>• 15 marketing campaigns</li>
+                    <li>• 6 channels (Social, Email, Web, Display, Video, Print)</li>
+                    <li>• Metrics: impressions, clicks, conversions, spend, revenue</li>
+                    <li>• 18 months of daily data (Jan 2024 - Jun 2025)</li>
+                </ul>
+                <button onclick="generateAndDownload('campaign')" 
+                    class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                    Download campaign_performance.csv
+                </button>
+            </div>
+
+            <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-purple-300/20">
+                <h2 class="text-2xl font-bold text-white mb-4">📁 Asset Usage Events</h2>
+                <p class="text-slate-200 mb-4">~16,000 event records tracking asset interactions</p>
+                <ul class="text-sm text-slate-300 space-y-2 mb-6">
+                    <li>• 8 action types (Download, View, Share, Approvals, etc.)</li>
+                    <li>• 7 departments tracking usage patterns</li>
+                    <li>• User, device, and session tracking</li>
+                    <li>• Approval workflow metrics</li>
+                </ul>
+                <button onclick="generateAndDownload('usage')"
+                    class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                    Download asset_usage_events.csv
+                </button>
+            </div>
+        </div>
+
+        <div id="status" class="hidden bg-green-500/20 border border-green-500/50 rounded-lg p-4 mb-8">
+            <p class="text-green-200 text-center font-semibold">
+                ✓ File generated and downloaded successfully!
+            </p>
+        </div>
+
+        <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-purple-300/20">
+            <h3 class="text-xl font-bold text-purple-300 mb-3">📝 Next Steps:</h3>
+            <ol class="text-slate-200 space-y-2 list-decimal list-inside">
+                <li>Download both CSV files using the buttons above</li>
+                <li>Index them in Elasticsearch alongside your brand_assets.csv</li>
+                <li>Configure Agent Builder with the ES|QL queries from the demo guide</li>
+                <li>Test natural language queries against your indexed data</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function generateCampaignPerformance() {
+            const assetIds = Array.from({length: 289}, (_, i) => `BA-${1001 + i}`);
+            const campaigns = [
+                "Year-End Review 2024", "NextGen Launch", "Future Forward 2025", 
+                "Project Nova", "Innovate & Elevate", "Brand Unification 2023",
+                "Summer Splash Sale", "Q3 Growth Initiative", "Spring Refresh",
+                "Digital Transform 2024", "Global Expansion", "Product Launch Q4",
+                "Holiday Campaign 2024", "Sustainability Initiative", "Tech Summit 2025"
+            ];
+            const regions = ['Global', 'EMEA', 'APAC', 'North America', 'LATAM'];
+            const channels = ['Social Media', 'Email', 'Web', 'Display Ads', 'Video', 'Print'];
+            const audienceSegments = ['Enterprise', 'SMB', 'Consumer', 'Developer', 'Creative Professional'];
+            
+            const rows = [];
+            let perfId = 1;
+            
+            const startDate = new Date('2024-01-01');
+            const endDate = new Date('2025-06-30');
+            
+            campaigns.forEach(campaign => {
+                const campaignDuration = 30 + Math.floor(Math.random() * 60);
+                const campaignStart = new Date(startDate.getTime() + Math.random() * (endDate.getTime() - startDate.getTime() - campaignDuration * 24 * 60 * 60 * 1000));
+                
+                const numAssets = 3 + Math.floor(Math.random() * 6);
+                const campaignAssets = [];
+                while (campaignAssets.length < numAssets) {
+                    const asset = assetIds[Math.floor(Math.random() * assetIds.length)];
+                    if (!campaignAssets.includes(asset)) campaignAssets.push(asset);
+                }
+                
+                for (let day = 0; day < campaignDuration; day++) {
+                    const date = new Date(campaignStart);
+                    date.setDate(date.getDate() + day);
+                    
+                    campaignAssets.forEach(assetId => {
+                        const numChannels = 1 + Math.floor(Math.random() * 3);
+                        const selectedChannels = [];
+                        while (selectedChannels.length < numChannels) {
+                            const channel = channels[Math.floor(Math.random() * channels.length)];
+                            if (!selectedChannels.includes(channel)) selectedChannels.push(channel);
+                        }
+                        
+                        selectedChannels.forEach(channel => {
+                            const region = regions[Math.floor(Math.random() * regions.length)];
+                            const audience = audienceSegments[Math.floor(Math.random() * audienceSegments.length)];
+                            
+                            const baseImpressions = channel === 'Social Media' ? 50000 : 
+                                                   channel === 'Display Ads' ? 100000 :
+                                                   channel === 'Email' ? 20000 :
+                                                   channel === 'Web' ? 30000 : 15000;
+                            
+                            const impressions = Math.floor(baseImpressions * (0.5 + Math.random()));
+                            const clicks = Math.floor(impressions * (0.01 + Math.random() * 0.05));
+                            const conversions = Math.floor(clicks * (0.02 + Math.random() * 0.08));
+                            const engagement_rate = (clicks / impressions * 100).toFixed(2);
+                            const conversion_rate = (conversions / clicks * 100).toFixed(2);
+                            const spend = (impressions * (0.002 + Math.random() * 0.008)).toFixed(2);
+                            const revenue = (conversions * (50 + Math.random() * 200)).toFixed(2);
+                            
+                            rows.push([
+                                `CP-${perfId++}`, campaign, assetId, date.toISOString().split('T')[0],
+                                channel, region, audience, impressions, clicks, conversions,
+                                engagement_rate, conversion_rate, spend, revenue
+                            ].join(','));
+                        });
+                    });
+                }
+            });
+            
+            return 'Performance ID,Campaign Name,Asset ID,Date,Channel,Region,Audience Segment,Impressions,Clicks,Conversions,Engagement Rate,Conversion Rate,Spend,Revenue\n' + rows.join('\n');
+        }
+
+        function generateAssetUsage() {
+            const assetIds = Array.from({length: 289}, (_, i) => `BA-${1001 + i}`);
+            const actionTypes = ['Download', 'View', 'Share', 'Edit Request', 'Approval Submitted', 'Approved', 'Rejected', 'Comment Added'];
+            const departments = ['Marketing', 'Creative', 'Sales', 'Product', 'Regional Marketing', 'Brand Management', 'Digital'];
+            const deviceTypes = ['Desktop', 'Mobile', 'Tablet'];
+            
+            const events = [];
+            let eventId = 1;
+            
+            const eventStartDate = new Date('2024-01-01');
+            const eventEndDate = new Date('2025-06-30');
+            
+            assetIds.forEach(assetId => {
+                const numEvents = 10 + Math.floor(Math.random() * 90);
+                
+                for (let i = 0; i < numEvents; i++) {
+                    const timestamp = new Date(eventStartDate.getTime() + Math.random() * (eventEndDate.getTime() - eventStartDate.getTime()));
+                    const actionType = actionTypes[Math.floor(Math.random() * actionTypes.length)];
+                    const department = departments[Math.floor(Math.random() * departments.length)];
+                    const deviceType = deviceTypes[Math.floor(Math.random() * deviceTypes.length)];
+                    const userId = `user-${1000 + Math.floor(Math.random() * 500)}`;
+                    
+                    let durationSeconds = '';
+                    if (actionType === 'View') {
+                        durationSeconds = 15 + Math.floor(Math.random() * 600);
+                    } else if (actionType === 'Edit Request') {
+                        durationSeconds = 300 + Math.floor(Math.random() * 3600);
+                    }
+                    
+                    events.push({
+                        timestamp,
+                        row: [
+                            `AE-${eventId++}`, assetId, timestamp.toISOString(), actionType,
+                            userId, department, deviceType, durationSeconds, `session-${Math.floor(Math.random() * 10000)}`
+                        ].join(',')
+                    });
+                }
+            });
+            
+            events.sort((a, b) => a.timestamp - b.timestamp);
+            
+            return 'Event ID,Asset ID,Timestamp,Action Type,User ID,Department,Device Type,Duration Seconds,Session ID\n' + events.map(e => e.row).join('\n');
+        }
+
+        function downloadCSV(content, filename) {
+            const blob = new Blob([content], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            document.getElementById('status').classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('status').classList.add('hidden');
+            }, 3000);
+        }
+
+        function generateAndDownload(type) {
+            if (type === 'campaign') {
+                const csv = generateCampaignPerformance();
+                downloadCSV(csv, 'campaign_performance.csv');
+            } else if (type === 'usage') {
+                const csv = generateAssetUsage();
+                downloadCSV(csv, 'asset_usage_events.csv');
+            }
+        }
+    </script>
+</body>
+</html>

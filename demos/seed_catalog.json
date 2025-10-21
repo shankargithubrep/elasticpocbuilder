@@ -1,0 +1,347 @@
+{
+  "seed_demos": [
+    {
+      "demo_id": "adobe_brand_assets",
+      "name": "Adobe Brand Asset Analytics",
+      "industry": "Digital Marketing",
+      "description": "Comprehensive brand asset management and campaign performance analytics",
+      "datasets": [
+        {
+          "name": "brand_assets",
+          "records": 289,
+          "description": "Core inventory of brand assets with metadata"
+        },
+        {
+          "name": "campaign_performance",
+          "records": 11000,
+          "description": "Campaign metrics with ROI tracking"
+        },
+        {
+          "name": "asset_usage_events",
+          "records": 16000,
+          "description": "Internal usage and workflow tracking"
+        }
+      ],
+      "agents": [
+        {
+          "agent_id": "brand_performance_analyst",
+          "name": "Brand Performance Analyst",
+          "capabilities": [
+            "ROI analysis",
+            "Asset utilization tracking",
+            "Hidden gems discovery",
+            "Workflow optimization"
+          ]
+        }
+      ],
+      "key_queries": [
+        "Campaign ROI by asset type",
+        "Underutilized high-potential assets",
+        "Department approval efficiency",
+        "Monthly performance trends"
+      ],
+      "success_metrics": {
+        "query_count": 8,
+        "avg_execution_time_ms": 250,
+        "validation_score": 0.95,
+        "reuse_count": 15
+      }
+    },
+    {
+      "demo_id": "ecommerce_analytics",
+      "name": "E-Commerce Customer Analytics",
+      "industry": "Retail",
+      "description": "Customer behavior analysis and purchase pattern optimization",
+      "datasets": [
+        {
+          "name": "products",
+          "records": 5000,
+          "description": "Product catalog with categories and pricing"
+        },
+        {
+          "name": "orders",
+          "records": 100000,
+          "description": "Transaction history with customer details"
+        },
+        {
+          "name": "customer_events",
+          "records": 500000,
+          "description": "Clickstream and browsing behavior"
+        }
+      ],
+      "agents": [
+        {
+          "agent_id": "customer_insights_expert",
+          "name": "Customer Insights Expert",
+          "capabilities": [
+            "Segmentation analysis",
+            "Churn prediction",
+            "Cart abandonment analysis",
+            "Product recommendation"
+          ]
+        },
+        {
+          "agent_id": "revenue_optimizer",
+          "name": "Revenue Optimization Agent",
+          "capabilities": [
+            "Pricing optimization",
+            "Cross-sell opportunities",
+            "Seasonal trend analysis",
+            "Inventory turnover"
+          ]
+        }
+      ],
+      "key_queries": [
+        "Customer lifetime value by segment",
+        "Cart abandonment patterns",
+        "Product affinity analysis",
+        "Seasonal revenue trends",
+        "Conversion funnel analysis"
+      ],
+      "success_metrics": {
+        "query_count": 10,
+        "avg_execution_time_ms": 180,
+        "validation_score": 0.98,
+        "reuse_count": 22
+      }
+    },
+    {
+      "demo_id": "security_operations",
+      "name": "Security Operations Center",
+      "industry": "Cybersecurity",
+      "description": "Threat detection and incident response analytics",
+      "datasets": [
+        {
+          "name": "security_alerts",
+          "records": 50000,
+          "description": "Security events and alerts from various sources"
+        },
+        {
+          "name": "network_assets",
+          "records": 2000,
+          "description": "Inventory of network devices and systems"
+        },
+        {
+          "name": "threat_intelligence",
+          "records": 10000,
+          "description": "Known threats and vulnerability data"
+        }
+      ],
+      "agents": [
+        {
+          "agent_id": "threat_hunter",
+          "name": "Threat Hunter",
+          "capabilities": [
+            "Anomaly detection",
+            "Attack pattern recognition",
+            "Threat correlation",
+            "Risk scoring"
+          ]
+        },
+        {
+          "agent_id": "incident_responder",
+          "name": "Incident Response Coordinator",
+          "capabilities": [
+            "Alert prioritization",
+            "Impact assessment",
+            "Response recommendation",
+            "MTTR calculation"
+          ]
+        }
+      ],
+      "key_queries": [
+        "Critical vulnerabilities by asset",
+        "Attack pattern timeline",
+        "Alert correlation by threat actor",
+        "Mean time to respond by severity",
+        "False positive rate analysis"
+      ],
+      "success_metrics": {
+        "query_count": 12,
+        "avg_execution_time_ms": 150,
+        "validation_score": 0.97,
+        "reuse_count": 18
+      }
+    },
+    {
+      "demo_id": "observability_platform",
+      "name": "Full-Stack Observability",
+      "industry": "IT Operations",
+      "description": "Application and infrastructure performance monitoring",
+      "datasets": [
+        {
+          "name": "application_logs",
+          "records": 1000000,
+          "description": "Application logs from microservices"
+        },
+        {
+          "name": "metrics",
+          "records": 500000,
+          "description": "System and application metrics"
+        },
+        {
+          "name": "traces",
+          "records": 200000,
+          "description": "Distributed tracing data"
+        }
+      ],
+      "agents": [
+        {
+          "agent_id": "root_cause_analyzer",
+          "name": "Root Cause Analyzer",
+          "capabilities": [
+            "Error pattern detection",
+            "Dependency mapping",
+            "Performance bottleneck identification",
+            "Service correlation"
+          ]
+        },
+        {
+          "agent_id": "sre_assistant",
+          "name": "SRE Assistant",
+          "capabilities": [
+            "SLO monitoring",
+            "Capacity planning",
+            "Incident prediction",
+            "Runbook automation"
+          ]
+        }
+      ],
+      "key_queries": [
+        "Service error rates by endpoint",
+        "P95 latency trends",
+        "Dependency impact analysis",
+        "Resource utilization patterns",
+        "Error budget consumption"
+      ],
+      "success_metrics": {
+        "query_count": 15,
+        "avg_execution_time_ms": 200,
+        "validation_score": 0.96,
+        "reuse_count": 25
+      }
+    },
+    {
+      "demo_id": "healthcare_analytics",
+      "name": "Patient Care Analytics",
+      "industry": "Healthcare",
+      "description": "Patient outcomes and operational efficiency analytics",
+      "datasets": [
+        {
+          "name": "patient_records",
+          "records": 25000,
+          "description": "Patient demographics and medical history"
+        },
+        {
+          "name": "clinical_events",
+          "records": 150000,
+          "description": "Treatments, procedures, and outcomes"
+        },
+        {
+          "name": "operational_metrics",
+          "records": 75000,
+          "description": "Resource utilization and scheduling data"
+        }
+      ],
+      "agents": [
+        {
+          "agent_id": "clinical_analyst",
+          "name": "Clinical Outcomes Analyst",
+          "capabilities": [
+            "Treatment effectiveness analysis",
+            "Readmission prediction",
+            "Patient risk scoring",
+            "Care pathway optimization"
+          ]
+        },
+        {
+          "agent_id": "operations_optimizer",
+          "name": "Healthcare Operations Optimizer",
+          "capabilities": [
+            "Resource allocation",
+            "Wait time analysis",
+            "Staff scheduling optimization",
+            "Cost per outcome analysis"
+          ]
+        }
+      ],
+      "key_queries": [
+        "Readmission rates by diagnosis",
+        "Treatment effectiveness comparison",
+        "Resource utilization by department",
+        "Patient satisfaction correlations",
+        "Cost per quality-adjusted life year"
+      ],
+      "success_metrics": {
+        "query_count": 9,
+        "avg_execution_time_ms": 220,
+        "validation_score": 0.94,
+        "reuse_count": 12
+      }
+    }
+  ],
+  "metadata": {
+    "total_seed_demos": 5,
+    "total_agents": 11,
+    "total_queries": 54,
+    "industries_covered": [
+      "Digital Marketing",
+      "Retail",
+      "Cybersecurity",
+      "IT Operations",
+      "Healthcare"
+    ],
+    "average_validation_score": 0.96,
+    "total_reuse_count": 92,
+    "created_date": "2024-10-21",
+    "version": "1.0.0"
+  },
+  "agent_capabilities_matrix": {
+    "query_optimization": [
+      "brand_performance_analyst",
+      "revenue_optimizer",
+      "root_cause_analyzer"
+    ],
+    "pattern_recognition": [
+      "threat_hunter",
+      "customer_insights_expert",
+      "clinical_analyst"
+    ],
+    "prediction_forecasting": [
+      "incident_responder",
+      "sre_assistant",
+      "operations_optimizer"
+    ],
+    "anomaly_detection": [
+      "threat_hunter",
+      "root_cause_analyzer",
+      "clinical_analyst"
+    ]
+  },
+  "reusable_patterns": [
+    {
+      "pattern_id": "time_series_aggregation",
+      "description": "Monthly/daily aggregation with trend analysis",
+      "used_in": ["adobe_brand_assets", "ecommerce_analytics", "observability_platform"],
+      "esql_template": "EVAL period = DATE_TRUNC(1 month, date_field) | STATS ... BY period"
+    },
+    {
+      "pattern_id": "multi_table_join",
+      "description": "Join multiple datasets for enrichment",
+      "used_in": ["adobe_brand_assets", "security_operations", "healthcare_analytics"],
+      "esql_template": "FROM main | LOOKUP JOIN table1 ON key1 | LOOKUP JOIN table2 ON key2"
+    },
+    {
+      "pattern_id": "percentage_calculation",
+      "description": "Calculate rates and percentages correctly",
+      "used_in": ["all"],
+      "esql_template": "EVAL rate = TO_DOUBLE(numerator) / denominator * 100"
+    },
+    {
+      "pattern_id": "top_n_analysis",
+      "description": "Find top performers by metric",
+      "used_in": ["all"],
+      "esql_template": "STATS ... BY dimension | SORT metric DESC | LIMIT 10"
+    }
+  ]
+}
