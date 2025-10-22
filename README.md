@@ -133,11 +133,8 @@ GITHUB_BRANCH=main
 # Activate virtual environment
 source venv/bin/activate
 
-# Run basic version
+# Run the unified app (one app for everything)
 streamlit run app.py
-
-# Or run enhanced version with validation
-streamlit run app_enhanced.py
 ```
 
 The app will open at `http://localhost:8501`
@@ -146,37 +143,46 @@ The app will open at `http://localhost:8501`
 
 1. **Open the Demo Builder**
    - Navigate to `http://localhost:8501` after starting the app
-   - You'll see a conversation interface and progress tracker
+   - You'll see a unified interface with two modes: **Create Demo** and **Browse Demos**
 
-2. **Provide Customer Context**
-   - Enter company name and website
-   - Specify target team/department
-   - Describe business challenges or pain points
+2. **Provide Customer Context (Create Mode)**
+   - Paste a detailed customer description or click **"📋 Use Test Prompt"** for an example
+   - The sidebar automatically extracts context:
+     - Company name and industry
+     - Department and team
+     - Pain points and challenges
+     - Scale metrics (revenue, users, etc.)
+   - Watch the progress bar fill as you provide more information
 
-3. **AI-Assisted Scenario Generation**
-   - The system researches the company
-   - Suggests relevant use cases
-   - Designs appropriate datasets and queries
+3. **Generate Custom Demo Module**
+   - When ready (≥50% context), type **"Generate demo"**
+   - The LLM creates custom Python modules specific to this customer:
+     - **data_generator.py** - Custom data generation code
+     - **query_generator.py** - ES|QL queries for their use cases
+     - **demo_guide.py** - Demo narrative and talk track
+   - Modules are saved to `demos/` directory for reuse
 
-4. **Validation & Testing**
-   - Watch real-time task progress in the UI
-   - Data is uploaded to Elasticsearch
-   - ES|QL queries are validated automatically
-   - See validation results before demo
+4. **Browse and Manage Demos**
+   - Switch to **Browse Demos** mode to see all generated modules
+   - Click **"View Details"** to inspect:
+     - Generated datasets with previews
+     - ES|QL queries with full syntax
+     - Complete demo guide
+   - Delete unwanted modules or customize Python files directly
 
-5. **Export Demo Package**
-   - Download demo guide (Markdown)
-   - Get ES|QL queries and agent configuration
-   - Access sample data files
-   - All materials ready for your presentation
+5. **Share and Collaborate**
+   - Generated modules are version controlled in Git
+   - Share demo directories with team members
+   - Manually refine modules for specific customer needs
+   - Build a library of reusable industry patterns
 
-### Demo State Persistence
+### Modular Architecture Benefits
 
-The platform saves your progress to GitHub, allowing you to:
-- Resume demos later by entering the Demo ID
-- Share demos with team members
-- Track iterations and improvements
-- Build a library of successful demos
+Unlike static templates, this system generates **customer-specific code** for each demo:
+- Each demo gets unique Python implementations
+- Data generators match the customer's business model
+- Queries solve their specific problems
+- Modules can be refined and shared across the team
 
 ---
 
@@ -291,33 +297,47 @@ A complete example demonstrating brand asset management across marketing campaig
 
 ```
 demo-builder/
-├── app.py                       # Basic Streamlit interface
-├── app_enhanced.py             # Enhanced UI with validation panel
+├── app.py                       # Unified Streamlit interface (ONE APP)
 ├── src/
+│   ├── framework/               # Modular architecture framework
+│   │   ├── __init__.py
+│   │   ├── base.py             # Base classes (DataGenerator, QueryGenerator, etc.)
+│   │   ├── module_generator.py # LLM-based module generation
+│   │   ├── module_loader.py    # Dynamic module loading
+│   │   └── orchestrator.py     # Demo orchestration
 │   ├── services/               # Core business logic services
-│   │   ├── customer_researcher.py      # Company analysis
-│   │   ├── scenario_generator.py       # Scenario creation
-│   │   ├── data_generator.py          # Synthetic data generation
-│   │   ├── esql_generator.py          # ES|QL query generation
-│   │   ├── elastic_client.py          # Elasticsearch operations
-│   │   ├── validation_service.py      # Query/data validation
-│   │   ├── github_state_manager.py    # State persistence
-│   │   └── elastic_agent_builder_client.py  # Agent Builder API
+│   │   ├── llm_service.py      # LLM integration
+│   │   ├── enhanced_data_generator.py  # Data generation engine
+│   │   ├── esql_generator.py   # ES|QL query generation
+│   │   ├── elastic_client.py   # Elasticsearch operations
+│   │   ├── validation_service.py  # Query/data validation
+│   │   └── demo_orchestrator.py   # Demo coordination
 │   └── utils/
-│       └── session_state.py   # Streamlit state management
+│       └── session_state.py    # Streamlit state management
+├── demos/                      # Generated demo modules
+│   ├── salesforce_customer_success_*/
+│   │   ├── config.json
+│   │   ├── data_generator.py   # Customer-specific code
+│   │   ├── query_generator.py  # Custom queries
+│   │   └── demo_guide.py       # Demo narrative
+│   └── adobe_marketing_*/
 ├── tests/                      # Test suites
-│   ├── test_integration.py    # End-to-end integration tests
-│   ├── test_query_refinement.py # Query fixing tests
-│   ├── TEST_STRATEGY.md       # Testing approach
-│   └── TEST_RESULTS.md        # Test execution results
+│   ├── test_integration.py     # End-to-end tests
+│   ├── test_llm_integration.py # LLM service tests
+│   ├── test_data_generation.py # Data generation tests
+│   ├── TEST_STRATEGY.md
+│   └── TEST_RESULTS.md
 ├── docs/                       # Comprehensive documentation
-│   ├── INTERNAL_DOCUMENTATION.md
+│   ├── MODULAR_ARCHITECTURE.md # Architecture design
+│   ├── QUICK_START_GUIDE.md    # Updated for unified app
 │   ├── DEVELOPER_GUIDE.md
 │   ├── API_REFERENCE.md
 │   └── TROUBLESHOOTING_GUIDE.md
-├── examples/
-│   └── adobe-demo/            # Complete demo example
-└── requirements.txt           # Python dependencies
+├── archive/                    # Old app versions (archived)
+│   ├── app_enhanced.py
+│   ├── app_conversational.py
+│   └── app_smart.py
+└── requirements.txt            # Python dependencies
 ```
 
 ---

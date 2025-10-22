@@ -321,3 +321,228 @@ class SalesforceQueryGenerator(QueryGeneratorModule):
 ```
 
 This modular approach ensures each demo is perfectly tailored while maintaining a consistent, maintainable framework!
+## 🖥️ Unified UI Integration
+
+### One App for Everything
+
+The modular architecture is accessed through a **single Streamlit application** (`app.py`) that provides two modes:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    app.py                           │
+│          Single Unified Interface                   │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  ┌───────────────┐      ┌──────────────────┐     │
+│  │  Create Mode  │      │  Browse Mode     │     │
+│  │               │      │                  │     │
+│  │ • Context     │      │ • List modules   │     │
+│  │   extraction  │      │ • View details   │     │
+│  │ • Conversation│      │ • Inspect code   │     │
+│  │ • Generation  │      │ • Delete modules │     │
+│  └───────┬───────┘      └────────┬─────────┘     │
+│          │                       │                 │
+│          └───────┬───────────────┘                 │
+│                  │                                  │
+└──────────────────┼──────────────────────────────────┘
+                   │
+    ┌──────────────▼──────────────┐
+    │ ModularDemoOrchestrator     │
+    │ DemoModuleManager           │
+    └──────────────┬──────────────┘
+                   │
+        ┌──────────▼──────────┐
+        │  Generated Modules  │
+        │  demos/*            │
+        └─────────────────────┘
+```
+
+### UI Architecture
+
+#### Create Mode
+Handles the full demo generation workflow:
+
+1. **Smart Context Extraction**
+   ```python
+   class SmartContextExtractor:
+       """Extracts context from natural language"""
+       def extract_context(message: str) -> Dict:
+           # Patterns for company, department, pain points, etc.
+           return extracted_context
+   ```
+
+2. **Conversation Management**
+   - Tracks conversation phase (initial → gathering → ready_to_generate)
+   - Updates sidebar with extracted context
+   - Shows progress indicator
+
+3. **Demo Generation**
+   ```python
+   # When user types "Generate demo"
+   orchestrator = ModularDemoOrchestrator()
+   results = orchestrator.generate_new_demo(config, progress_callback)
+   ```
+
+4. **Progress Tracking**
+   - Real-time updates during module generation
+   - Visual progress bar
+   - Status messages for each step
+
+#### Browse Mode
+Provides module library management:
+
+1. **Module Listing**
+   ```python
+   manager = DemoModuleManager()
+   demos = manager.list_modules()
+   # Returns all demos with metadata
+   ```
+
+2. **Module Details**
+   - **Config Tab**: Shows customer context and configuration
+   - **Data Tab**: Displays generated datasets with previews
+   - **Queries Tab**: Shows all ES|QL queries with syntax
+   - **Guide Tab**: Renders complete demo guide
+
+3. **Module Operations**
+   - View detailed module information
+   - Delete unwanted modules
+   - Access module files for customization
+
+### Session State Management
+
+The app uses Streamlit session state to maintain:
+
+```python
+st.session_state = {
+    "messages": [],              # Chat history
+    "demo_context": {            # Extracted context
+        "company_name": None,
+        "department": None,
+        "pain_points": [],
+        ...
+    },
+    "conversation_phase": "initial",
+    "current_demo_module": None,  # Selected module in browse mode
+    "view_mode": "create",        # "create" or "browse"
+    "needs_processing": False     # Flag for programmatic messages
+}
+```
+
+### Workflow Integration
+
+#### Creating a Demo
+```
+User Input
+    │
+    ▼
+SmartContextExtractor.extract_context()
+    │
+    ▼
+Update session_state.demo_context
+    │
+    ▼
+Display context in sidebar
+    │
+    ▼
+Generate intelligent response
+    │
+    ▼
+User types "Generate demo"
+    │
+    ▼
+ModularDemoOrchestrator.generate_new_demo()
+    │
+    ├─► ModuleGenerator.generate_demo_module()
+    │       │
+    │       ├─► _generate_data_module()
+    │       ├─► _generate_query_module()
+    │       └─► _generate_guide_module()
+    │
+    └─► ModuleLoader.execute_demo()
+            │
+            ├─► load_data_generator()
+            ├─► load_query_generator()
+            └─► load_demo_guide()
+```
+
+#### Browsing Demos
+```
+Switch to Browse Mode
+    │
+    ▼
+DemoModuleManager.list_modules()
+    │
+    ▼
+Display module cards
+    │
+    ▼
+User clicks "View Details"
+    │
+    ▼
+DemoModuleManager.get_module(name)
+    │
+    ▼
+ModuleLoader(module_path)
+    │
+    ▼
+Display tabs:
+    ├─► Config: loader.config
+    ├─► Data: loader.load_data_generator().generate_datasets()
+    ├─► Queries: loader.load_query_generator().generate_queries()
+    └─► Guide: loader.load_demo_guide().generate_guide()
+```
+
+### UI Features
+
+#### Smart Context Extraction
+The UI automatically extracts:
+- **Company name** from mentions like "Salesforce's team"
+- **Department** from keywords like "customer success"
+- **Pain points** from problem descriptions
+- **Metrics** from business terms like "churn", "ROI"
+- **Scale** from numbers like "$10B ARR" or "5000 accounts"
+
+#### Visual Feedback
+- **Progress bar** showing context completeness
+- **Real-time sidebar** updates with extracted info
+- **Color-coded status**: 
+  - < 50% context: "📝 Gathering more details..."
+  - ≥ 50% context: "✅ Sufficient context to generate demo!"
+
+#### Test Prompt Button
+Pre-loaded example for quick testing:
+```python
+test_prompt = """Salesforce's Customer Success team wants to prevent 
+churn in their enterprise accounts. They manage 5,000+ accounts worth 
+$10B in ARR but can only do quarterly business reviews..."""
+```
+
+### Module File Access
+
+Generated modules are stored in `demos/` and can be:
+
+1. **Viewed in UI**: Browse mode shows all details
+2. **Edited Locally**: Direct file editing for customization
+3. **Version Controlled**: Git tracks all module changes
+4. **Shared**: Copy module directories to share demos
+
+### Benefits of Unified UI
+
+1. **Single Entry Point**
+   - No confusion about which app to use
+   - All functionality in one place
+
+2. **Seamless Workflow**
+   - Create → Browse → Customize → Share
+   - Switch modes without losing context
+
+3. **Progressive Disclosure**
+   - Simple initial interface
+   - Advanced features when needed
+
+4. **Context Preservation**
+   - Session state maintains all info
+   - Easy to revisit previous demos
+
+This unified interface makes the modular architecture accessible while maintaining the flexibility and power of LLM-generated custom modules!

@@ -1,302 +1,439 @@
 # Quick Start Guide
-## How to Use the Demo Builder UI
+## One App for Everything
 
 ---
 
-## 🚀 Which App to Use
+## 🚀 Getting Started
 
-We have three versions of the app, each with different capabilities:
+We've consolidated everything into **one unified app** that handles demo creation, browsing, and management.
 
-### 1. **app_conversational.py** (RECOMMENDED TO START)
-Best for first-time users with guided conversation flow
+### Launch the App
 ```bash
-streamlit run app_conversational.py
-```
-
-**Features:**
-- ✅ Onboarding with example prompts
-- ✅ Guided conversation flow
-- ✅ Context gathering tracker
-- ✅ Help panel with tips
-- ⚠️ Mock LLM responses (not connected to real LLM yet)
-
-### 2. **app_enhanced.py**
-Best for seeing the full validation workflow
-```bash
-streamlit run app_enhanced.py
-```
-
-**Features:**
-- ✅ Task tracking with visual progress
-- ✅ Validation panel
-- ✅ GitHub state persistence
-- ⚠️ Requires more technical knowledge
-
-### 3. **app.py**
-Basic version for simple interactions
-```bash
+source venv/bin/activate
 streamlit run app.py
 ```
 
+The app will start at **http://localhost:8501**
+
 ---
 
-## 📝 How to Create Your First Demo
+## 🎯 Two Modes in One Interface
 
-### Step 1: Start the Conversational App
-```bash
-source venv/bin/activate
-streamlit run app_conversational.py
-```
+The app has two modes accessible via the sidebar:
 
-### Step 2: Use an Example Prompt or Create Your Own
+### 1. **Create Demo** Mode
+Conversational interface for building new custom demos
+- ✅ Smart context extraction
+- ✅ LLM-generated custom modules
+- ✅ Test prompt button
+- ✅ Real-time progress tracking
 
-#### Option A: Click an Example Button
-The UI provides several example scenarios:
-- 🏢 **Enterprise Customer** - Adobe marketing operations
-- 🏥 **Healthcare Customer** - Kaiser patient flow
-- 🏪 **Retail Customer** - Target e-commerce analytics
-- 🏦 **Financial Services** - JPMorgan fraud detection
+### 2. **Browse Demos** Mode
+Library for managing all generated demo modules
+- ✅ View all generated demos
+- ✅ Inspect datasets, queries, and guides
+- ✅ Delete unwanted modules
+- ✅ Export and share modules
 
-#### Option B: Write Your Own Prompt
+---
+
+## 📝 Creating Your First Demo
+
+### Step 1: Launch and Choose Mode
+
+Start the app and ensure you're in **"Create Demo"** mode (default).
+
+### Step 2: Provide Customer Context
+
+You have two options:
+
+#### Option A: Use the Test Prompt Button
+Click **"📋 Use Test Prompt"** in the sidebar to try a pre-built Salesforce example.
+
+#### Option B: Write Your Own Description
+
+Paste a detailed customer description. The more detail, the better!
 
 **❌ Poor Initial Prompts:**
 - "I need a demo"
 - "Customer analytics"
 - "Show me ES|QL"
 
-**✅ Good Initial Prompts:**
-- "I'm meeting with Adobe's marketing team next week. They manage campaigns across 5 brands and need better ROI visibility."
-- "Target's e-commerce team wants to analyze customer journeys and detect fraud in real-time transactions."
-- "I need to show Kaiser Permanente how to optimize patient flow in their emergency departments."
-
-### Step 3: Engage in the Conversation
-
-The assistant will ask clarifying questions. Be specific in your responses:
-
-**Assistant:** "Which department at Adobe?"
-**You:** "Marketing Operations - they manage Creative Cloud, Document Cloud, and Experience Cloud campaigns"
-
-**Assistant:** "What are their main pain points?"
-**You:** "They can't see cross-brand performance in real-time, and it takes hours to calculate campaign ROI"
-
-**Assistant:** "What scale are we talking about?"
-**You:** "Thousands of campaigns, millions of customer interactions daily"
-
-### Step 4: Review and Confirm the Plan
-
-The assistant will present a demo plan:
+**✅ Excellent Initial Prompts:**
 ```
-📋 Demo Summary:
-- Customer: Adobe - Marketing Operations
-- Use Case: Campaign Performance Analytics
-- Datasets: Campaigns, Brand Assets, Customer Interactions
-- Queries: ROI calculations, funnel analysis, anomaly detection
-- Agent: Marketing Analytics Assistant
+Salesforce's Customer Success team wants to prevent churn in their
+enterprise accounts. They manage 5,000+ accounts worth $10B in ARR
+but can only do quarterly business reviews. They need real-time
+health scores, usage analytics, and early warning signals. The CCO
+wants agents that can answer 'Which accounts are at risk this month
+and why?'
 ```
 
-Type **"Generate demo"** to proceed.
+```
+Target's e-commerce team is struggling with cart abandonment and
+wants to understand customer journey patterns. They process 2M+
+transactions daily but lack visibility into drop-off points. They
+need real-time fraud detection and personalized recommendations.
+```
 
-### Step 5: Download Your Demo Package
+### Step 3: Watch the Magic Happen
 
-After generation, you'll receive:
-- 📝 **Demo Guide** - Complete walkthrough and talk track
-- 🔍 **ES|QL Queries** - Validated and tested queries
-- 📊 **Sample Data** - CSV files with realistic data
-- 🤖 **Agent Config** - Ready to deploy configuration
+As you provide information, the sidebar shows **extracted context**:
+
+- 🏢 **Company:** Salesforce
+- 🏭 **Industry:** Technology
+- 👥 **Department:** Customer Success
+- 📊 **Scale:** 10B ARR
+- 🎯 **Pain Points:**
+  - Lack of real-time visibility
+  - Lack of predictive capabilities
+- 📈 **Metrics:** Churn, Revenue, Risk
+
+**Progress indicator** shows when you have enough context (≥50%) to generate.
+
+### Step 4: Generate the Demo
+
+When the assistant says you're ready, type:
+```
+Generate demo
+```
+
+The system will:
+1. 🤖 **Generate custom Python modules** using LLM
+2. 🏗️ **Create data generators** specific to the company's needs
+3. 🔍 **Build ES|QL queries** that solve their problems
+4. 📝 **Write demo guide** with talk track and objection handling
+
+### Step 5: Access Your Demo Module
+
+After generation completes, you'll see:
+```
+✅ Demo module created: salesforce_customer_success_20241021_143022
+
+Generated:
+- Custom data generator (3 datasets)
+- ES|QL queries (8 queries)
+- Demo guide and talk track
+
+Next Steps:
+1. Click "Browse Demos" to view all details
+2. The module is saved in demos/salesforce_customer_success_20241021_143022/
+```
+
+---
+
+## 📚 Browsing and Managing Demos
+
+### Switch to Browse Mode
+
+Click **"Browse Demos"** in the sidebar radio selector.
+
+### View Demo Library
+
+You'll see all generated demo modules with:
+- Customer name
+- Department
+- Creation date
+- Module path
+
+### Inspect a Demo Module
+
+Click **"🔍 View Details"** on any demo to see:
+
+#### 📋 Config Tab
+View the complete module configuration and customer context.
+
+#### 🗂️ Data Tab
+See generated datasets with:
+- Sample data preview (first 10 rows)
+- Total row counts
+- Data types and relationships
+
+#### 🔍 Queries Tab
+View all ES|QL queries with:
+- Query name and description
+- Full ES|QL syntax
+- Expected insights
+
+#### 📝 Guide Tab
+Read the complete demo guide including:
+- Opening hook
+- Demo flow
+- Talk track for each query
+- Objection handling
+
+### Delete Unwanted Demos
+
+Click **"🗑️ Delete"** to remove demo modules you no longer need.
+
+---
+
+## 🏗️ Understanding the Modular Architecture
+
+### What Makes This Different?
+
+Unlike traditional demo builders, this system uses **LLM-generated modules** that are:
+
+1. **Customer-Specific**
+   - Each demo gets custom Python code
+   - Data generators match their business model
+   - Queries solve their specific problems
+
+2. **Reusable & Shareable**
+   - Modules saved as Python files
+   - Version controlled in Git
+   - Can be refined and improved
+
+3. **Maintainable**
+   - Framework code stays stable
+   - Each demo is isolated
+   - Updates don't break existing demos
+
+### Module Structure
+
+Each demo creates a directory like:
+```
+demos/salesforce_customer_success_20241021_143022/
+├── __init__.py              # Module init
+├── config.json              # Customer context
+├── data_generator.py        # Custom data generation
+├── query_generator.py       # Custom ES|QL queries
+└── demo_guide.py           # Demo narrative
+```
+
+### Customization After Generation
+
+You can manually edit any generated module:
+
+1. Navigate to `demos/your_module_name/`
+2. Edit Python files directly
+3. Re-run the demo to see changes
+4. Share refined modules with your team
 
 ---
 
 ## 💡 Tips for Effective Demos
 
-### Information to Gather Before Starting
+### Provide Rich Context
 
-1. **Company Context**
-   - Company name and industry
-   - Size and scale of operations
-   - Current technology stack
+**Include:**
+- Specific company name
+- Department/team details
+- Concrete pain points with examples
+- Scale metrics (revenue, volume, users)
+- Urgency indicators (meeting dates, timelines)
 
-2. **Audience Details**
-   - Department and team
-   - Technical vs business audience
-   - Decision makers present
+**Example:**
+```
+I'm presenting to Walmart's Supply Chain Operations next Monday.
+They're struggling with inventory forecasting across 4,700 stores.
+Current system takes 24 hours to update, causing $50M in excess
+inventory costs. They need real-time visibility into stock levels
+and predictive alerts for stockouts.
+```
 
-3. **Business Challenges**
-   - Specific pain points
-   - Current workarounds
-   - Cost of the problem
+### Be Conversational
 
-4. **Success Criteria**
-   - What would impress them?
-   - Key metrics they track
-   - Desired outcomes
+The assistant will ask follow-up questions. Respond naturally:
 
-### During the Conversation
+**Assistant:** "Which team at Walmart will be the primary users?"
+**You:** "Supply chain managers and store operations - about 200 users"
 
-**Be Specific About:**
-- Data volumes and velocity
-- Types of queries they run
-- Integration requirements
-- Performance expectations
+### Use the Test Prompt
 
-**Ask Yourself:**
-- What would make them say "wow"?
-- What's their biggest skepticism?
-- How can I show immediate value?
+The **"📋 Use Test Prompt"** button shows a perfectly formatted example. Use it to:
+- See what good context looks like
+- Test the system quickly
+- Learn the conversation flow
 
 ---
 
-## 🔧 Connecting to Real LLM (For Developers)
+## 🎨 Special Features
 
-The current app uses mock responses. To connect to a real LLM:
+### 💡 A-ha Moment (Coming Soon)
 
-### Option 1: Anthropic Claude
+Currently showing as disabled button. Future feature will generate:
+- Powerful demo moment that "wows" the customer
+- Shows exactly how Agent Builder solves their biggest pain
+- Includes specific metrics and business impact
+
+### 🔄 Start Fresh
+
+Clear all context and messages to begin a new demo.
+
+### 📊 Context Progress Tracker
+
+Watch the sidebar progress bar fill as you provide information:
+- **< 50%**: Need more context
+- **≥ 50%**: ✅ Ready to generate!
+
+---
+
+## 🔧 Behind the Scenes
+
+### What Happens During Generation
+
+1. **Module Setup** (< 1 sec)
+   - Creates unique module directory
+   - Initializes configuration
+
+2. **LLM Code Generation** (5-10 sec)
+   - Generates data_generator.py implementation
+   - Creates query_generator.py with ES|QL queries
+   - Writes demo_guide.py with narrative
+
+3. **Module Execution** (2-5 sec)
+   - Loads generated modules dynamically
+   - Executes data generation
+   - Runs query generation
+   - Produces demo guide
+
+4. **Save and Index** (< 1 sec)
+   - Saves all artifacts
+   - Indexes in module library
+   - Ready for browsing
+
+**Total Time:** ~10-20 seconds for complete custom demo
+
+### Module Loading System
+
+The framework uses **dynamic module loading**:
+
 ```python
-# In app_conversational.py, add:
-from anthropic import Anthropic
-from src.prompts.conversation_prompts import DEMO_BUILDER_SYSTEM_PROMPT
-
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
-def process_user_message(message: str) -> str:
-    context = {
-        "company": st.session_state.demo_context["company_name"],
-        "department": st.session_state.demo_context["department"],
-        # ... other context
-    }
-
-    response = client.messages.create(
-        model="claude-3-sonnet-20240229",
-        system=DEMO_BUILDER_SYSTEM_PROMPT.format(**context),
-        messages=[
-            {"role": m["role"], "content": m["content"]}
-            for m in st.session_state.messages
-        ] + [{"role": "user", "content": message}]
-    )
-
-    return response.content[0].text
+# Framework loads your generated code at runtime
+loader = ModuleLoader('demos/salesforce_customer_success_20241021/')
+data_gen = loader.load_data_generator()
+datasets = data_gen.generate_datasets()
 ```
 
-### Option 2: OpenAI GPT-4
-```python
-# In app_conversational.py, add:
-from openai import OpenAI
-from src.prompts.conversation_prompts import DEMO_BUILDER_SYSTEM_PROMPT
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-def process_user_message(message: str) -> str:
-    context = {
-        "company": st.session_state.demo_context["company_name"],
-        "department": st.session_state.demo_context["department"],
-        # ... other context
-    }
-
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": DEMO_BUILDER_SYSTEM_PROMPT.format(**context)},
-            *[{"role": m["role"], "content": m["content"]}
-              for m in st.session_state.messages],
-            {"role": "user", "content": message}
-        ]
-    )
-
-    return response.choices[0].message.content
-```
+This means:
+- No static templates
+- Pure customer-specific code
+- Full Python flexibility
 
 ---
 
 ## 🐛 Troubleshooting
 
-### "Module not found" Error
-```bash
-# Ensure you're in virtual environment
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
 ### App Won't Start
+
 ```bash
 # Check if port is in use
 lsof -i :8501
-# Kill process if needed
+
+# Kill existing process
 kill -9 <PID>
+
+# Restart
+source venv/bin/activate
+streamlit run app.py
 ```
 
-### Mock Mode for Testing
-If you don't have Elasticsearch connected:
-```bash
-echo "ENABLE_MOCK_MODE=true" >> .env
-```
+### Test Prompt Button Does Nothing
 
-### View Logs
-```bash
-# Run with debug logging
-LOG_LEVEL=DEBUG streamlit run app_conversational.py
-```
+The button has been fixed! If it's not working:
+1. Check browser console for errors
+2. Refresh the page
+3. Check that streamlit is running latest version
+
+### Module Generation Fails
+
+Check the logs in the terminal where streamlit is running. Common issues:
+- Missing LLM API keys (will use mock generation)
+- Invalid customer context
+- Python syntax errors in generated code
+
+### Can't See Generated Demos
+
+1. Switch to "Browse Demos" mode
+2. Check `demos/` directory exists
+3. Verify config.json files are present
 
 ---
 
-## 📊 What Happens Behind the Scenes
+## 📊 Example Workflow
 
-When you type **"Generate demo"**, the system:
+Here's a complete example session:
 
-1. **Customer Research** (< 1 second)
-   - Analyzes company and industry
-   - Identifies relevant pain points
-   - Suggests appropriate use cases
+### 1. Start App
+```bash
+streamlit run app.py
+```
 
-2. **Scenario Generation** (< 1 second)
-   - Creates business scenario
-   - Defines dataset relationships
-   - Plans query progression
+### 2. Provide Context
+```
+Adobe's Marketing Operations team manages campaigns across 5 major
+product lines (Creative Cloud, Document Cloud, Experience Cloud,
+Commerce Cloud, and Advertising Cloud). They need real-time ROI
+analytics across $2B in annual marketing spend. Current BI tool
+takes hours to update, causing missed optimization opportunities.
+```
 
-3. **Data Generation** (~ 5 seconds)
-   - Creates synthetic datasets
-   - Maintains referential integrity
-   - Generates 100K+ records
+### 3. Watch Sidebar Fill
+- Company: Adobe ✅
+- Industry: Technology ✅
+- Department: Marketing ✅
+- Scale: $2B ✅
+- Pain Points: Performance issues ✅
+- Progress: 71% ✅
 
-4. **Query Generation** (< 1 second)
-   - Creates ES|QL queries
-   - Validates syntax
-   - Auto-fixes common issues
+### 4. Generate
+```
+Generate demo
+```
 
-5. **Validation** (~ 5 seconds with Elasticsearch)
-   - Tests each query
-   - Captures performance metrics
-   - Ensures all queries work
+### 5. Browse Results
+- Switch to "Browse Demos"
+- Click "View Details" on adobe_marketing_*
+- Review datasets, queries, guide
 
-6. **Agent Configuration** (< 1 second)
-   - Creates tool definitions
-   - Writes agent instructions
-   - Generates test conversations
+### 6. Customize (Optional)
+```bash
+cd demos/adobe_marketing_operations_20241021_143022/
+vim data_generator.py  # Add more columns
+vim query_generator.py  # Add custom query
+```
 
-Total time: **< 15 seconds** for complete demo generation
+### 7. Share with Team
+```bash
+git add demos/adobe_marketing_*
+git commit -m "Add Adobe marketing demo"
+git push
+```
 
 ---
 
 ## 🎯 Next Steps
 
-1. **Try Different Scenarios**
-   - Test with various industries
-   - Explore different use cases
-   - Vary the complexity level
+### 1. Create Your First Demo
+- Use test prompt or write your own
+- Experience the full workflow
+- Browse the generated module
 
-2. **Connect to Elasticsearch**
-   - Add your cluster details to `.env`
-   - Run with real validation
-   - Test query execution
+### 2. Explore the Modular Architecture
+- Read `docs/MODULAR_ARCHITECTURE.md`
+- Inspect generated Python files
+- Try customizing a module
 
-3. **Customize Templates**
-   - Add industry templates in `customer_researcher.py`
-   - Create query patterns in `esql_generator.py`
-   - Design scenarios in `scenario_generator.py`
+### 3. Build Your Demo Library
+- Create demos for different customers
+- Reuse successful patterns
+- Build industry templates
 
-4. **Share Feedback**
-   - What worked well?
-   - What was confusing?
-   - What features would help?
+### 4. Connect to Elasticsearch (Optional)
+- Add cluster details to `.env`
+- Validate queries against real cluster
+- Test with actual data ingestion
 
 ---
 
-*Ready to create your first demo? Start with `streamlit run app_conversational.py`!*
+## 📚 Additional Resources
+
+- **Architecture:** `docs/MODULAR_ARCHITECTURE.md`
+- **Developer Guide:** `docs/DEVELOPER_GUIDE.md`
+- **API Reference:** `docs/API_REFERENCE.md`
+- **Troubleshooting:** `docs/TROUBLESHOOTING_GUIDE.md`
+
+---
+
+*Ready to build? Run `streamlit run app.py` and create your first demo!*

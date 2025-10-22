@@ -6,7 +6,7 @@ Dynamically loads and executes demo modules
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import json
 import logging
 import pandas as pd

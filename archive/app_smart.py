@@ -88,6 +88,9 @@ if "demo_context" not in st.session_state:
 if "conversation_phase" not in st.session_state:
     st.session_state.conversation_phase = "initial"
 
+if "needs_processing" not in st.session_state:
+    st.session_state.needs_processing = False
+
 
 class SmartContextExtractor:
     """Intelligent context extraction from user messages"""
@@ -492,6 +495,19 @@ def main():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
+    # Process programmatically added messages (like from test button)
+    if st.session_state.needs_processing and st.session_state.messages:
+        last_message = st.session_state.messages[-1]
+        if last_message["role"] == "user":
+            st.session_state.needs_processing = False
+
+            with st.chat_message("assistant"):
+                with st.spinner("Analyzing context..."):
+                    response = process_smart_message(last_message["content"])
+                    st.markdown(response)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    st.rerun()
+
     # Chat input
     if prompt := st.chat_input("Paste your customer description or requirements..."):
         # Add user message
@@ -614,11 +630,9 @@ def main():
             st.rerun()
 
         if st.button("📋 Use Test Prompt", use_container_width=True):
-            test_prompt = """Salesforce's Customer Success team wants to prevent churn in their enterprise accounts.
-            They manage 5,000+ accounts worth $10B in ARR but can only do quarterly business reviews.
-            They need real-time health scores, usage analytics, and early warning signals.
-            The CCO wants agents that can answer 'Which accounts are at risk this month and why?'"""
+            test_prompt = """Salesforce's Customer Success team wants to prevent churn in their enterprise accounts. They manage 5,000+ accounts worth $10B in ARR but can only do quarterly business reviews. They need real-time health scores, usage analytics, and early warning signals. The CCO wants agents that can answer 'Which accounts are at risk this month and why?'"""
             st.session_state.messages.append({"role": "user", "content": test_prompt})
+            st.session_state.needs_processing = True
             st.rerun()
 
         st.markdown("---")
