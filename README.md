@@ -566,16 +566,4 @@ git commit -m "feat: add new industry template"
 
 ---
 
-## The Magic Moment
-
-**What users see**:
-> "I described my customer's problem, and 5 minutes later I have a complete, working demo with data, queries, and a script."
-
-**What actually happens**:
-> The system used an LLM to write custom Python code that encodes domain expertise, business logic, and demo best practices - then executed that code to produce all the assets.
-
-It's **code generating code generating content** - and that's what makes it scalable, customizable, and powerful.
-
----
-
-**Built with ❤️ by the Elastic Solutions Architecture Team**
+**Built by the Elastic Solutions Architecture Team**
