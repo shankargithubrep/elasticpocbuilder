@@ -58,3 +58,12 @@ pip-delete-this-directory.txt
 credentials.json
 *.pem
 *.key
+
+# Generated demos (except examples)
+demos/*
+!demos/bass_pro_shops_product_management_20251029_214937/
+
+# Test files and validation reports
+test_*.py
+validation_report_*.json
+new_browse_view.py

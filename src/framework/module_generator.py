@@ -71,6 +71,15 @@ The module should:
 4. Define relationships between datasets
 5. Be specific to their business, not generic
 
+CRITICAL - TIMESTAMP REQUIREMENTS:
+- All timestamp/datetime columns MUST use datetime.now() as the END date
+- Generate data going BACKWARDS from today, maximum 120 days old
+- NEVER hardcode dates like '2023-01-01' or generate future dates
+- NEVER generate data older than 120 days from today
+- Use pd.date_range(end=datetime.now(), periods=N, freq='h') for timeseries data
+- Example: For 90 days of hourly data use periods=90*24 (2,160 rows)
+- This ensures ES|QL queries with "NOW() - X days" will return results (stay within 120-day window)
+
 Template:
 ```python
 from src.framework.base import DataGeneratorModule, DemoConfig
@@ -88,6 +97,15 @@ class {config['company_name'].replace(' ', '')}DataGenerator(DataGeneratorModule
 
         # Generate main dataset with columns specific to their business
         # Include patterns that demonstrate their pain points
+
+        # EXAMPLE: Generate timestamps ending at NOW (critical for ES|QL queries)
+        # Max 120 days of data - this example shows ~42 days (1000 hours)
+        # events_df = pd.DataFrame({{
+        #     'timestamp': pd.date_range(end=datetime.now(), periods=1000, freq='h'),
+        #     'event_type': np.random.choice(['click', 'purchase'], 1000),
+        #     'amount': np.random.uniform(10, 1000, 1000)
+        # }})
+        # datasets['events'] = events_df
 
         # IMPORTANT: Keep datasets SMALL for demo purposes
         # - Primary datasets: 500-2000 rows MAX
@@ -304,6 +322,7 @@ class {company}DataGenerator(DataGeneratorModule):
         datasets['customers'] = customers
 
         # Transactions dataset
+        # IMPORTANT: Use datetime.now() as end date so ES|QL queries with NOW() work
         transactions = pd.DataFrame({{
             'transaction_id': [f'TXN-{{i:08d}}' for i in range(10000)],
             'customer_id': np.random.choice(customers['customer_id'], 10000),

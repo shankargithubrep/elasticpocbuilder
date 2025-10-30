@@ -69,13 +69,24 @@ FROM main_table
 | EVAL rate = TO_DOUBLE(success_count) / total_count
 
 // Pattern 3: Time-based aggregation
-| EVAL month = DATE_TRUNC(1 month, date_field)
+| EVAL month = DATE_TRUNC(1 month, @timestamp)
 | STATS ... BY month
 
-// Pattern 4: DATE_EXTRACT (time unit MUST be uppercase, no quotes)
-| EVAL month = DATE_EXTRACT("MONTH", timestamp)
-| EVAL year = DATE_EXTRACT("YEAR", timestamp)
-| EVAL day = DATE_EXTRACT("DAY", timestamp)
+// Pattern 4: Timestamp filtering (CRITICAL - use @timestamp not timestamp)
+FROM timeseries_data
+| WHERE @timestamp > NOW() - 90 days  // ✅ Correct: @timestamp, within 120-day window
+| WHERE @timestamp >= "2024-01-01"    // ❌ AVOID: Hardcoded dates don't adapt to "now"
+// ❌ WRONG: timestamp (DataFrame column name, not indexed field name)
+// The indexer automatically maps 'timestamp' column → '@timestamp' field
+// ⚠️  IMPORTANT: Demo data spans maximum 120 days from today
+// - Use relative time ranges: NOW() - 7/30/60/90/120 days
+// - Avoid queries older than 120 days - data won't exist
+// - Examples: NOW() - 7 days, NOW() - 30 days, NOW() - 90 days
+
+// Pattern 5: DATE_EXTRACT (time unit MUST be uppercase, no quotes)
+| EVAL month = DATE_EXTRACT("MONTH", @timestamp)
+| EVAL year = DATE_EXTRACT("YEAR", @timestamp)
+| EVAL day = DATE_EXTRACT("DAY", @timestamp)
 
 // Pattern 5: Conditional aggregation
 | STATS
@@ -110,9 +121,9 @@ FROM main_data
    - ✅ Using LOOKUP JOIN with properly configured lookup indices
    - ❌ Cannot LOOKUP JOIN to timeseries data/data streams - only to lookup mode indices
 5. **DATE_EXTRACT Syntax**:
-   - ❌ `DATE_EXTRACT("month", timestamp)` - lowercase unit
-   - ❌ `DATE_EXTRACT(timestamp, "MONTH")` - wrong parameter order
-   - ✅ `DATE_EXTRACT("MONTH", timestamp)` - correct syntax
+   - ❌ `DATE_EXTRACT("month", @timestamp)` - lowercase unit
+   - ❌ `DATE_EXTRACT(@timestamp, "MONTH")` - wrong parameter order
+   - ✅ `DATE_EXTRACT("MONTH", @timestamp)` - correct syntax
 6. **Non-Existent Functions**: ES|QL does NOT support many SQL functions:
    - ❌ Window functions: LAG(), LEAD(), RANK(), ROW_NUMBER(), FIRST_VALUE(), LAST_VALUE()
    - ❌ Semantic functions: SEMANTIC(), COSINE_SIMILARITY()

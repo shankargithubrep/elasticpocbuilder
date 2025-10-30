@@ -88,14 +88,14 @@ EVAL churn_rate = TO_DOUBLE(churned) / total
 #### Pattern D: DATE_EXTRACT Syntax Errors
 **Issue**:
 ```esql
-EVAL month = DATE_EXTRACT("month", timestamp)      // lowercase unit
-EVAL month = DATE_EXTRACT(timestamp, "MONTH")      // wrong parameter order
+EVAL month = DATE_EXTRACT("month", @timestamp)      // lowercase unit
+EVAL month = DATE_EXTRACT(@timestamp, "MONTH")      // wrong parameter order
 ```
 
 **Fix**:
 ```esql
-EVAL month = DATE_EXTRACT("MONTH", timestamp)      // uppercase, correct order
-EVAL year = DATE_EXTRACT("YEAR", timestamp)
+EVAL month = DATE_EXTRACT("MONTH", @timestamp)      // uppercase, correct order
+EVAL year = DATE_EXTRACT("YEAR", @timestamp)
 ```
 
 **Valid time units**: YEAR, QUARTER, MONTH, WEEK, DAY, HOUR, MINUTE, SECOND
