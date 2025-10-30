@@ -534,36 +534,4 @@ python -m pytest tests/test_integration.py          # Integration (12/14 ⚠️ 
 
 ---
 
-## Contributing
-
-### Development Setup
-
-```bash
-# Create branch
-git checkout -b feature/your-feature
-
-# Activate environment
-source venv/bin/activate
-
-# Make changes and test
-python -m pytest tests/
-
-# Format code
-black src/ tests/
-isort src/ tests/
-
-# Commit
-git commit -m "feat: add new industry template"
-```
-
----
-
-## Support
-
-- **Documentation**: [docs/](docs/)
-- **Issues**: GitHub Issues
-- **Email**: sa-tools@elastic.co
-
----
-
-**Built by the Elastic Solutions Architecture Team**
+**Built By Jesse Miller <jesse.miller@elastic.co>**
