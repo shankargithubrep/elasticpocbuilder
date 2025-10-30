@@ -461,91 +461,310 @@ You can now refine the generated modules or start a new demo!"""
                     st.session_state.messages.append({"role": "assistant", "content": response})
 
 
-def render_browse_demos_view():
-    """Render the demo browsing interface"""
-    st.title("📚 Demo Modules Library")
-    st.markdown("*Browse and manage generated demo modules*")
-
-    # List all demos
+@st.cache_data(ttl=3600)
+def load_demo_datasets(module_name: str):
+    """Cache dataset generation for faster loading"""
     manager = DemoModuleManager()
-    demos = manager.list_modules()
+    loader = manager.get_module(module_name)
+    if loader:
+        data_gen = loader.load_data_generator()
+        return data_gen.generate_datasets()
+    return {}
 
-    if not demos:
-        st.info("No demo modules yet. Create your first demo!")
-        return
+@st.cache_data(ttl=3600)
+def load_demo_queries(module_name: str):
+    """Cache query generation for faster loading"""
+    manager = DemoModuleManager()
+    loader = manager.get_module(module_name)
+    if loader:
+        datasets = load_demo_datasets(module_name)
+        query_gen = loader.load_query_generator(datasets)
+        return query_gen.generate_queries()
+    return []
 
-    st.markdown(f"### {len(demos)} Demo Modules")
+@st.cache_data(ttl=3600)
+def load_demo_guide(module_name: str):
+    """Cache guide generation for faster loading"""
+    manager = DemoModuleManager()
+    loader = manager.get_module(module_name)
+    if loader:
+        datasets = load_demo_datasets(module_name)
+        queries = load_demo_queries(module_name)
+        guide_gen = loader.load_demo_guide(datasets, queries)
+        return guide_gen.generate_guide()
+    return ""
 
-    for demo in demos:
-        with st.expander(f"🎯 {demo['name']}", expanded=False):
-            col1, col2 = st.columns([3, 1])
-
-            with col1:
-                st.markdown(f"**Customer:** {demo.get('customer', 'N/A')}")
-                st.markdown(f"**Department:** {demo.get('department', 'N/A')}")
-                st.markdown(f"**Created:** {demo.get('created_at', 'N/A')}")
-                st.markdown(f"**Path:** `{demo['path']}`")
-
-            with col2:
-                if st.button("🔍 View Details", key=f"view_{demo['name']}"):
-                    st.session_state.current_demo_module = demo['name']
-
-                if st.button("🗑️ Delete", key=f"delete_{demo['name']}"):
-                    if manager.delete_module(demo['name']):
-                        st.success(f"Deleted {demo['name']}")
-                        st.rerun()
-
+def render_browse_demos_view():
+    """Render the demo browsing interface - demo details only (list is in sidebar)"""
     # Show details if a module is selected
     if st.session_state.current_demo_module:
-        st.markdown("---")
-        st.markdown(f"## 📊 Module: {st.session_state.current_demo_module}")
+        st.title(f"📊 {st.session_state.current_demo_module}")
 
+        manager = DemoModuleManager()
         loader = manager.get_module(st.session_state.current_demo_module)
 
         if loader:
             tabs = st.tabs(["📋 Config", "🗂️ Data", "🔍 Queries", "📝 Guide"])
 
             with tabs[0]:
+                st.markdown("### Generate Demo Assets")
+                st.warning("""
+                ⚠️ **Generation Time: 5-20 minutes**
+
+                Large datasets (10,000+ rows) can take significant time to generate.
+                The page will appear frozen but is actively processing. Please be patient!
+
+                **Progress:**
+                - Data generation: 80-90% of time (slowest)
+                - Query generation: 5-10% of time
+                - Guide generation: 5-10% of time
+                """)
+
+                if st.button("🚀 Generate Assets", use_container_width=True):
+                    with st.spinner("Generating demo assets..."):
+                        try:
+                            # Force regeneration by clearing cache and loading
+                            load_demo_datasets.clear()
+                            load_demo_queries.clear()
+                            load_demo_guide.clear()
+
+                            # Generate all assets
+                            datasets = load_demo_datasets(st.session_state.current_demo_module)
+                            queries = load_demo_queries(st.session_state.current_demo_module)
+                            guide = load_demo_guide(st.session_state.current_demo_module)
+
+                            # Mark assets as generated
+                            st.session_state.assets_generated = True
+
+                            st.success(f"✅ Generated {len(datasets)} datasets, {len(queries)} queries, and demo guide!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error generating assets: {e}")
+                            import traceback
+                            st.code(traceback.format_exc())
+
+                st.divider()
+                st.markdown("### Demo Configuration")
                 st.json(loader.config)
 
             with tabs[1]:
-                try:
-                    data_gen = loader.load_data_generator()
-                    datasets = data_gen.generate_datasets()
+                # Only load if assets have been generated
+                if st.session_state.get("assets_generated", False):
+                    try:
+                        datasets = load_demo_datasets(st.session_state.current_demo_module)
 
-                    for name, df in datasets.items():
-                        st.markdown(f"### {name}")
-                        st.dataframe(df.head(10))
-                        st.caption(f"Total rows: {len(df)}")
-                except Exception as e:
-                    st.error(f"Error loading data: {e}")
+                        # Get semantic fields specification from data generator
+                        manager = DemoModuleManager()
+                        loader = manager.get_module(st.session_state.current_demo_module)
+                        data_gen = loader.load_data_generator()
+
+                        # Try to get semantic fields (may not exist in older modules)
+                        try:
+                            semantic_fields_spec = data_gen.get_semantic_fields()
+                        except AttributeError:
+                            semantic_fields_spec = {}
+
+                        if datasets:
+                            for name, df in datasets.items():
+                                st.markdown(f"### {name}")
+
+                                # Action buttons
+                                col1, col2, col3 = st.columns(3)
+
+                                with col1:
+                                    # Download CSV
+                                    csv = df.to_csv(index=False)
+                                    st.download_button(
+                                        "📥 CSV",
+                                        csv,
+                                        f"{name}.csv",
+                                        "text/csv",
+                                        key=f"download_{name}",
+                                        use_container_width=True
+                                    )
+
+                                with col2:
+                                    # View data
+                                    if st.button("👁️ View", key=f"view_{name}", use_container_width=True):
+                                        st.session_state[f"show_data_{name}"] = not st.session_state.get(f"show_data_{name}", False)
+
+                                with col3:
+                                    # Index in Elasticsearch button
+                                    if st.button("📤 Index", key=f"index_{name}", use_container_width=True):
+                                        from src.services.elasticsearch_indexer import ElasticsearchIndexer
+
+                                        # Get semantic fields for this dataset
+                                        semantic_fields = semantic_fields_spec.get(name, [])
+
+                                        # Show progress and stop button
+                                        progress_bar = st.progress(0)
+                                        status_text = st.empty()
+                                        stop_button_container = st.empty()
+
+                                        # Track stop request in session state
+                                        stop_key = f"stop_indexing_{name}"
+                                        st.session_state[stop_key] = False
+
+                                        def progress_callback(pct, msg):
+                                            progress_bar.progress(pct)
+                                            status_text.text(msg)
+
+                                        def stop_callback():
+                                            return st.session_state.get(stop_key, False)
+
+                                        # Show stop button
+                                        if stop_button_container.button("⏸️ Stop Indexing", key=f"stop_{name}"):
+                                            st.session_state[stop_key] = True
+
+                                        try:
+                                            # Index the dataset
+                                            indexer = ElasticsearchIndexer()
+                                            result = indexer.index_dataset(
+                                                df,
+                                                name,
+                                                semantic_fields=semantic_fields,
+                                                progress_callback=progress_callback,
+                                                stop_callback=stop_callback
+                                            )
+
+                                            # Clear stop button
+                                            stop_button_container.empty()
+
+                                            if result.success:
+                                                was_stopped = result.documents_indexed < len(df)
+                                                if was_stopped:
+                                                    st.warning(
+                                                        f"⏸️ Indexing stopped by user\n\n"
+                                                        f"**Indexed:** {result.documents_indexed:,} / {len(df):,} documents\n\n"
+                                                        f"**Index:** {result.index_name} ({result.index_type})\n\n"
+                                                        f"**Semantic fields:** {', '.join(result.semantic_fields) if result.semantic_fields else 'None'}\n\n"
+                                                        f"**Duration:** {result.duration_seconds}s"
+                                                    )
+                                                else:
+                                                    st.success(
+                                                        f"✅ Indexed {result.documents_indexed:,} documents\n\n"
+                                                        f"**Index:** {result.index_name} ({result.index_type})\n\n"
+                                                        f"**Semantic fields:** {', '.join(result.semantic_fields) if result.semantic_fields else 'None'}\n\n"
+                                                        f"**Duration:** {result.duration_seconds}s"
+                                                    )
+                                            else:
+                                                st.error(f"❌ Indexing failed:\n{chr(10).join(result.errors)}")
+
+                                        except Exception as e:
+                                            stop_button_container.empty()
+                                            st.error(f"❌ Indexing error: {e}")
+                                            import traceback
+                                            st.code(traceback.format_exc())
+
+                                # Show semantic fields info if specified
+                                if name in semantic_fields_spec and semantic_fields_spec[name]:
+                                    st.info(f"🧠 **Semantic fields:** {', '.join(semantic_fields_spec[name])}")
+
+                                # Show data if view button was clicked
+                                if st.session_state.get(f"show_data_{name}", False):
+                                    st.dataframe(df.head(100), use_container_width=True)
+                                    st.caption(f"Showing first 100 of {len(df)} rows")
+                                else:
+                                    st.caption(f"Total rows: {len(df)} | Columns: {len(df.columns)}")
+
+                                st.divider()
+                        else:
+                            st.info("No datasets found. Try regenerating assets from the Config tab.")
+                    except Exception as e:
+                        st.error(f"Error loading data: {e}")
+                        st.info("Try clicking 'Generate Assets' in the Config tab.")
+                else:
+                    st.info("📋 Click 'Generate Assets' in the Config tab to view datasets")
 
             with tabs[2]:
-                try:
-                    data_gen = loader.load_data_generator()
-                    datasets = data_gen.generate_datasets()
-                    query_gen = loader.load_query_generator(datasets)
-                    queries = query_gen.generate_queries()
+                # Only load if assets have been generated
+                if st.session_state.get("assets_generated", False):
+                    try:
+                        queries = load_demo_queries(st.session_state.current_demo_module)
+                        if queries:
+                            for i, query in enumerate(queries, 1):
+                                query_name = query.get('name', f'Query {i}')
+                                st.markdown(f"### {i}. {query_name}")
 
-                    for i, query in enumerate(queries, 1):
-                        st.markdown(f"### Query {i}: {query.get('name', 'Query')}")
-                        st.code(query.get('esql', ''), language='sql')
-                        st.caption(query.get('description', ''))
-                except Exception as e:
-                    st.error(f"Error loading queries: {e}")
+                                # Description
+                                if query.get('description'):
+                                    st.caption(query['description'])
+
+                                # Query code with copy button
+                                query_text = query.get('esql', '')
+                                st.code(query_text, language='sql')
+
+                                # Action buttons
+                                col1, col2 = st.columns([1, 3])
+
+                                with col1:
+                                    # Test query button
+                                    if st.button("▶️ Test Query", key=f"test_query_{i}", use_container_width=True):
+                                        from src.services.elasticsearch_indexer import ElasticsearchIndexer
+
+                                        with st.spinner(f"Executing {query_name}..."):
+                                            try:
+                                                indexer = ElasticsearchIndexer()
+                                                success, result, error = indexer.execute_esql(query_text)
+
+                                                if success:
+                                                    st.success(f"✅ Query executed successfully!")
+
+                                                    # Display results
+                                                    if result:
+                                                        # Try to convert to DataFrame for better display
+                                                        try:
+                                                            if 'columns' in result and 'values' in result:
+                                                                # ES|QL response format
+                                                                columns = [col['name'] for col in result['columns']]
+                                                                values = result['values']
+                                                                result_df = pd.DataFrame(values, columns=columns)
+                                                                st.dataframe(result_df, use_container_width=True)
+                                                                st.caption(f"Returned {len(result_df)} rows")
+                                                            else:
+                                                                # Fallback to JSON display
+                                                                st.json(result)
+                                                        except Exception as display_error:
+                                                            # If conversion fails, show raw JSON
+                                                            st.json(result)
+                                                else:
+                                                    st.error(f"❌ Query failed:\n\n{error}")
+
+                                            except Exception as e:
+                                                st.error(f"❌ Error executing query: {e}")
+                                                import traceback
+                                                with st.expander("Show traceback"):
+                                                    st.code(traceback.format_exc())
+
+                                with col2:
+                                    # Copy to clipboard button (visual only, actual copy handled by st.code)
+                                    st.caption(f"💾 Use the copy button in the code block above")
+
+                                st.divider()
+                        else:
+                            st.info("No queries found. Try regenerating assets from the Config tab.")
+                    except Exception as e:
+                        st.error(f"Error loading queries: {e}")
+                        st.info("Try clicking 'Generate Assets' in the Config tab.")
+                else:
+                    st.info("📋 Click 'Generate Assets' in the Config tab to view queries")
 
             with tabs[3]:
-                try:
-                    data_gen = loader.load_data_generator()
-                    datasets = data_gen.generate_datasets()
-                    query_gen = loader.load_query_generator(datasets)
-                    queries = query_gen.generate_queries()
-                    guide_gen = loader.load_demo_guide(datasets, queries)
-                    guide = guide_gen.generate_guide()
-
-                    st.markdown(guide)
-                except Exception as e:
-                    st.error(f"Error loading guide: {e}")
+                # Only load if assets have been generated
+                if st.session_state.get("assets_generated", False):
+                    try:
+                        guide = load_demo_guide(st.session_state.current_demo_module)
+                        if guide:
+                            st.markdown(guide)
+                        else:
+                            st.info("No demo guide found. Try regenerating assets from the Config tab.")
+                    except Exception as e:
+                        st.error(f"Error loading guide: {e}")
+                        st.info("Try clicking 'Generate Assets' in the Config tab.")
+                else:
+                    st.info("📋 Click 'Generate Assets' in the Config tab to view the demo guide")
+    else:
+        st.info("👈 Select a demo from the sidebar to view details")
 
 
 def main():
@@ -553,27 +772,36 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.markdown("## 🎛️ Controls")
+        # Demo Builder header
+        st.markdown("### Demo Builder")
 
-        # View mode selector
-        view_mode = st.radio(
-            "Mode",
-            ["Create Demo", "Browse Demos"],
-            key="view_selector",
-            horizontal=True
-        )
+        # Prominent mode toggle buttons with custom styling
+        col1, col2 = st.columns(2)
 
-        if view_mode == "Create Demo":
-            st.session_state.view_mode = "create"
-        else:
-            st.session_state.view_mode = "browse"
+        with col1:
+            create_selected = st.session_state.view_mode == "create"
+            if st.button(
+                "Create",
+                use_container_width=True,
+                type="primary" if create_selected else "secondary",
+                key="create_mode_btn"
+            ):
+                st.session_state.view_mode = "create"
+                st.rerun()
 
-        st.markdown("---")
+        with col2:
+            browse_selected = st.session_state.view_mode == "browse"
+            if st.button(
+                "Browse",
+                use_container_width=True,
+                type="primary" if browse_selected else "secondary",
+                key="browse_mode_btn"
+            ):
+                st.session_state.view_mode = "browse"
+                st.rerun()
 
         if st.session_state.view_mode == "create":
             display_context_summary()
-
-            st.markdown("---")
 
             if st.button("🔄 Start Fresh", use_container_width=True):
                 st.session_state.messages = []
@@ -596,12 +824,84 @@ def main():
                 st.rerun()
 
             st.markdown("---")
+            st.markdown("### 🔗 Elasticsearch")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button("Test Connection", use_container_width=True):
+                    from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                    try:
+                        indexer = ElasticsearchIndexer()
+                        success, message = indexer.verify_connection()
+
+                        if success:
+                            st.success(f"✅ {message}")
+                        else:
+                            st.error(f"❌ {message}")
+                    except Exception as e:
+                        st.error(f"❌ Connection failed: {e}")
+
+            with col2:
+                if st.button("Check ELSER", use_container_width=True):
+                    from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                    try:
+                        indexer = ElasticsearchIndexer()
+                        is_ready, message = indexer.check_elser_deployment()
+
+                        if is_ready:
+                            st.success(f"✅ {message}")
+                        else:
+                            st.warning(f"⚠️ {message}")
+
+                            # Offer to deploy
+                            if "not deployed" in message.lower():
+                                if st.button("Deploy ELSER", use_container_width=True):
+                                    with st.spinner("Deploying ELSER..."):
+                                        deploy_success, deploy_msg = indexer.deploy_elser()
+                                        if deploy_success:
+                                            st.success(f"✅ {deploy_msg}")
+                                        else:
+                                            st.error(f"❌ {deploy_msg}")
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+
+            st.markdown("---")
             st.markdown("### ✨ Special Features")
 
             if st.button("💡 Generate A-ha Moment", use_container_width=True, disabled=True):
                 pass
 
             st.caption("🚧 **Coming Soon:** Generate powerful 'A-ha moments' that wow customers!")
+
+        else:  # Browse mode
+            st.markdown("### 📚 Demo Modules")
+
+            manager = DemoModuleManager()
+            demos = manager.list_modules()
+
+            if not demos:
+                st.info("No demos yet. Switch to Create mode to make one!")
+            else:
+                # Show count
+                st.caption(f"{len(demos)} modules")
+
+                # List demos as clickable buttons
+                for demo in demos:
+                    # Make button show selected state
+                    is_selected = st.session_state.current_demo_module == demo['name']
+                    button_type = "primary" if is_selected else "secondary"
+
+                    if st.button(
+                        f"{demo.get('customer', 'Unknown')} - {demo.get('department', 'N/A')}",
+                        key=f"select_{demo['name']}",
+                        use_container_width=True,
+                        type=button_type
+                    ):
+                        # Only rerun if selection changed
+                        if st.session_state.current_demo_module != demo['name']:
+                            st.session_state.current_demo_module = demo['name']
+                            st.rerun()
 
     # Main content area
     if st.session_state.view_mode == "create":

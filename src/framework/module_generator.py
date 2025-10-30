@@ -40,11 +40,14 @@ class ModuleGenerator:
         module_path.mkdir(parents=True, exist_ok=True)
         (module_path / '__init__.py').touch()
 
-        # Generate each component
+        # Generate each component (Python modules)
         self._generate_data_module(config, module_path)
         self._generate_query_module(config, module_path)
         self._generate_guide_module(config, module_path)
         self._generate_config_file(config, module_path)
+
+        # Generate static files for quick loading
+        self._generate_static_files(module_path)
 
         logger.info(f"Generated demo module at: {module_path}")
         return str(module_path)
@@ -85,7 +88,12 @@ class {config['company_name'].replace(' ', '')}DataGenerator(DataGeneratorModule
 
         # Generate main dataset with columns specific to their business
         # Include patterns that demonstrate their pain points
-        # Create realistic data volumes based on scale: {config['scale']}
+
+        # IMPORTANT: Keep datasets SMALL for demo purposes
+        # - Primary datasets: 500-2000 rows MAX
+        # - Reference/lookup tables: 50-500 rows MAX
+        # This ensures fast loading in the UI (< 30 seconds)
+        # Scale mentioned: {config['scale']} (for context only, don't generate that many rows!)
 
         return datasets
 
@@ -394,3 +402,57 @@ class {company}DemoGuide(DemoGuideModule):
             'What about data security?': 'Enterprise-grade security with full encryption and RBAC...'
         }}
 """
+    def _generate_static_files(self, module_path: Path):
+        """Generate static files for quick loading in Browse mode
+
+        Creates:
+        - CSV files for each dataset
+        - queries.json for query list
+        - demo_guide.md for guide text
+        """
+        try:
+            # Dynamically load the generated modules
+            from src.framework.module_loader import ModuleLoader
+
+            loader = ModuleLoader(str(module_path))
+
+            # Generate and save datasets as CSV
+            logger.info("Generating static dataset files...")
+            data_gen = loader.load_data_generator()
+            datasets = data_gen.generate_datasets()
+
+            # Create data/ subdirectory
+            data_dir = module_path / 'data'
+            data_dir.mkdir(exist_ok=True)
+
+            for name, df in datasets.items():
+                csv_path = data_dir / f"{name}.csv"
+                df.to_csv(csv_path, index=False)
+                logger.info(f"  Saved {name}.csv ({len(df)} rows)")
+
+            # Generate and save queries as JSON
+            logger.info("Generating static queries file...")
+            query_gen = loader.load_query_generator(datasets)
+            queries = query_gen.generate_queries()
+
+            queries_file = module_path / 'queries.json'
+            queries_file.write_text(json.dumps(queries, indent=2))
+            logger.info(f"  Saved queries.json ({len(queries)} queries)")
+
+            # Generate and save demo guide as Markdown
+            logger.info("Generating static guide file...")
+            guide_gen = loader.load_demo_guide(datasets, queries)
+            guide = guide_gen.generate_guide()
+
+            guide_file = module_path / 'demo_guide.md'
+            guide_file.write_text(guide)
+            logger.info(f"  Saved demo_guide.md")
+
+            logger.info("Static file generation complete!")
+
+        except Exception as e:
+            logger.error(f"Error generating static files: {e}")
+            # Don't fail the entire generation if static files fail
+            # The dynamic modules will still work
+            import traceback
+            logger.debug(traceback.format_exc())

@@ -1,0 +1,156 @@
+---
+title: ES|QL RERANK command
+description: 
+url: https://www.elastic.co/docs/reference/query-languages/esql/commands/rerank
+---
+
+# ES|QL RERANK command
+
+```yaml
+serverless: preview
+stack: preview 9.2.0
+```
+
+The `RERANK` command uses an inference model to compute a new relevance score
+for an initial set of documents, directly within your ES|QL queries.
+**Syntax**
+```esql
+RERANK [column =] query ON field [, field, ...] [WITH { "inference_id" : "my_inference_endpoint" }]
+```
+
+**Parameters**
+<definitions>
+  <definition term="column">
+    (Optional) The name of the output column containing the reranked scores.
+    If not specified, the results will be stored in a column named `_score`.
+    If the specified column already exists, it will be overwritten with the new
+    results.
+  </definition>
+  <definition term="query">
+    The query text used to rerank the documents. This is typically the same
+    query used in the initial search.
+  </definition>
+  <definition term="field">
+    One or more fields to use for reranking. These fields should contain the
+    text that the reranking model will evaluate.
+  </definition>
+  <definition term="my_inference_endpoint">
+    The ID of
+    the [inference endpoint](https://www.elastic.co/docs/explore-analyze/elastic-inference/inference-api)
+    to use for the task.
+    The inference endpoint must be configured with the `rerank` task type.
+  </definition>
+</definitions>
+
+**Description**
+The `RERANK` command uses an inference model to compute a new relevance score
+for an initial set of documents, directly within your ES|QL queries.
+Typically, you first use a `WHERE` clause with a function like `MATCH` to
+retrieve an initial set of documents. This set is often sorted by `_score` and
+reduced to the top results (for example, 100) using `LIMIT`. The `RERANK`
+command then processes this smaller, refined subset, which is a good balance
+between performance and accuracy.
+**Requirements**
+To use this command, you must deploy your reranking model in Elasticsearch as
+an [inference endpoint](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-inference-put)
+with the
+task type `rerank`.
+
+#### Handling timeouts
+
+`RERANK` commands may time out when processing large datasets or complex
+queries. The default timeout is 10 minutes, but you can increase this limit if
+necessary.
+How you increase the timeout depends on your deployment type:
+<tab-set>
+
+  <tab-item title="Elastic Cloud Hosted">
+
+    - You can adjust Elasticsearch settings in
+      the [Elastic Cloud Console](https://www.elastic.co/docs/deploy-manage/deploy/elastic-cloud/edit-stack-settings)
+    - You can also adjust the `search.default_search_timeout` cluster setting
+      using [Kibana's Advanced settings](https://www.elastic.co/docs/reference/kibana/advanced-settings#kibana-search-settings)
+  </tab-item>
+
+  <tab-item title="Self-managed">
+
+    - You can configure at the cluster level by setting
+      `search.default_search_timeout` in `elasticsearch.yml` or updating
+      via [Cluster Settings API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-cluster-put-settings)
+    - You can also adjust the `search:timeout` setting
+      using [Kibana's Advanced settings](https://www.elastic.co/docs/reference/kibana/advanced-settings#kibana-search-settings)
+    - Alternatively, you can add timeout parameters to individual queries
+  </tab-item>
+
+  <tab-item title="Elastic Cloud Serverless">
+
+    - Requires a manual override from Elastic Support because you cannot modify
+      timeout settings directly
+  </tab-item>
+</tab-set>
+
+If you don't want to increase the timeout limit, try the following:
+- Reduce data volume with `LIMIT` or more selective filters before the `RERANK`
+  command
+- Split complex operations into multiple simpler queries
+- Configure your HTTP client's response timeout (Refer
+  to [HTTP client configuration](/docs/reference/elasticsearch/configuration-reference/networking-settings#_http_client_configuration))
+
+**Examples**
+Rerank search results using a simple query and a single field:
+```esql
+FROM books METADATA _score
+| WHERE MATCH(description, "hobbit")
+| SORT _score DESC
+| LIMIT 100
+| RERANK "hobbit" ON description WITH { "inference_id" : "test_reranker" }
+| LIMIT 3
+| KEEP title, _score
+```
+
+
+| title:text                                                                                  | _score:double         |
+|---------------------------------------------------------------------------------------------|-----------------------|
+| Poems from the Hobbit                                                                       | 0.0015673980815336108 |
+| A Tolkien Compass: Including J. R. R. Tolkien's Guide to the Names in The Lord of the Rings | 0.007936508394777775  |
+| Return of the King Being the Third Part of The Lord of the Rings                            | 9.960159659385681E-4  |
+
+Rerank search results using a query and multiple fields, and store the new score
+in a column named `rerank_score`:
+```esql
+FROM books METADATA _score
+| WHERE MATCH(description, "hobbit") OR MATCH(author, "Tolkien")
+| SORT _score DESC
+| LIMIT 100
+| RERANK rerank_score = "hobbit" ON description, author WITH { "inference_id" : "test_reranker" }
+| SORT rerank_score
+| LIMIT 3
+| KEEP title, _score, rerank_score
+```
+
+
+| title:text                                                       | _score:double      | rerank_score:double  |
+|------------------------------------------------------------------|--------------------|----------------------|
+| Return of the Shadow                                             | 2.8181066513061523 | 5.740527994930744E-4 |
+| Return of the King Being the Third Part of The Lord of the Rings | 3.6248698234558105 | 9.000900317914784E-4 |
+| The Lays of Beleriand                                            | 1.3002015352249146 | 9.36329597607255E-4  |
+
+Combine the original score with the reranked score:
+```esql
+FROM books METADATA _score
+| WHERE MATCH(description, "hobbit") OR MATCH(author, "Tolkien")
+| SORT _score DESC
+| LIMIT 100
+| RERANK rerank_score = "hobbit" ON description, author WITH { "inference_id" : "test_reranker" }
+| EVAL original_score = _score, _score = rerank_score + original_score
+| SORT _score
+| LIMIT 3
+| KEEP title, original_score, rerank_score, _score
+```
+
+
+| title:text                                                       | _score:double      | rerank_score:double   | rerank_score:double  |
+|------------------------------------------------------------------|--------------------|-----------------------|----------------------|
+| Poems from the Hobbit                                            | 4.012462615966797  | 0.001396648003719747  | 0.001396648003719747 |
+| The Lord of the Rings - Boxed Set                                | 3.768855094909668  | 0.0010020040208473802 | 0.001396648003719747 |
+| Return of the King Being the Third Part of The Lord of the Rings | 3.6248698234558105 | 9.000900317914784E-4  | 0.001396648003719747 |
