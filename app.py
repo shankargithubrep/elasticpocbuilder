@@ -3,6 +3,10 @@ Elastic Agent Builder Demo Generator
 Modular architecture with LLM-generated custom demos
 """
 
+# Load environment variables from .env file FIRST
+from dotenv import load_dotenv
+load_dotenv()
+
 import streamlit as st
 import os
 import json
@@ -97,157 +101,416 @@ if "view_mode" not in st.session_state:
 
 
 class SmartContextExtractor:
-    """Intelligent context extraction from user messages"""
+    """Intelligent context extraction from user messages using LLM"""
 
     def __init__(self):
-        self.company_patterns = [
-            r"(?:for|with|at|meeting with)\s+([A-Z][A-Za-z0-9\s&'.-]+?)(?:'s|'s|team|division|department|\s+wants|\s+needs|\s+is|\s+has|,|\.|\s+[a-z])",
-            r"^([A-Z][A-Za-z0-9\s&'.-]+?)(?:'s|'s|team|division|department|\s+wants|\s+needs)",
-            r"(?:customer|client|prospect)\s+is\s+([A-Z][A-Za-z0-9\s&'.-]+)",
-        ]
+        self.llm_client = None
+        try:
+            import anthropic
+            import os
 
-        self.department_keywords = {
-            "customer success": ["customer success", "cs team", "account management"],
-            "sales": ["sales", "revenue", "account executive"],
-            "marketing": ["marketing", "campaign", "brand"],
-            "engineering": ["engineering", "development", "devops"],
-            "operations": ["operations", "ops team", "supply chain"],
-            "finance": ["finance", "accounting", "treasury"],
-            "analytics": ["analytics", "data team", "business intelligence"],
-        }
+            # Try to get API key from environment or Streamlit secrets
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key and hasattr(st, 'secrets') and 'ANTHROPIC_API_KEY' in st.secrets:
+                api_key = st.secrets["ANTHROPIC_API_KEY"]
 
-        self.pain_point_patterns = {
-            "visibility": ["can't see", "no visibility", "lack of visibility"],
-            "performance": ["slow", "performance", "takes hours"],
-            "prediction": ["predict", "forecast", "anticipate", "prevent"],
-            "real_time": ["real-time", "real time", "instant"],
-            "manual": ["manual", "by hand", "spreadsheet"],
-        }
+            if api_key:
+                self.llm_client = anthropic.Anthropic(api_key=api_key)
+            else:
+                # Don't show warning in __init__, will show if extraction fails
+                pass
+        except Exception as e:
+            # Silently fail, will fallback to basic extraction
+            pass
 
     def extract_context(self, message: str) -> Dict:
-        """Extract all possible context from the message"""
+        """Extract all possible context from the message using LLM"""
+
+        if not self.llm_client:
+            # Fallback to basic extraction if LLM not available
+            st.info("💡 Using basic extraction. For better results, set ANTHROPIC_API_KEY environment variable.")
+            return self._basic_extract(message)
+
+        try:
+            # Use LLM to extract context
+            extraction_prompt = f"""Extract the following information from this customer description. Return ONLY valid JSON.
+
+Customer Message:
+{message}
+
+Extract:
+- company_name: The company name (string or null)
+- department: The department/team (string or null)
+- industry: The industry (string or null)
+- pain_points: List of specific pain points or challenges (array of strings, extract as many as mentioned)
+- use_cases: List of use cases or goals (array of strings)
+- metrics: List of metrics they care about (array of strings)
+- scale: Data scale mentioned (string or null, e.g., "5000+ accounts", "millions of transactions")
+
+Return ONLY a JSON object with these keys. If a field is not found, use null or empty array.
+
+JSON:"""
+
+            response = self.llm_client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=1000,
+                temperature=0.3,
+                messages=[{"role": "user", "content": extraction_prompt}]
+            )
+
+            # Parse JSON response
+            content = response.content[0].text.strip()
+
+            # Extract JSON from response (handle markdown code blocks)
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
+            context = json.loads(content)
+
+            # Clean up nulls
+            result = {}
+            for key, value in context.items():
+                if value is not None and value != [] and value != "":
+                    result[key] = value
+
+            return result
+
+        except Exception as e:
+            st.error(f"LLM extraction failed: {e}")
+            return self._basic_extract(message)
+
+    def _basic_extract(self, message: str) -> Dict:
+        """Fallback basic extraction using regex"""
         context = {}
 
-        company = self.extract_company(message)
-        if company:
-            context["company_name"] = company
-            context["industry"] = self.infer_industry(company)
+        # Basic company extraction
+        company_match = re.search(r"(?:Customer is|for|with|at)\s+([A-Z][A-Za-z0-9\s&'.-]+?)(?:\.|,|Department|\s+is)", message, re.IGNORECASE)
+        if company_match:
+            context["company_name"] = company_match.group(1).strip()
 
-        department = self.extract_department(message)
-        if department:
-            context["department"] = department
-
-        pain_points = self.extract_pain_points(message)
-        if pain_points:
-            context["pain_points"] = pain_points
-
-        metrics = self.extract_metrics(message)
-        if metrics:
-            context["metrics"] = metrics
-
-        scale = self.extract_scale(message)
-        if scale:
-            context["scale"] = scale
+        # Basic department extraction
+        dept_keywords = ["Call Center", "Customer Success", "Sales", "Marketing", "Operations", "Supply Chain", "Finance"]
+        for dept in dept_keywords:
+            if dept.lower() in message.lower():
+                context["department"] = dept
+                break
 
         return context
 
-    def extract_company(self, message: str) -> Optional[str]:
-        """Extract company name from message"""
-        for pattern in self.company_patterns:
-            match = re.search(pattern, message, re.IGNORECASE)
-            if match:
-                company = match.group(1).strip()
-                company = re.sub(r"\s+(team|division|department)$", "", company, flags=re.IGNORECASE)
-                return company
-        return None
 
-    def extract_department(self, message: str) -> Optional[str]:
-        """Extract department from message"""
-        message_lower = message.lower()
-        for dept_name, keywords in self.department_keywords.items():
-            for keyword in keywords:
-                if keyword in message_lower:
-                    return dept_name.title()
-        return None
+def generate_suggestions() -> str:
+    """Generate AI suggestions for missing context fields"""
+    from src.services.context_tracker import ContextTracker
+    import anthropic
 
-    def extract_pain_points(self, message: str) -> List[str]:
-        """Extract pain points from message"""
-        pain_points = []
-        message_lower = message.lower()
+    context = st.session_state.demo_context
+    tracker = ContextTracker()
+    progress, missing = tracker.calculate_progress(context)
 
-        for category, patterns in self.pain_point_patterns.items():
-            for pattern in patterns:
-                if pattern in message_lower:
-                    if category == "visibility":
-                        pain_points.append("Lack of real-time visibility")
-                    elif category == "performance":
-                        pain_points.append("Performance issues")
-                    elif category == "prediction":
-                        pain_points.append("Lack of predictive capabilities")
-                    elif category == "real_time":
-                        pain_points.append("Need for real-time insights")
-                    elif category == "manual":
-                        pain_points.append("Manual processes")
-                    break
+    if not missing:
+        return "✅ You have all the information needed! Type **'generate'** to create your demo."
 
-        return list(set(pain_points))
+    # Build prompt with what we have
+    known_info = []
+    if context.get("company_name"):
+        known_info.append(f"Company: {context['company_name']}")
+    if context.get("department"):
+        known_info.append(f"Department: {context['department']}")
+    if context.get("industry"):
+        known_info.append(f"Industry: {context['industry']}")
+    if context.get("pain_points"):
+        known_info.append(f"Pain Points: {', '.join(context['pain_points'])}")
+    if context.get("use_cases"):
+        known_info.append(f"Use Cases: {', '.join(context['use_cases'])}")
 
-    def extract_metrics(self, message: str) -> List[str]:
-        """Extract mentioned metrics from message"""
-        metrics = []
-        message_lower = message.lower()
+    known_context = "\n".join(known_info) if known_info else "No context provided yet"
 
-        metric_keywords = {
-            "Revenue": ["revenue", "arr", "mrr"],
-            "Churn": ["churn", "retention", "attrition"],
-            "Performance": ["performance", "efficiency"],
-            "Risk": ["risk", "exposure"],
-        }
+    # List missing fields
+    missing_fields = [field_name for field_name, _ in missing]
 
-        for metric_name, keywords in metric_keywords.items():
-            for keyword in keywords:
-                if keyword in message_lower:
-                    metrics.append(metric_name)
-                    break
+    suggestion_prompt = f"""Based on this customer context, suggest realistic and relevant information for the missing fields.
 
-        return list(set(metrics))
+**Known Context:**
+{known_context}
 
-    def extract_scale(self, message: str) -> Optional[str]:
-        """Extract scale information from message"""
-        patterns = [
-            r"(\d+[,\d]*)\s*(?:billion|B)\s+(?:in\s+)?(\w+)",
-            r"(\d+[,\d]*)\s*(?:million|M)\s+(\w+)",
-            r"(\d+[,\d]*[+]?)\s+(\w+)",
-        ]
+**Missing Fields:** {', '.join(missing_fields)}
 
-        for pattern in patterns:
-            match = re.search(pattern, message, re.IGNORECASE)
-            if match:
-                return f"{match.group(1)} {match.group(2)}"
+For each missing field, provide 2-3 specific, realistic suggestions that would make sense for this customer scenario.
 
-        return None
+Format your response as JSON with this structure:
+{{
+  "pain_points": ["suggestion 1", "suggestion 2", "suggestion 3"],
+  "use_cases": ["suggestion 1", "suggestion 2"],
+  "metrics": ["suggestion 1", "suggestion 2"],
+  "scale": "suggested scale description"
+}}
 
-    def infer_industry(self, company: str) -> str:
-        """Infer industry from company name"""
-        company_lower = company.lower()
+Only include fields that are actually missing. Be specific and relevant to their industry and department.
 
-        industry_indicators = {
-            "Technology": ["tech", "software", "salesforce", "microsoft", "adobe"],
-            "Retail": ["walmart", "target", "retail", "store"],
-            "Healthcare": ["clinic", "hospital", "health", "medical"],
-            "Financial": ["bank", "capital", "financial", "chase"],
-        }
+JSON:"""
 
-        for industry, indicators in industry_indicators.items():
-            for indicator in indicators:
-                if indicator in company_lower:
-                    return industry
+    try:
+        # Get API key
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            return "❌ Cannot generate suggestions: ANTHROPIC_API_KEY not set. Please provide the missing information manually."
 
-        return "Enterprise"
+        client = anthropic.Anthropic(api_key=api_key)
+
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=1000,
+            temperature=0.7,  # Higher temperature for creative suggestions
+            messages=[{"role": "user", "content": suggestion_prompt}]
+        )
+
+        content = response.content[0].text.strip()
+
+        # Parse JSON
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+
+        suggestions = json.loads(content)
+
+        # Update context with suggestions
+        for key, value in suggestions.items():
+            if value and key in context:
+                if isinstance(value, list):
+                    context[key] = value
+                else:
+                    context[key] = value
+
+        # Format response
+        response_parts = ["🤖 **AI-Generated Suggestions Applied!**\n"]
+
+        for key, value in suggestions.items():
+            field_name = key.replace("_", " ").title()
+            if isinstance(value, list):
+                response_parts.append(f"\n**{field_name}:**")
+                for item in value:
+                    response_parts.append(f"  • {item}")
+            else:
+                response_parts.append(f"\n**{field_name}:** {value}")
+
+        response_parts.append("\n\n✅ Context updated! Review the sidebar and type **'generate'** when ready, or provide more details to refine.")
+
+        return "\n".join(response_parts)
+
+    except Exception as e:
+        return f"❌ Error generating suggestions: {e}\n\nPlease provide the missing information manually."
 
 
 def process_smart_message(message: str) -> str:
-    """Process message with intelligent context extraction"""
+    """Process message with intelligent context extraction and progress tracking using LLM"""
+    from src.services.context_tracker import ContextTracker
+    import anthropic
+    import os
+
+    # Check if user is asking for suggestions
+    if message.strip().lower() in ['suggestions', 'suggest', 'generate suggestions', 'help']:
+        return generate_suggestions()
+
+    # Check if user wants to skip missing fields and use defaults
+    if message.strip().lower() in ['skip', "i don't know", "don't know", "use defaults", "not sure"]:
+        return _handle_skip_defaults()
+
+    # Get current context
+    current_context = st.session_state.demo_context
+    tracker = ContextTracker()
+
+    # Build conversation history for context
+    conversation_history = []
+    for msg in st.session_state.messages[-3:]:  # Last 3 messages for context
+        conversation_history.append(f"{msg['role']}: {msg['content'][:200]}")
+
+    # Create structured prompt for LLM
+    prompt = f"""You are a demo assistant helping gather information to build an Elastic Agent Builder demo.
+
+**Current Context:**
+- Company: {current_context.get('company_name') or 'Not provided'}
+- Department: {current_context.get('department') or 'Not provided'}
+- Industry: {current_context.get('industry') or 'Not provided'}
+- Pain Points: {len(current_context.get('pain_points', []))} identified
+- Use Cases: {len(current_context.get('use_cases', []))} identified
+- Scale: {current_context.get('scale') or 'Not provided'}
+- Metrics: {len(current_context.get('metrics', []))} identified
+
+**Recent Conversation:**
+{chr(10).join(conversation_history) if conversation_history else 'None'}
+
+**User's New Message:**
+{message}
+
+**CRITICAL INSTRUCTIONS:**
+You MUST return valid JSON in this EXACT format. No other text before or after the JSON.
+
+{{
+  "extracted_context": {{
+    "company_name": null,
+    "department": null,
+    "industry": null,
+    "pain_points": [],
+    "use_cases": [],
+    "scale": null,
+    "metrics": [],
+    "demo_type": null
+  }},
+  "user_response": ""
+}}
+
+**Guidelines:**
+1. Extract ALL new information from the user's message into extracted_context
+2. For pain_points and use_cases, extract specific items from lists or paragraphs
+3. **Classify demo_type** (CRITICAL):
+   - Set to "search" if use case involves: finding/retrieving documents, RAG, knowledge bases, patient records, policy lookup, semantic search, relevance
+   - Set to "analytics" if use case involves: analyzing trends, metrics, aggregations, dashboards, BI, time-series, forecasting
+   - Keywords for "search": search, find, retrieve, lookup, knowledge base, documents, relevant, RAG
+   - Keywords for "analytics": analyze, trend, metric, dashboard, report, insights, aggregate
+4. For user_response:
+   - If ≥80% complete: Say ready and ask them to type 'generate' (just the word "generate")
+   - If 50-79%: Acknowledge what was captured, then ask for missing fields AS BULLETS
+   - If <50%: Welcome and ask for key info AS BULLETS
+   - Be specific about what was found
+   - When asking for missing info, format as bullet points (one per field)
+   - ALWAYS end with: "💡 Don't have all the details? Just type **'skip'** and I'll use reasonable defaults."
+
+**Example user_response format when info is missing:**
+"Great! I've captured [what you found]. To complete the demo, I need:
+
+• **Scale:** How many [relevant unit]? (e.g., agents, transactions, customers)
+• **Metrics:** What KPIs matter most? (e.g., response time, conversion rate)
+
+💡 Don't have all the details? Just type **'skip'** and I'll use reasonable defaults."
+
+RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
+
+    try:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            # Fallback to basic extraction if no API key
+            st.warning("⚠️ API key not found, using basic extraction")
+            return _fallback_processing(message)
+
+        client = anthropic.Anthropic(api_key=api_key)
+
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=2000,
+            temperature=0.3,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        content = response.content[0].text.strip()
+
+        # Debug logging
+        logger.info(f"LLM raw response length: {len(content)}")
+        logger.debug(f"LLM response preview: {content[:500]}")
+        print(f"\n{'='*70}")
+        print(f"LLM RESPONSE DEBUG")
+        print(f"{'='*70}")
+        print(f"Length: {len(content)}")
+        print(f"First 500 chars:\n{content[:500]}")
+        print(f"{'='*70}\n")
+
+        # Extract JSON from response
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+
+        # Try to parse JSON
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parse failed: {e}")
+            logger.error(f"Content was: {content[:1000]}")
+            raise
+
+        # Update session state with extracted context
+        extracted = result.get('extracted_context', {})
+        context = st.session_state.demo_context
+
+        for key, value in extracted.items():
+            if value:
+                if isinstance(value, list) and value:  # Non-empty list
+                    # Merge with existing, removing duplicates
+                    existing = context.get(key, [])
+                    context[key] = list(set(existing + value))
+                elif not isinstance(value, list):  # String value
+                    context[key] = value
+
+        # Calculate progress for phase tracking
+        progress, missing = tracker.calculate_progress(context)
+        is_ready = tracker.is_ready_to_generate(context)
+
+        if is_ready:
+            st.session_state.conversation_phase = "ready_to_generate"
+        else:
+            st.session_state.conversation_phase = "gathering"
+
+        # Return the user-facing response from LLM
+        return result.get('user_response', 'Processing your request...')
+
+    except Exception as e:
+        logger.error(f"LLM processing failed: {e}", exc_info=True)
+        st.warning(f"⚠️ Using fallback processing due to error: {e}")
+        return _fallback_processing(message)
+
+
+def _handle_skip_defaults() -> str:
+    """Handle when user wants to skip missing fields and use defaults"""
+    from src.services.context_tracker import ContextTracker
+
+    context = st.session_state.demo_context
+    tracker = ContextTracker()
+
+    # Fill in reasonable defaults for missing fields
+    if not context.get('scale'):
+        # Infer scale from company/department context
+        if 'enterprise' in str(context.get('company_name', '')).lower() or \
+           'call center' in str(context.get('department', '')).lower():
+            context['scale'] = "1000+ agents handling 10,000+ daily interactions"
+        else:
+            context['scale'] = "100+ team members managing 1,000+ transactions daily"
+
+    if not context.get('metrics') or len(context.get('metrics', [])) == 0:
+        # Infer metrics from department
+        dept = str(context.get('department', '')).lower()
+        if 'sales' in dept:
+            context['metrics'] = ['conversion rate', 'pipeline velocity', 'deal size']
+        elif 'support' in dept or 'service' in dept or 'call center' in dept:
+            context['metrics'] = ['first call resolution', 'average handle time', 'customer satisfaction']
+        elif 'operations' in dept:
+            context['metrics'] = ['efficiency rate', 'cost per transaction', 'processing time']
+        else:
+            context['metrics'] = ['user engagement', 'task completion rate', 'response time']
+
+    # Check if now ready
+    progress, missing = tracker.calculate_progress(context)
+    is_ready = tracker.is_ready_to_generate(context)
+
+    if is_ready:
+        st.session_state.conversation_phase = "ready_to_generate"
+        return f"""Perfect! I've filled in reasonable defaults:
+
+• **Scale:** {context.get('scale')}
+• **Metrics:** {', '.join(context.get('metrics', []))}
+
+You're all set! Type **'generate'** to create your custom demo module."""
+    else:
+        st.session_state.conversation_phase = "gathering"
+        return f"""I've added some defaults, but I still need a bit more information. Currently at **{int(progress * 100)}% complete**.
+
+{tracker.generate_prompt_for_missing(missing)}"""
+
+
+def _fallback_processing(message: str) -> str:
+    """Fallback processing when LLM is unavailable"""
+    from src.services.context_tracker import ContextTracker
 
     extractor = SmartContextExtractor()
     extracted = extractor.extract_context(message)
@@ -262,98 +525,95 @@ def process_smart_message(message: str) -> str:
             else:
                 context[key] = value
 
-    # Determine conversation phase
-    has_company = bool(context.get("company_name"))
-    has_department = bool(context.get("department"))
-    has_pain_points = bool(context.get("pain_points"))
+    # Use ContextTracker for intelligent response
+    tracker = ContextTracker()
+    progress, missing = tracker.calculate_progress(context)
+    is_ready = tracker.is_ready_to_generate(context)
 
-    # Generate intelligent response
-    if has_company and has_department and has_pain_points:
-        company = context["company_name"]
-        dept = context["department"]
-        pain_points = context["pain_points"]
+    # Generate intelligent response based on progress
+    if is_ready:
+        company = context.get("company_name", "this customer")
+        dept = context.get("department", "team")
 
-        response = f"""Excellent! I understand you're creating a demo for **{company}'s {dept}** team.
+        response = f"""Perfect! I have all the information needed to create a demo for **{company}'s {dept}** team.
 
-Based on the challenges you mentioned:
-"""
-        for pain_point in pain_points[:3]:
-            response += f"- {pain_point}\n"
+{tracker.get_summary(context)}
 
-        if context.get("scale"):
-            response += f"\n**Scale:** {context['scale']}\n"
-
-        if context.get("metrics"):
-            response += f"\n**Key Metrics:** {', '.join(context['metrics'])}\n"
-
-        response += """
-I'll create a custom demo module with:
-- Industry-specific datasets tailored to their business
-- ES|QL queries that solve their specific problems
-- A demo guide and talk track
-
-**Ready to build?** Type **"Generate demo"** to proceed!
+**Ready to build?** Type **'generate'** to proceed!
 """
         st.session_state.conversation_phase = "ready_to_generate"
         return response
 
-    elif has_company and has_department:
-        return f"""Great! I see you're working with **{context['company_name']}'s {context['department']}** team.
-
-To create the most impactful demo, could you tell me more about their specific challenges and pain points?"""
-
-    elif has_company:
-        return f"""Excellent, **{context['company_name']}** is a great opportunity!
-
-Which specific team or department will be using Agent Builder?"""
-
     else:
-        return """I'd love to help you create a compelling Agent Builder demo!
+        response = f"""Great! I'm gathering information for your demo. **({int(progress * 100)}% complete)**\n\n"""
 
-Could you provide:
-1. **Company name** and industry?
-2. **Which team** will use it?
-3. **Main challenges** they're facing?
+        if context.get("company_name"):
+            response += f"✅ **Company:** {context['company_name']}\n"
+        if context.get("department"):
+            response += f"✅ **Department:** {context['department']}\n"
+        if context.get("pain_points"):
+            response += f"✅ **Pain Points:** {len(context['pain_points'])} identified\n"
+        if context.get("use_cases"):
+            response += f"✅ **Use Cases:** {len(context['use_cases'])} defined\n"
 
-Feel free to paste in meeting notes - I'll extract the details!"""
+        response += "\n---\n\n"
+
+        missing_prompt = tracker.generate_prompt_for_missing(missing)
+        if missing_prompt:
+            response += missing_prompt
+
+        st.session_state.conversation_phase = "gathering"
+        return response
 
 
 def display_context_summary():
-    """Display extracted context in sidebar"""
-    if any(st.session_state.demo_context.values()):
-        st.markdown("### 📋 Demo Context")
+    """Display extracted context in sidebar with progress tracking"""
+    from src.services.context_tracker import ContextTracker
 
-        context = st.session_state.demo_context
+    tracker = ContextTracker()
+    context = st.session_state.demo_context
 
-        if context.get("company_name"):
-            st.markdown(f"🏢 **Company:** {context['company_name']}")
+    # Calculate progress
+    progress, missing = tracker.calculate_progress(context)
+    status = tracker.get_completion_status(context)
 
-        if context.get("industry"):
-            st.markdown(f"🏭 **Industry:** {context['industry']}")
+    st.markdown("### 📋 Demo Context")
 
-        if context.get("department"):
-            st.markdown(f"👥 **Department:** {context['department']}")
+    # Show demo type if detected
+    demo_type = context.get('demo_type')
+    if demo_type:
+        type_emoji = "🔍" if demo_type == "search" else "📊"
+        type_label = "Search/RAG" if demo_type == "search" else "Analytics"
+        st.info(f"{type_emoji} **Demo Type:** {type_label}")
 
-        if context.get("scale"):
-            st.markdown(f"📊 **Scale:** {context['scale']}")
+    # Progress bar at top
+    st.progress(progress, text=f"{int(progress * 100)}% complete")
 
-        if context.get("pain_points"):
-            st.markdown("**🎯 Pain Points:**")
-            for point in context["pain_points"]:
-                st.markdown(f"  • {point}")
+    # Checklist of fields
+    for field_key, field_status in status.items():
+        icon = "✅" if field_status['is_complete'] else "⬜"
+        name = field_status['display_name']
+        value = field_status['display_value']
 
-        if context.get("metrics"):
-            st.markdown(f"**📈 Metrics:** {', '.join(context['metrics'])}")
+        if field_status['is_complete']:
+            st.markdown(f"{icon} **{name}:** {value}")
+        else:
+            st.markdown(f"{icon} {name}")
 
-        # Progress indicator
-        filled_fields = sum(1 for k, v in context.items() if v)
-        total_fields = 7
-        progress = filled_fields / total_fields
+    # Status message
+    st.markdown("---")
 
-        st.progress(progress, text=f"Context: {int(progress*100)}%")
+    if tracker.is_ready_to_generate(context):
+        st.success("✅ Ready to generate!\n\nType **'generate'** to create your demo.")
+    else:
+        missing_count = len(missing)
+        st.warning(f"⚠️ Need more info ({missing_count} fields)")
 
-        if progress >= 0.5:
-            st.success("✅ Ready to generate!")
+        # Show what's missing
+        prompt = tracker.generate_prompt_for_missing(missing)
+        if prompt:
+            with st.expander("What's missing?"):
+                st.info(prompt)
 
 
 def render_create_demo_view():
@@ -396,7 +656,7 @@ def render_create_demo_view():
             st.markdown(prompt)
 
         # Check if this is a generate command
-        if "generate demo" in prompt.lower() and st.session_state.conversation_phase == "ready_to_generate":
+        if prompt.lower().strip() == "generate" and st.session_state.conversation_phase == "ready_to_generate":
             with st.chat_message("assistant"):
                 with st.spinner("🚀 Generating custom demo module..."):
                     try:
@@ -409,7 +669,9 @@ def render_create_demo_view():
                             "pain_points": context.get("pain_points", []),
                             "use_cases": context.get("use_cases", []),
                             "scale": context.get("scale", "10000 records"),
-                            "metrics": context.get("metrics", [])
+                            "metrics": context.get("metrics", []),
+                            "demo_type": context.get("demo_type", "analytics"),
+                            "dataset_size_preference": st.session_state.get("dataset_size_preference", "medium")
                         }
 
                         # Create progress placeholder
@@ -418,9 +680,15 @@ def render_create_demo_view():
                         def update_progress(progress: float, message: str):
                             progress_placeholder.progress(progress, text=message)
 
-                        # Generate demo using modular orchestrator
+                        # Generate demo using modular orchestrator with query-first strategy
                         orchestrator = ModularDemoOrchestrator()
-                        results = orchestrator.generate_new_demo(config, update_progress)
+
+                        # Use new strategy-based workflow
+                        results = orchestrator.generate_new_demo_with_strategy(
+                            config,
+                            update_progress,
+                            conversation=st.session_state.messages
+                        )
 
                         st.session_state.current_demo_module = results['module_name']
 
@@ -459,6 +727,8 @@ You can now refine the generated modules or start a new demo!"""
                     response = process_smart_message(prompt)
                     st.markdown(response)
                     st.session_state.messages.append({"role": "assistant", "content": response})
+            # Force rerun to update sidebar with new context
+            st.rerun()
 
 
 @st.cache_data(ttl=3600)
@@ -799,6 +1069,39 @@ def main():
             ):
                 st.session_state.view_mode = "browse"
                 st.rerun()
+
+        # Dataset size preference (always visible)
+        st.markdown("---")
+        st.markdown("#### Dataset Size")
+
+        # Initialize dataset_size_preference if not exists
+        if "dataset_size_preference" not in st.session_state:
+            st.session_state.dataset_size_preference = "medium"
+
+        # Slider with options
+        size_options = ["small", "medium", "large"]
+        size_index = size_options.index(st.session_state.dataset_size_preference)
+
+        selected_index = st.select_slider(
+            "Size",
+            options=range(len(size_options)),
+            value=size_index,
+            format_func=lambda x: size_options[x].capitalize(),
+            key="dataset_size_slider",
+            label_visibility="collapsed"
+        )
+
+        st.session_state.dataset_size_preference = size_options[selected_index]
+
+        # Display legend based on selection
+        size_legends = {
+            "small": "**Small:** < 5,000 records per dataset",
+            "medium": "**Medium:** 5,000-15,000 records per dataset",
+            "large": "**Large:** 15,000-50,000 records per dataset"
+        }
+
+        st.caption(size_legends[st.session_state.dataset_size_preference])
+        st.markdown("---")
 
         if st.session_state.view_mode == "create":
             display_context_summary()
