@@ -783,14 +783,33 @@ def load_demo_datasets(module_name: str):
 
 @st.cache_data(ttl=3600)
 def load_demo_queries(module_name: str):
-    """Cache query generation for faster loading"""
+    """Cache query generation for faster loading
+
+    Returns dict with three query types:
+    {
+        'scripted': [...],
+        'parameterized': [...],
+        'rag': [...]
+    }
+    """
     manager = DemoModuleManager()
     loader = manager.get_module(module_name)
     if loader:
         datasets = load_demo_datasets(module_name)
         query_gen = loader.load_query_generator(datasets)
-        return query_gen.generate_queries()
-    return []
+
+        # Load all three query types
+        scripted = query_gen.generate_queries()
+        parameterized = query_gen.generate_parameterized_queries()
+        rag = query_gen.generate_rag_queries()
+
+        return {
+            'scripted': scripted,
+            'parameterized': parameterized,
+            'rag': rag,
+            'all': scripted + parameterized + rag  # For backward compatibility
+        }
+    return {'scripted': [], 'parameterized': [], 'rag': [], 'all': []}
 
 @st.cache_data(ttl=3600)
 def load_demo_guide(module_name: str):
@@ -799,8 +818,9 @@ def load_demo_guide(module_name: str):
     loader = manager.get_module(module_name)
     if loader:
         datasets = load_demo_datasets(module_name)
-        queries = load_demo_queries(module_name)
-        guide_gen = loader.load_demo_guide(datasets, queries)
+        queries_dict = load_demo_queries(module_name)
+        # Pass all queries to guide generator
+        guide_gen = loader.load_demo_guide(datasets, queries_dict['all'])
         return guide_gen.generate_guide()
     return ""
 
@@ -1059,72 +1079,120 @@ def render_browse_demos_view():
                 # Only load if assets have been generated
                 if st.session_state.get("assets_generated", False):
                     try:
-                        queries = load_demo_queries(st.session_state.current_demo_module)
-                        if queries:
-                            for i, query in enumerate(queries, 1):
-                                query_name = query.get('name', f'Query {i}')
-                                st.markdown(f"### {i}. {query_name}")
+                        queries_dict = load_demo_queries(st.session_state.current_demo_module)
 
-                                # Description
-                                if query.get('description'):
-                                    st.caption(query['description'])
+                        # Create sub-tabs for query types
+                        query_tabs = st.tabs([
+                            f"📝 Scripted ({len(queries_dict['scripted'])})",
+                            f"🔧 Parameterized ({len(queries_dict['parameterized'])})",
+                            f"🤖 RAG ({len(queries_dict['rag'])})"
+                        ])
 
-                                # Query code with copy button
-                                query_text = query.get('esql', '')
-                                st.code(query_text, language='sql')
+                        # Helper function to render queries
+                        def render_query_list(queries, query_type, can_execute=True):
+                            if queries:
+                                for i, query in enumerate(queries, 1):
+                                    query_name = query.get('name', f'Query {i}')
+                                    st.markdown(f"### {i}. {query_name}")
 
-                                # Action buttons
-                                col1, col2 = st.columns([1, 3])
+                                    # Query type badge
+                                    if query_type == 'scripted':
+                                        st.markdown("**Type:** `Scripted` ✅ *Executable*")
+                                    elif query_type == 'parameterized':
+                                        st.markdown("**Type:** `Parameterized` ⚙️ *Agent Builder Tool*")
+                                    elif query_type == 'rag':
+                                        st.markdown("**Type:** `RAG` 🤖 *Agent Builder Tool*")
 
-                                with col1:
-                                    # Test query button
-                                    if st.button("▶️ Test Query", key=f"test_query_{i}", use_container_width=True):
-                                        from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                                    # Description
+                                    if query.get('description'):
+                                        st.caption(query['description'])
 
-                                        with st.spinner(f"Executing {query_name}..."):
-                                            try:
-                                                indexer = ElasticsearchIndexer()
-                                                success, result, error = indexer.execute_esql(query_text)
+                                    # Query code with copy button
+                                    query_text = query.get('esql', '')
+                                    st.code(query_text, language='sql')
 
-                                                if success:
-                                                    st.success(f"✅ Query executed successfully!")
+                                    # Show parameters if they exist (for parameterized/RAG queries)
+                                    if query.get('parameters'):
+                                        with st.expander("📋 Parameters"):
+                                            for param_name, param_info in query['parameters'].items():
+                                                st.markdown(f"**`?{param_name}`** ({param_info.get('type', 'unknown')})")
+                                                st.caption(param_info.get('description', ''))
+                                                if 'default' in param_info:
+                                                    st.caption(f"Default: `{param_info['default']}`")
 
-                                                    # Display results
-                                                    if result:
-                                                        # Try to convert to DataFrame for better display
-                                                        try:
-                                                            if 'columns' in result and 'values' in result:
-                                                                # ES|QL response format
-                                                                columns = [col['name'] for col in result['columns']]
-                                                                values = result['values']
-                                                                result_df = pd.DataFrame(values, columns=columns)
-                                                                st.dataframe(result_df, use_container_width=True)
-                                                                st.caption(f"Returned {len(result_df)} rows")
-                                                            else:
-                                                                # Fallback to JSON display
-                                                                st.json(result)
-                                                        except Exception as display_error:
-                                                            # If conversion fails, show raw JSON
-                                                            st.json(result)
-                                                else:
-                                                    st.error(f"❌ Query failed:\n\n{error}")
+                                    # Action buttons (only for scripted queries)
+                                    if can_execute and query_type == 'scripted':
+                                        col1, col2 = st.columns([1, 3])
 
-                                            except Exception as e:
-                                                st.error(f"❌ Error executing query: {e}")
-                                                import traceback
-                                                with st.expander("Show traceback"):
-                                                    st.code(traceback.format_exc())
+                                        with col1:
+                                            # Test query button
+                                            if st.button("▶️ Test Query", key=f"test_query_{query_type}_{i}", use_container_width=True):
+                                                from src.services.elasticsearch_indexer import ElasticsearchIndexer
 
-                                with col2:
-                                    # Copy to clipboard button (visual only, actual copy handled by st.code)
-                                    st.caption(f"💾 Use the copy button in the code block above")
+                                                with st.spinner(f"Executing {query_name}..."):
+                                                    try:
+                                                        indexer = ElasticsearchIndexer()
+                                                        success, result, error = indexer.execute_esql(query_text)
 
-                                st.divider()
-                        else:
-                            st.info("No queries found. Try regenerating assets from the Config tab.")
+                                                        if success:
+                                                            st.success(f"✅ Query executed successfully!")
+
+                                                            # Display results
+                                                            if result:
+                                                                # Try to convert to DataFrame for better display
+                                                                try:
+                                                                    if 'columns' in result and 'values' in result:
+                                                                        # ES|QL response format
+                                                                        columns = [col['name'] for col in result['columns']]
+                                                                        values = result['values']
+                                                                        result_df = pd.DataFrame(values, columns=columns)
+                                                                        st.dataframe(result_df, use_container_width=True)
+                                                                        st.caption(f"Returned {len(result_df)} rows")
+                                                                    else:
+                                                                        # Fallback to JSON display
+                                                                        st.json(result)
+                                                                except Exception as display_error:
+                                                                    # If conversion fails, show raw JSON
+                                                                    st.json(result)
+                                                        else:
+                                                            st.error(f"❌ Query failed:\n\n{error}")
+
+                                                    except Exception as e:
+                                                        st.error(f"❌ Error executing query: {e}")
+                                                        import traceback
+                                                        with st.expander("Show traceback"):
+                                                            st.code(traceback.format_exc())
+
+                                        with col2:
+                                            # Copy to clipboard button (visual only, actual copy handled by st.code)
+                                            st.caption(f"💾 Use the copy button in the code block above")
+
+                                    st.divider()
+                            else:
+                                st.info(f"No {query_type} queries found.")
+
+                        # Render each query type in its tab
+                        with query_tabs[0]:
+                            st.markdown("### Scripted Queries")
+                            st.caption("Non-parameterized, fully tested ES|QL queries. These can be executed directly.")
+                            render_query_list(queries_dict['scripted'], 'scripted', can_execute=True)
+
+                        with query_tabs[1]:
+                            st.markdown("### Parameterized Queries")
+                            st.caption("Agent Builder ES|QL tool definitions with `?parameter` syntax. These are for Agent Builder integration (v2 feature).")
+                            render_query_list(queries_dict['parameterized'], 'parameterized', can_execute=False)
+
+                        with query_tabs[2]:
+                            st.markdown("### RAG Queries")
+                            st.caption("Semantic search queries using MATCH → RERANK → COMPLETION pipeline for open-ended Q&A.")
+                            render_query_list(queries_dict['rag'], 'rag', can_execute=False)
+
                     except Exception as e:
                         st.error(f"Error loading queries: {e}")
                         st.info("Try clicking 'Generate Assets' in the Config tab.")
+                        import traceback
+                        with st.expander("Show traceback"):
+                            st.code(traceback.format_exc())
                 else:
                     st.info("📋 Click 'Generate Assets' in the Config tab to view queries")
 

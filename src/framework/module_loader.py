@@ -149,24 +149,44 @@ class ModuleLoader:
 
             logger.info(f"Generated {len(datasets)} datasets")
 
-            # Step 2: Generate queries
+            # Step 2: Generate queries (all three types)
             if progress_callback:
                 progress_callback(0.5, "🔍 Creating ES|QL queries...")
 
             query_generator = self.load_query_generator(datasets)
-            queries = query_generator.generate_queries()
+
+            # Generate scripted queries (tested, non-parameterized)
+            scripted_queries = query_generator.generate_queries()
+
+            # Generate parameterized queries (Agent Builder tools)
+            parameterized_queries = query_generator.generate_parameterized_queries()
+
+            # Generate RAG queries (MATCH → RERANK → COMPLETION)
+            rag_queries = query_generator.generate_rag_queries()
+
             query_progression = query_generator.get_query_progression()
 
-            results['queries'] = queries
+            # Store queries organized by type
+            results['queries'] = {
+                'scripted': scripted_queries,
+                'parameterized': parameterized_queries,
+                'rag': rag_queries
+            }
+            results['all_queries'] = scripted_queries + parameterized_queries + rag_queries
             results['query_progression'] = query_progression
 
-            logger.info(f"Generated {len(queries)} queries")
+            logger.info(
+                f"Generated {len(scripted_queries)} scripted, "
+                f"{len(parameterized_queries)} parameterized, "
+                f"{len(rag_queries)} RAG queries"
+            )
 
             # Step 3: Generate demo guide
             if progress_callback:
                 progress_callback(0.8, "📝 Creating demo guide...")
 
-            demo_guide = self.load_demo_guide(datasets, queries)
+            # Pass all queries to demo guide generator
+            demo_guide = self.load_demo_guide(datasets, results['all_queries'])
             guide_text = demo_guide.generate_guide()
             talk_track = demo_guide.get_talk_track()
             objections = demo_guide.get_objection_handling()

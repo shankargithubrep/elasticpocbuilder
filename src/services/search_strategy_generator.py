@@ -1,13 +1,15 @@
 """
 Search Query Strategy Generator
 Generates query-first strategy for SEARCH/RAG use cases
+Includes RAG query field analysis for MATCH → RERANK → COMPLETION pipeline
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -353,3 +355,202 @@ ES|QL Search Commands:
 
         logger.info("Search strategy validation passed")
         return True
+
+
+class RAGFieldAnalyzer:
+    """Analyzes dataset schema to identify optimal fields for RAG queries
+
+    Supports the MATCH → RERANK → COMPLETION pipeline by identifying:
+    - Text fields suitable for MATCH
+    - Fields for RERANK (important text content)
+    - Fields for LLM context
+    - Temporal boundaries
+    """
+
+    def __init__(self, dataset_schema: Dict[str, str]):
+        """Initialize with dataset schema
+
+        Args:
+            dataset_schema: Dict mapping field names to types
+                Example: {"title": "text", "content": "text", "@timestamp": "date"}
+        """
+        self.schema = dataset_schema
+
+    def identify_text_fields(self) -> List[str]:
+        """Find text/keyword fields suitable for MATCH
+
+        Looks for common text field patterns:
+        - description, summary, content, message, feedback
+        - title, subject, headline
+        - notes, comments, details
+        - Any field with 'text' or 'keyword' type
+
+        Returns:
+            List of field names suitable for semantic search
+        """
+        text_fields = []
+        text_keywords = [
+            'description', 'summary', 'content', 'message', 'feedback',
+            'title', 'subject', 'headline', 'body', 'text',
+            'notes', 'comments', 'details', 'explanation', 'reason'
+        ]
+
+        for field_name, field_type in self.schema.items():
+            # Include if field type is text or keyword
+            if field_type in ('text', 'keyword', 'semantic_text'):
+                text_fields.append(field_name)
+            # Or if field name suggests text content
+            elif any(keyword in field_name.lower() for keyword in text_keywords):
+                text_fields.append(field_name)
+
+        logger.info(f"Identified {len(text_fields)} text fields for MATCH: {text_fields}")
+        return text_fields
+
+    def identify_rerank_fields(self, text_fields: Optional[List[str]] = None) -> List[str]:
+        """Find most important text fields for RERANK
+
+        Selects 2-4 most important text fields from text_fields.
+        Prioritizes:
+        - Primary content fields (description, content, message)
+        - User-generated content (feedback, comments)
+        - Resolution/outcome fields
+
+        Args:
+            text_fields: Optional list of text fields (calls identify_text_fields if not provided)
+
+        Returns:
+            List of 2-4 most important text fields for reranking
+        """
+        if text_fields is None:
+            text_fields = self.identify_text_fields()
+
+        # Priority keywords (higher priority = higher score)
+        priority_map = {
+            'content': 10,
+            'description': 9,
+            'message': 8,
+            'feedback': 7,
+            'comments': 6,
+            'summary': 5,
+            'notes': 4,
+            'title': 3,
+            'subject': 2
+        }
+
+        # Score each field
+        scored_fields = []
+        for field in text_fields:
+            score = 0
+            field_lower = field.lower()
+            for keyword, priority in priority_map.items():
+                if keyword in field_lower:
+                    score = max(score, priority)
+            scored_fields.append((field, score))
+
+        # Sort by score (descending) and take top 2-4
+        scored_fields.sort(key=lambda x: x[1], reverse=True)
+        rerank_fields = [field for field, score in scored_fields[:4]]
+
+        # Ensure we have at least 2 fields
+        if len(rerank_fields) < 2 and text_fields:
+            rerank_fields = text_fields[:min(4, len(text_fields))]
+
+        logger.info(f"Identified {len(rerank_fields)} fields for RERANK: {rerank_fields}")
+        return rerank_fields
+
+    def identify_context_fields(self) -> List[str]:
+        """Find fields to include in LLM context
+
+        Includes ID fields, status fields, metadata, and all text fields.
+        Excludes internal/system fields.
+
+        Returns:
+            List of field names to include in COMPLETION prompt
+        """
+        context_fields = []
+        exclude_patterns = ['_', 'internal', 'system', 'meta']
+
+        for field_name, field_type in self.schema.items():
+            # Exclude fields with underscore prefix (internal fields)
+            if field_name.startswith('_'):
+                continue
+            # Exclude if matches exclude patterns
+            if any(pattern in field_name.lower() for pattern in exclude_patterns[1:]):
+                continue
+            # Include all other fields
+            context_fields.append(field_name)
+
+        logger.info(f"Identified {len(context_fields)} fields for context: {context_fields}")
+        return context_fields
+
+    def determine_time_boundary(self, row_count_estimate: str = "moderate") -> str:
+        """Determine appropriate time range for temporal queries
+
+        Based on data volume, suggests time boundary:
+        - Small/Few: 30 days
+        - Moderate: 90 days
+        - Large/Many: 120 days
+
+        Args:
+            row_count_estimate: Estimated data volume ("small", "moderate", "large")
+
+        Returns:
+            Time boundary string (e.g., "90 days")
+        """
+        # Check if schema has timestamp field
+        has_timestamp = any(
+            '@timestamp' in field or 'timestamp' in field.lower() or 'date' in field.lower()
+            for field in self.schema.keys()
+        )
+
+        if not has_timestamp:
+            logger.warning("No timestamp field found, time boundary may not be applicable")
+            return "120 days"  # Default fallback
+
+        # Determine boundary based on volume
+        if 'small' in row_count_estimate.lower() or 'few' in row_count_estimate.lower():
+            boundary = "30 days"
+        elif 'large' in row_count_estimate.lower() or 'many' in row_count_estimate.lower():
+            boundary = "120 days"
+        else:  # moderate or unknown
+            boundary = "90 days"
+
+        logger.info(f"Determined time boundary: {boundary} (volume: {row_count_estimate})")
+        return boundary
+
+    def generate_rag_template_config(self, dataset_name: str, row_count: str = "moderate") -> Dict[str, Any]:
+        """Generate complete RAG query configuration
+
+        Analyzes schema and returns all necessary information for
+        generating a RAG query template.
+
+        Args:
+            dataset_name: Name of the dataset/index
+            row_count: Estimated row count
+
+        Returns:
+            Dict with:
+            - search_fields: Fields for MATCH
+            - rerank_fields: Fields for RERANK
+            - context_fields: Fields for COMPLETION context
+            - time_boundary: Time range string
+            - index_name: Dataset name
+        """
+        text_fields = self.identify_text_fields()
+        rerank_fields = self.identify_rerank_fields(text_fields)
+        context_fields = self.identify_context_fields()
+        time_boundary = self.determine_time_boundary(row_count)
+
+        config = {
+            "index_name": dataset_name,
+            "search_fields": text_fields,
+            "rerank_fields": rerank_fields,
+            "context_fields": context_fields,
+            "time_boundary": time_boundary,
+            "has_timestamp": any('@timestamp' in f or 'timestamp' in f.lower() for f in self.schema.keys())
+        }
+
+        logger.info(f"Generated RAG template config for {dataset_name}")
+        logger.debug(f"Config: {json.dumps(config, indent=2)}")
+
+        return config

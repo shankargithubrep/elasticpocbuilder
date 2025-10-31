@@ -57,7 +57,13 @@ class DataGeneratorModule(ABC):
 
 
 class QueryGeneratorModule(ABC):
-    """Base class for query generation modules"""
+    """Base class for query generation modules
+
+    Generates three types of queries:
+    1. Scripted queries (non-parameterized, tested)
+    2. Parameterized queries (Agent Builder tools, LLM-generated)
+    3. RAG queries (MATCH → RERANK → COMPLETION pipeline)
+    """
 
     def __init__(self, config: DemoConfig, datasets: Dict[str, pd.DataFrame]):
         """Initialize with config and available datasets"""
@@ -66,16 +72,83 @@ class QueryGeneratorModule(ABC):
 
     @abstractmethod
     def generate_queries(self) -> List[Dict[str, Any]]:
-        """Generate ES|QL queries for the demo
+        """Generate scripted (non-parameterized) ES|QL queries for the demo
+
+        These are fully tested queries with hard-coded values that address
+        specific customer pain points. They serve as the foundation for
+        parameterized versions.
 
         Returns:
             List of query definitions with:
+            - query_type: "scripted"
             - name: Query name
             - description: What it demonstrates
-            - esql: The ES|QL query
+            - esql: The ES|QL query (no parameters)
             - expected_insight: What the customer will learn
+            - tested: True (indicates validation status)
         """
         pass
+
+    def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
+        """Generate parameterized versions of scripted queries
+
+        These queries use ?parameter syntax for Agent Builder ES|QL tools.
+        They are LLM-generated based on validated scripted queries.
+
+        Note: These are NOT executed in this app - they are tool definitions
+        for Agent Builder integration (v2 feature).
+
+        Returns:
+            List of parameterized query definitions with:
+            - query_type: "parameterized"
+            - name: Query name
+            - description: What it demonstrates
+            - esql: ES|QL query with ?parameter syntax
+            - parameters: Dict of parameter definitions with:
+                - type: Parameter data type (string, date, keyword[], etc.)
+                - description: What the parameter controls
+                - default: Default value (from scripted query)
+                - required: Boolean
+            - base_query: Name of the scripted query this derives from
+            - agent_builder_ready: True
+
+        Important: Avoid LIKE and RLIKE operators - they don't support parameters!
+        """
+        # Default implementation: Return empty list
+        # LLM-generated modules will override this with actual parameterized queries
+        return []
+
+    def generate_rag_queries(self) -> List[Dict[str, Any]]:
+        """Generate RAG queries for semantic search + LLM completion
+
+        These queries implement the MATCH → RERANK → COMPLETION pipeline
+        for open-ended question answering via Agent Builder.
+
+        Pipeline:
+        1. MATCH/MATCH_PHRASE - Semantic text search (100+ docs)
+        2. RERANK (optional) - ML-based relevance scoring (top 5-10 docs)
+        3. INLINE STATS - Aggregate context (preserves fields!)
+        4. COMPLETION - LLM generates answer from context
+
+        Returns:
+            List of RAG query definitions with:
+            - query_type: "rag"
+            - name: Query name
+            - description: What questions it can answer
+            - esql: Full MATCH → RERANK → COMPLETION query
+            - parameters: Dict with at least:
+                - user_question: Required string parameter
+            - search_fields: List of text fields for MATCH
+            - rerank_fields: List of fields for RERANK (optional)
+            - context_fields: List of fields for LLM context
+            - time_boundary: Time range (e.g., "120 days")
+            - agent_builder_tool: Dict with tool definition metadata
+
+        Critical: Use INLINE STATS not STATS to preserve fields before COMPLETION!
+        """
+        # Default implementation: Return empty list
+        # LLM-generated modules will override this with actual RAG queries
+        return []
 
     @abstractmethod
     def get_query_progression(self) -> List[str]:

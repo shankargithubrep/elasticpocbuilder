@@ -215,56 +215,245 @@ Generate the complete implementation:"""
         module_file.write_text(code)
 
     def _generate_query_module(self, config: Dict[str, Any], module_path: Path):
-        """Generate the query generation module"""
+        """Generate the query generation module with THREE query types:
+        1. Scripted queries (tested, non-parameterized)
+        2. Parameterized queries (Agent Builder tools)
+        3. RAG queries (MATCH → RERANK → COMPLETION)
+        """
 
-        prompt = f"""Generate a Python module that implements QueryGeneratorModule for this customer:
+        # Read ES|QL documentation for reference
+        esql_docs = self._read_esql_docs()
 
+        prompt = f"""Generate a Python module that implements QueryGeneratorModule with THREE types of queries.
+
+**Customer Context:**
 Company: {config['company_name']}
 Department: {config['department']}
 Pain Points: {', '.join(config['pain_points'])}
 Use Cases: {', '.join(config['use_cases'])}
 
-The module should:
-1. Generate ES|QL queries that directly address their pain points
-2. Show progression from simple to complex
-3. Include queries that demonstrate real-time value
-4. Be specific to their metrics and KPIs
+**CRITICAL - Generate ALL THREE Query Types:**
 
-CRITICAL - ESCAPING ES|QL QUERIES IN PYTHON:
+1. **SCRIPTED QUERIES** (generate_queries method):
+   - Non-parameterized, fully tested ES|QL queries
+   - Hard-coded values addressing specific pain points
+   - These serve as the foundation for parameterized versions
+
+2. **PARAMETERIZED QUERIES** (generate_parameterized_queries method):
+   - Based on validated scripted queries
+   - Use ?parameter syntax for Agent Builder ES|QL tools
+   - NOT executed in this app - tool definitions only
+   - AVOID LIKE/RLIKE operators (not supported with parameters!)
+
+3. **RAG QUERIES** (generate_rag_queries method):
+   - MATCH → RERANK → COMPLETION pipeline
+   - For open-ended question answering
+   - Use INLINE STATS (NOT STATS) to preserve fields!
+
+**ES|QL Reference Documentation:**
+{esql_docs}
+
+**CRITICAL - ESCAPING ES|QL QUERIES IN PYTHON:**
 - ES|QL queries with JSON parameters use curly braces: MATCH(field, "term", {{"boost": 0.75}})
 - ALWAYS use double curly braces {{{{ }}}} to escape JSON in queries when using f-strings
-- OR use regular strings with .format() instead of f-strings for queries
 - Example CORRECT: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{"boost": 1.5}})\"\"\"
 - Example WRONG: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {"boost": 1.5})\"\"\"
 
-Template:
+**Template Structure:**
 ```python
 from src.framework.base import QueryGeneratorModule, DemoConfig
 from typing import Dict, List, Any
 import pandas as pd
 
 class {config['company_name'].replace(' ', '')}QueryGenerator(QueryGeneratorModule):
-    \"\"\"Query generator for {config['company_name']} - {config['department']}\"\"\"
+    \"\"\"Query generator for {config['company_name']} - {config['department']}
+
+    Generates three types of queries:
+    1. Scripted (tested, non-parameterized)
+    2. Parameterized (Agent Builder tools)
+    3. RAG (semantic search + LLM completion)
+    \"\"\"
 
     def generate_queries(self) -> List[Dict[str, Any]]:
-        \"\"\"Generate ES|QL queries specific to {config['company_name']}'s use cases\"\"\"
+        \"\"\"Generate SCRIPTED (non-parameterized) ES|QL queries
 
+        These are fully tested queries with hard-coded values.
+        Address pain points: {', '.join(config['pain_points'])}
+        \"\"\"
         queries = []
 
-        # Create queries that solve their specific problems
-        # Address pain points: {', '.join(config['pain_points'])}
-        # Support use cases: {', '.join(config['use_cases'])}
+        # Query 1: [Simple query addressing first pain point]
+        queries.append({{
+            "query_type": "scripted",
+            "name": "query_name_here",
+            "description": "What it demonstrates",
+            "esql": \"\"\"
+                FROM index_name
+                | WHERE condition
+                | STATS aggregation
+                | SORT field DESC
+                | LIMIT 10
+            \"\"\",
+            "expected_insight": "What customer learns",
+            "tested": True
+        }})
+
+        # Add 4-6 more scripted queries...
 
         return queries
 
+    def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
+        \"\"\"Generate PARAMETERIZED versions for Agent Builder
+
+        Based on validated scripted queries above.
+        Use ?parameter syntax. NO LIKE/RLIKE operators!
+        \"\"\"
+        param_queries = []
+
+        # Parameterized version of Query 1
+        param_queries.append({{
+            "query_type": "parameterized",
+            "name": "parameterized_query_name",
+            "description": "Configurable version of X",
+            "esql": \"\"\"
+                FROM index_name
+                | WHERE field == ?value
+                | WHERE @timestamp >= ?start_date
+                | STATS aggregation
+                | SORT field DESC
+                | LIMIT ?limit
+            \"\"\",
+            "parameters": {{
+                "value": {{
+                    "type": "keyword",
+                    "description": "Filter value",
+                    "default": "original_value",
+                    "required": True
+                }},
+                "start_date": {{
+                    "type": "date",
+                    "description": "Start of date range",
+                    "default": "NOW() - 7 days",
+                    "required": True
+                }},
+                "limit": {{
+                    "type": "integer",
+                    "description": "Max results",
+                    "default": "10",
+                    "required": False
+                }}
+            }},
+            "base_query": "query_name_here",
+            "agent_builder_ready": True
+        }})
+
+        # Add parameterized versions for 2-3 more scripted queries...
+
+        return param_queries
+
+    def generate_rag_queries(self) -> List[Dict[str, Any]]:
+        \"\"\"Generate RAG queries (MATCH → RERANK → COMPLETION)
+
+        For semantic search + AI-powered answers via Agent Builder.
+        CRITICAL: Use INLINE STATS not STATS!
+        \"\"\"
+        rag_queries = []
+
+        # Identify text fields from datasets
+        # Example: description, content, feedback, notes, etc.
+
+        rag_queries.append({{
+            "query_type": "rag",
+            "name": "semantic_search_rag",
+            "description": "Ask questions about [data type]",
+            "esql": \"\"\"
+                FROM index_name METADATA _score
+                | WHERE MATCH(text_field1, ?user_question)
+                    OR MATCH(text_field2, ?user_question)
+                | WHERE @timestamp >= NOW() - 120 days
+                | SORT _score DESC
+                | LIMIT 100
+                | RERANK ?user_question
+                    ON text_field1, text_field2, text_field3
+                    WITH {{"inference_id": "rerank_endpoint"}}
+                | LIMIT 5
+                | EVAL context = CONCAT(
+                    "Record: ", id_field, " | ",
+                    "Field1: ", text_field1, " | ",
+                    "Field2: ", text_field2
+                  )
+                | INLINE STATS all_context = MV_CONCAT(context, "\\\\n\\\\n")
+                | EVAL prompt = CONCAT(
+                    "Based on these records:\\\\n\\\\n",
+                    all_context,
+                    "\\\\n\\\\nQuestion: ", ?user_question,
+                    "\\\\n\\\\nProvide a detailed answer:"
+                  )
+                | COMPLETION answer = prompt
+                    WITH {{"inference_id": "completion_endpoint"}}
+                | KEEP answer, all_context
+            \"\"\",
+            "parameters": {{
+                "user_question": {{
+                    "type": "string",
+                    "description": "Question to answer",
+                    "required": True,
+                    "example": "What are the main issues with...?"
+                }}
+            }},
+            "search_fields": ["text_field1", "text_field2"],
+            "rerank_fields": ["text_field1", "text_field2", "text_field3"],
+            "context_fields": ["id_field", "text_field1", "text_field2", "status"],
+            "time_boundary": "120 days",
+            "agent_builder_tool": {{
+                "tool_name": "search_dataset_name",
+                "tool_description": "Search and analyze [data type] with AI-powered answers"
+            }}
+        }})
+
+        # Optionally add 1-2 more RAG queries for different use cases...
+
+        return rag_queries
+
     def get_query_progression(self) -> List[str]:
-        \"\"\"Define the order to present queries for maximum impact\"\"\"
+        \"\"\"Order to present SCRIPTED queries (for demos)\"\"\"
         return [
-            # Query names in order of presentation
+            # List scripted query names in presentation order
         ]
 ```
 
-Generate the complete implementation with specific ES|QL queries:"""
+**IMPORTANT GUIDELINES:**
+
+1. **Scripted Queries** (5-7 queries):
+   - Start simple, progress to complex
+   - Hard-coded dates, values, filters
+   - Each solves a specific pain point
+   - All fully tested and validated
+
+2. **Parameterized Queries** (3-5 queries):
+   - Select 3-5 most useful scripted queries
+   - Replace hard-coded values with ?parameters
+   - Provide meaningful parameter descriptions
+   - Link to base_query for trust/validation
+   - NEVER use LIKE or RLIKE (not supported!)
+
+3. **RAG Queries** (1-3 queries):
+   - Identify 3-5 text fields for MATCH
+   - Select 2-4 most important for RERANK
+   - Use INLINE STATS to aggregate context
+   - Include all relevant fields in context
+   - Set appropriate time boundary (30/90/120 days)
+
+4. **Field Selection for RAG:**
+   - Text fields: description, content, message, feedback, notes, comments
+   - Context: Include IDs, status, categories, timestamps
+   - Rerank: Prioritize primary content fields
+
+5. **Multi-Index Support:**
+   - Can query multiple indices: FROM index1,index2,index-*
+   - Useful for RAG across related datasets
+
+Generate the COMPLETE implementation with ALL THREE methods populated:"""
 
         if self.llm_client:
             code = self._call_llm(prompt)
@@ -621,6 +810,82 @@ Generate the complete implementation with ALL queries from the strategy:"""
 
         config_file = module_path / 'config.json'
         config_file.write_text(json.dumps(config_data, indent=2))
+
+    def _read_esql_docs(self) -> str:
+        """Read ES|QL documentation for RAG query generation
+
+        Reads key ES|QL docs needed for generating RAG queries:
+        - search-match.md (MATCH/MATCH_PHRASE)
+        - rerank.md (RERANK command)
+        - completion.md (COMPLETION command)
+        - metadata-fields.md (METADATA _score)
+        """
+        try:
+            from pathlib import Path
+            docs_path = Path('docs/esql')
+
+            docs = []
+            doc_files = [
+                'search-match.md',
+                'rerank.md',
+                'completion.md',
+                'metadata-fields.md'
+            ]
+
+            for doc_file in doc_files:
+                doc_path = docs_path / doc_file
+                if doc_path.exists():
+                    content = doc_path.read_text()
+                    # Include first 2000 chars of each doc (enough for syntax/examples)
+                    docs.append(f"### {doc_file}\n{content[:2000]}")
+
+            if docs:
+                return "\n\n---\n\n".join(docs)
+            else:
+                logger.warning("ES|QL docs not found, using minimal reference")
+                return self._get_minimal_esql_reference()
+
+        except Exception as e:
+            logger.warning(f"Could not read ES|QL docs: {e}")
+            return self._get_minimal_esql_reference()
+
+    def _get_minimal_esql_reference(self) -> str:
+        """Minimal ES|QL reference if docs unavailable"""
+        return """
+### ES|QL Commands for RAG Queries
+
+**MATCH (Semantic Search):**
+```
+WHERE MATCH(field, "query", {"boost": 0.75})
+```
+
+**RERANK (ML Relevance):**
+```
+| RERANK query_text ON field1, field2 WITH {"inference_id": "rerank_endpoint"}
+```
+
+**INLINE STATS (Preserve Fields):**
+```
+| INLINE STATS context = MV_CONCAT(field, "\\n")
+```
+
+**COMPLETION (LLM Generation):**
+```
+| COMPLETION answer = prompt WITH {"inference_id": "completion_endpoint"}
+```
+
+**METADATA (Score):**
+```
+FROM index METADATA _score
+```
+
+**Parameter Syntax:**
+```
+?param_name  (for Agent Builder tools)
+```
+
+**CRITICAL:** Use INLINE STATS not STATS before COMPLETION!
+"""
 
     def _call_llm(self, prompt: str) -> str:
         """Call LLM to generate code"""
