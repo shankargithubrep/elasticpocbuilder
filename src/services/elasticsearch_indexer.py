@@ -199,6 +199,7 @@ class ElasticsearchIndexer:
         df: pd.DataFrame,
         dataset_name: str,
         semantic_fields: Optional[List[str]] = None,
+        index_mode: Optional[str] = None,
         progress_callback: Optional[callable] = None,
         stop_callback: Optional[callable] = None
     ) -> IndexingResult:
@@ -209,6 +210,8 @@ class ElasticsearchIndexer:
             df: pandas DataFrame to index
             dataset_name: name for the index/data stream
             semantic_fields: optional list of fields to use semantic_text
+            index_mode: optional explicit index mode ('data_stream' or 'lookup')
+                       If not provided, will auto-detect based on timestamp fields
             progress_callback: optional callback(progress, message)
             stop_callback: optional callback() that returns True to stop indexing
 
@@ -240,8 +243,18 @@ class ElasticsearchIndexer:
             if progress_callback:
                 progress_callback(0.1, "Analyzed dataset structure")
 
+            # Determine index type: use explicit index_mode if provided, otherwise auto-detect
+            if index_mode:
+                # Use explicit mode from strategy
+                use_data_stream = (index_mode == "data_stream")
+                logger.info(f"Using explicit index_mode: {index_mode}")
+            else:
+                # Fall back to auto-detection based on timestamp fields
+                use_data_stream = mapping_info["is_timeseries"]
+                logger.info(f"Auto-detected index type: {'data_stream' if use_data_stream else 'lookup'}")
+
             # Create index or data stream
-            if mapping_info["is_timeseries"]:
+            if use_data_stream:
                 index_name = self._create_data_stream(
                     dataset_name,
                     mapping_info["mappings"],
@@ -266,10 +279,13 @@ class ElasticsearchIndexer:
                 progress_callback(0.4, f"Prepared {len(documents)} documents")
 
             # Bulk index (with stop callback support)
+            # Pass semantic fields info for proper batch sizing
+            has_semantic_fields = bool(mapping_info["semantic_fields"])
             indexed_count = self._bulk_index(
                 index_name,
                 documents,
                 index_type,
+                has_semantic_fields,
                 progress_callback,
                 stop_callback
             )
@@ -372,13 +388,27 @@ class ElasticsearchIndexer:
         return full_name
 
     def _prepare_documents(self, df: pd.DataFrame, is_timeseries: bool) -> List[Dict]:
-        """Convert DataFrame to Elasticsearch documents"""
+        """Convert DataFrame to Elasticsearch documents
+
+        Note: When a field has both 'field' and 'field_semantic' versions,
+        we only include the '_semantic' version since semantic_text fields
+        store both the text and embeddings automatically.
+        """
         documents = []
+
+        # Identify fields that have semantic versions
+        semantic_suffixed_fields = {col for col in df.columns if col.endswith('_semantic')}
+        base_fields_to_skip = {col.replace('_semantic', '') for col in semantic_suffixed_fields}
 
         for _, row in df.iterrows():
             doc = {}
 
             for col, value in row.items():
+                # Skip base field if semantic version exists
+                # e.g., skip "exclusions" if "exclusions_semantic" exists
+                if col in base_fields_to_skip and f"{col}_semantic" in df.columns:
+                    continue
+
                 # Handle timestamp mapping
                 if col in ["timestamp", "time", "date"] and is_timeseries:
                     # Map to @timestamp
@@ -413,6 +443,7 @@ class ElasticsearchIndexer:
         index_name: str,
         documents: List[Dict],
         index_type: str,
+        has_semantic_fields: bool = False,
         progress_callback: Optional[callable] = None,
         stop_callback: Optional[callable] = None
     ) -> int:
@@ -423,29 +454,51 @@ class ElasticsearchIndexer:
             index_name: Name of the index/data stream
             documents: List of documents to index
             index_type: Type of index ('data_stream' or 'lookup')
+            has_semantic_fields: Whether the index has semantic_text fields (limits batch to 16)
             progress_callback: Optional callback(progress, message) for progress updates
             stop_callback: Optional callback() that returns True if indexing should stop
 
         Returns:
             Number of documents successfully indexed
         """
-        batch_size = 1000
+        # ELSER batch size limit: max 16 documents per batch when using semantic_text
+        # https://www.elastic.co/docs/reference/elasticsearch/mapping-reference/semantic-text#using-elser-on-eis
+        batch_size = 16 if has_semantic_fields else 1000
         total_docs = len(documents)
         indexed_count = 0
 
-        # Prepare bulk actions
+        # Prepare bulk actions for helpers.bulk()
+        # Format: each action is a dict with _index, _op_type, and document fields at top level
         actions = []
         for doc in documents:
-            action = {
-                "_index": index_name,
-                "_source": doc
-            }
+            # Make a copy to avoid modifying original
+            doc_copy = doc.copy()
 
             # Use create for data streams (append-only)
-            if index_type == "data_stream":
-                action["_op_type"] = "create"
-            else:
-                action["_op_type"] = "index"
+            op_type = "create" if index_type == "data_stream" else "index"
+
+            # Data streams REQUIRE @timestamp field
+            if index_type == "data_stream" and "@timestamp" not in doc_copy:
+                # Try to find a timestamp field to use
+                timestamp_value = None
+                for key in ['timestamp', 'created_at', 'created_date', 'date', 'time']:
+                    if key in doc_copy:
+                        timestamp_value = doc_copy[key]
+                        break
+
+                # If no timestamp field found, use current time
+                if timestamp_value is None:
+                    from datetime import datetime
+                    timestamp_value = datetime.utcnow().isoformat()
+
+                doc_copy["@timestamp"] = timestamp_value
+
+            # helpers.bulk() expects: {_op_type: op, _index: name, **document_fields}
+            action = {
+                "_op_type": op_type,
+                "_index": index_name,
+                **doc_copy  # Spread document fields at top level (not in _source)
+            }
 
             actions.append(action)
 
@@ -462,15 +515,38 @@ class ElasticsearchIndexer:
 
             batch = actions[i:i+batch_size]
 
-            # Execute bulk
-            success, failed = helpers.bulk(
-                self.client,
-                batch,
-                raise_on_error=False,
-                stats_only=False
-            )
+            # Execute bulk with detailed error tracking
+            try:
+                # Use helpers.bulk for proper formatting, but capture details
+                success_count, failed_items = helpers.bulk(
+                    self.client,
+                    batch,
+                    raise_on_error=False,
+                    stats_only=False  # Get failed items for error details
+                )
 
-            indexed_count += success
+                indexed_count += success_count
+                failed_count = len(failed_items)
+
+                # Log failures with sample errors
+                if failed_count > 0:
+                    error_samples = []
+                    for item in failed_items[:3]:  # First 3 errors
+                        # Extract error from failed item
+                        error_info = item.get('index', item.get('create', {})).get('error', {})
+                        if isinstance(error_info, dict):
+                            error_type = error_info.get('type', 'unknown')
+                            error_reason = error_info.get('reason', 'no reason')
+                            error_samples.append(f"{error_type}: {error_reason}")
+                        else:
+                            error_samples.append(str(error_info))
+
+                    error_sample = "; ".join(error_samples)
+                    logger.error(f"Batch {i//batch_size + 1}: {success_count} succeeded, {failed_count} failed. Sample errors: {error_sample}")
+
+            except Exception as e:
+                logger.error(f"Bulk request failed: {e}")
+                failed_count = len(batch)
 
             # Update progress
             if progress_callback:

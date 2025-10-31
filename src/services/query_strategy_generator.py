@@ -106,9 +106,16 @@ For each query, specify the EXACT data structure needed to make it work.
 1. Queries must SOLVE specific pain points (not generic)
 2. Use advanced ES|QL features (LOOKUP JOIN, INLINESTATS, EVAL, etc.)
 3. Specify EXACT field names needed (be specific, not generic)
-4. Identify which datasets are timeseries (with @timestamp) vs reference/lookup
+4. Choose correct index_mode based on data PURPOSE:
+   - **data_stream**: Append-only event streams (logs, tickets, transactions, claims)
+   - **lookup**: Master/reference data (products, customers, knowledge base, policies)
 5. Define relationships between datasets (foreign keys)
 6. Mark fields that should use semantic_text for vector search
+
+**Index Mode Decision Guide:**
+- **Use data_stream if**: Events/transactions that are immutable once created
+- **Use lookup if**: Master data that gets queried/enriched (even if it has timestamps!)
+  - Example: knowledge_base has `updated_date` but is LOOKUP (reference data)
 
 **Output Format (MUST be valid JSON):**
 ```json
@@ -117,6 +124,7 @@ For each query, specify the EXACT data structure needed to make it work.
     {{
       "name": "sales_transactions",
       "type": "timeseries",
+      "index_mode": "data_stream",
       "row_count": "100000+",
       "required_fields": {{
         "transaction_id": "keyword",
@@ -133,6 +141,7 @@ For each query, specify the EXACT data structure needed to make it work.
     {{
       "name": "products",
       "type": "reference",
+      "index_mode": "lookup",
       "row_count": "10000+",
       "required_fields": {{
         "product_id": "keyword",

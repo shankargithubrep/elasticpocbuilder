@@ -230,6 +230,13 @@ The module should:
 3. Include queries that demonstrate real-time value
 4. Be specific to their metrics and KPIs
 
+CRITICAL - ESCAPING ES|QL QUERIES IN PYTHON:
+- ES|QL queries with JSON parameters use curly braces: MATCH(field, "term", {{"boost": 0.75}})
+- ALWAYS use double curly braces {{{{ }}}} to escape JSON in queries when using f-strings
+- OR use regular strings with .format() instead of f-strings for queries
+- Example CORRECT: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{"boost": 1.5}})\"\"\"
+- Example WRONG: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {"boost": 1.5})\"\"\"
+
 Template:
 ```python
 from src.framework.base import QueryGeneratorModule, DemoConfig
@@ -272,60 +279,73 @@ Generate the complete implementation with specific ES|QL queries:"""
         module_file.write_text(code)
 
     def _generate_guide_module(self, config: Dict[str, Any], module_path: Path):
-        """Generate the demo guide module"""
+        """Generate the demo guide module
 
-        prompt = f"""Generate a Python module that implements DemoGuideModule for this customer:
+        Uses fixed template since structure is always the same - only content varies.
+        Content is dynamically generated from config/datasets/queries at runtime.
+        """
+        company_class = config['company_name'].replace(' ', '')
 
-Company: {config['company_name']}
-Department: {config['department']}
-Industry: {config['industry']}
-
-The module should:
-1. Create a compelling demo narrative
-2. Include specific talk track for their industry
-3. Handle common objections from {config['industry']} companies
-4. Reference their specific pain points
-
-Template:
-```python
-from src.framework.base import DemoGuideModule, DemoConfig
+        # Fixed template - structure doesn't change, only runtime content
+        code = f"""from src.framework.base import DemoGuideModule, DemoConfig
 from typing import Dict, List, Any, Optional
 import pandas as pd
 
-class {config['company_name'].replace(' ', '')}DemoGuide(DemoGuideModule):
+class {company_class}DemoGuide(DemoGuideModule):
     \"\"\"Demo guide for {config['company_name']} - {config['department']}\"\"\"
+
+    def __init__(self, config: DemoConfig, datasets: Dict[str, pd.DataFrame],
+                 queries: List[Dict], aha_moment: Optional[Dict] = None):
+        \"\"\"Initialize with demo context\"\"\"
+        super().__init__(config, datasets, queries, aha_moment)
 
     def generate_guide(self) -> str:
         \"\"\"Generate customized demo guide\"\"\"
-        guide = f\"\"\"# Demo Guide: {config['company_name']} - {config['department']}
+        # Extract pain points
+        pain_points = ', '.join(self.config.pain_points[:2]) if self.config.pain_points else 'operational challenges'
 
-        ## Opening Hook
-        [Specific opening that references their pain points]
+        # Extract query names
+        query_names = [q.get('name', f'Query {{i+1}}') for i, q in enumerate(self.queries[:5])]
+        query_list = '\\n'.join([f'{{i+1}}. {{name}}' for i, name in enumerate(query_names)])
 
-        ## Demo Flow
-        [Step-by-step flow customized for their situation]
-        \"\"\"
-        return guide
+        return f\"\"\"# Demo Guide: {{self.config.company_name}} - {{self.config.department}}
+
+## Overview
+**Industry:** {{self.config.industry}}
+**Focus Areas:** {{pain_points}}
+
+## Demo Flow
+1. **Introduction** - Establish context around their key challenges
+2. **Data Exploration** - Show {{len(self.queries)}} targeted queries addressing pain points
+3. **Business Impact** - Highlight speed, accuracy, and insights gained
+
+## Key Queries
+{{query_list}}
+
+## Value Proposition
+- **Speed:** Insights in seconds vs hours/days
+- **Scalability:** Handles growing data volumes
+- **Self-Service:** Empowers teams with intuitive query language
+
+## Closing Points
+- ES|QL provides SQL-like simplicity with Elasticsearch power
+- Queries run directly on indexed data (millisecond response times)
+- Most teams productive within days, not weeks
+\"\"\"
 
     def get_talk_track(self) -> Dict[str, str]:
-        \"\"\"Generate talk track for each query\"\"\"
-        return {{
-            # 'Query Name': 'What to say when showing this query'
-        }}
+        \"\"\"Talk track for each query\"\"\"
+        # Can be customized per demo as needed
+        return {{}}
 
     def get_objection_handling(self) -> Dict[str, str]:
-        \"\"\"Industry-specific objection handling\"\"\"
+        \"\"\"Common objections and responses\"\"\"
         return {{
-            # 'Common objection': 'Response'
+            "complexity": "ES|QL syntax is SQL-like and easier than complex aggregations",
+            "performance": "Queries run on indexed data with millisecond response times",
+            "learning_curve": "Most teams productive within days, not weeks"
         }}
-```
-
-Generate the complete implementation:"""
-
-        if self.llm_client:
-            code = self._call_llm(prompt)
-        else:
-            code = self._generate_mock_guide_module(config)
+"""
 
         # Validate syntax before saving
         self._validate_python_syntax(code, 'demo_guide.py')
@@ -534,6 +554,13 @@ IMPORTANT - ES|QL SYNTAX:
 - Use @timestamp not timestamp for indexed data
 - DATE_EXTRACT syntax: DATE_EXTRACT("month", @timestamp)
 - Include proper error handling for edge cases
+
+CRITICAL - ESCAPING ES|QL QUERIES IN PYTHON:
+- ES|QL queries with JSON parameters use curly braces: MATCH(field, "term", {{"boost": 0.75}})
+- ALWAYS use double curly braces {{{{ }}}} to escape JSON in queries when using f-strings
+- OR use regular strings with .format() instead of f-strings for queries
+- Example CORRECT: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{"boost": 1.5}})\"\"\"
+- Example WRONG: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {"boost": 1.5})\"\"\"
 
 Template:
 ```python

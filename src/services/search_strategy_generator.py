@@ -110,6 +110,25 @@ class SearchQueryStrategyGenerator:
 Design 5-7 ES|QL SEARCH queries that help users FIND and RETRIEVE relevant information.
 This is a SEARCH/RAG demo, NOT analytics. Focus on document retrieval, not aggregations.
 
+**CRITICAL - Always Demonstrate Advanced Capabilities:**
+While addressing the customer's pain points, ALWAYS include at least 2-3 sophisticated queries that showcase Elasticsearch's advanced search features:
+
+1. **Weighted Hybrid Search** - Use `MATCH` with `{{"boost": X}}` to balance semantic vs exact matching
+   Example: `MATCH(title_semantic, "term", {{"boost": 0.75}}) OR MATCH(title, "term", {{"boost": 0.25}})`
+
+2. **Fuzzy Search** - Use `{{"fuzziness": "AUTO"}}` to handle typos and misspellings
+   Example: `MATCH(product_name, "wireles headfones", {{"fuzziness": "AUTO"}})`
+
+3. **Precision Control** - Use `{{"minimum_should_match": N}}` for multi-term queries
+   Example: `MATCH(content, "configure email notification settings", {{"operator": "OR", "minimum_should_match": 3}})`
+
+4. **Multi-field Search** - Search across multiple fields with different weights
+
+5. **Phrase Matching** - Use `MATCH_PHRASE` for exact phrase searches with optional `{{"slop": N}}`
+
+These advanced queries should feel natural to the use case, not forced. If customer pain points are basic,
+frame these as "best practice" or "advanced optimization" examples.
+
 **ES|QL Search Capabilities:**
 {esql_skill}
 
@@ -120,6 +139,9 @@ This is a SEARCH/RAG demo, NOT analytics. Focus on document retrieval, not aggre
 4. Include semantic_text fields for vector search
 5. Limit results (5-50 documents)
 6. NO STATS, NO GROUP BY, NO aggregations (that's analytics, not search)
+7. Choose correct index_mode:
+   - **lookup**: Document collections (articles, policies, FAQs - even with timestamps!)
+   - **data_stream**: Only for high-volume event logs (rare in search demos)
 
 **Output Format (MUST be valid JSON):**
 ```json
@@ -159,7 +181,7 @@ This is a SEARCH/RAG demo, NOT analytics. Focus on document retrieval, not aggre
   ],
   "queries": [
     {{
-      "name": "Find Relevant Knowledge Base Articles",
+      "name": "Basic Semantic Search",
       "pain_point": "Agents can't quickly find answers to customer questions",
       "search_type": "semantic",
       "required_datasets": ["knowledge_base_articles"],
@@ -167,8 +189,32 @@ This is a SEARCH/RAG demo, NOT analytics. Focus on document retrieval, not aggre
         "knowledge_base_articles": ["title", "content_semantic", "category", "created_date"]
       }},
       "description": "Use semantic search to find most relevant articles for a customer inquiry",
-      "complexity": "medium",
-      "example_esql": "FROM knowledge_base_articles | WHERE MATCH(content_semantic, 'password reset procedure') | EVAL relevance = _score | KEEP title, content, category, relevance | SORT relevance DESC | LIMIT 5"
+      "complexity": "simple",
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content_semantic, 'password reset procedure') | KEEP title, content, category, _score | SORT _score DESC | LIMIT 5"
+    }},
+    {{
+      "name": "Weighted Hybrid Search - Best Practice",
+      "pain_point": "Demonstrate advanced relevance tuning",
+      "search_type": "hybrid",
+      "required_datasets": ["knowledge_base_articles"],
+      "required_fields": {{
+        "knowledge_base_articles": ["title", "title_semantic", "content", "_score"]
+      }},
+      "description": "Balance semantic understanding with exact keyword matching using boost weights",
+      "complexity": "advanced",
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(title_semantic, 'authentication error', {{'boost': 0.75}}) OR MATCH(title, 'authentication error', {{'boost': 0.25}}) | KEEP title, content, _score | SORT _score DESC | LIMIT 10"
+    }},
+    {{
+      "name": "Fuzzy Search for Typo Tolerance",
+      "pain_point": "Handle user typos and misspellings",
+      "search_type": "fuzzy",
+      "required_datasets": ["knowledge_base_articles"],
+      "required_fields": {{
+        "knowledge_base_articles": ["product_name", "description"]
+      }},
+      "description": "Find results even when search terms contain typos",
+      "complexity": "advanced",
+      "example_esql": "FROM products METADATA _score | WHERE MATCH(product_name, 'wireles headfones', {{'fuzziness': 'AUTO'}}) | KEEP product_name, category, price, _score | SORT _score DESC | LIMIT 20"
     }}
   ],
   "relationships": [
@@ -198,6 +244,16 @@ This is a SEARCH/RAG demo, NOT analytics. Focus on document retrieval, not aggre
 ✅ GOOD: "Search for support tickets similar to this issue"
 ❌ BAD: "Count how many tickets per category" (that's analytics)
 ❌ BAD: "Average response time by department" (that's analytics)
+
+**MANDATORY - Include Advanced Queries:**
+Of the 5-7 queries you design, AT LEAST 2-3 MUST be "advanced" complexity demonstrating:
+- Weighted hybrid search with boost parameters
+- Fuzzy search with fuzziness parameter
+- Precision control with minimum_should_match
+- Multi-field search across semantic and text fields
+- Phrase matching with MATCH_PHRASE
+
+Label these queries with "complexity": "advanced" and describe them as "best practices" or "optimization techniques".
 
 Generate the complete SEARCH strategy as valid JSON:"""
 

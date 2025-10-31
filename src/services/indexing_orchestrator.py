@@ -31,6 +31,7 @@ class IndexingOrchestrator:
         self,
         datasets: Dict[str, pd.DataFrame],
         semantic_fields: Dict[str, List[str]],
+        index_modes: Optional[Dict[str, str]] = None,
         progress_callback: Optional[Callable] = None
     ) -> Dict[str, Dict]:
         """Index all datasets with retry logic
@@ -38,6 +39,7 @@ class IndexingOrchestrator:
         Args:
             datasets: Dictionary mapping dataset names to DataFrames
             semantic_fields: Dictionary mapping dataset names to semantic field lists
+            index_modes: Optional dictionary mapping dataset names to index modes ('data_stream' or 'lookup')
             progress_callback: Optional progress callback function(progress, message)
 
         Returns:
@@ -57,11 +59,17 @@ class IndexingOrchestrator:
             # Get semantic fields for this dataset
             dataset_semantic_fields = semantic_fields.get(name, [])
 
+            # Get index mode for this dataset (if provided)
+            dataset_index_mode = None
+            if index_modes:
+                dataset_index_mode = index_modes.get(name)
+
             # Try indexing with retries
             result = self._index_with_retry(
                 name,
                 df,
                 dataset_semantic_fields,
+                dataset_index_mode,
                 progress_callback
             )
 
@@ -79,6 +87,7 @@ class IndexingOrchestrator:
         dataset_name: str,
         df: pd.DataFrame,
         semantic_fields: List[str],
+        index_mode: Optional[str] = None,
         progress_callback: Optional[Callable] = None
     ) -> Dict:
         """Index a dataset with retry logic
@@ -87,6 +96,7 @@ class IndexingOrchestrator:
             dataset_name: Name of the dataset
             df: DataFrame to index
             semantic_fields: List of semantic field names
+            index_mode: Optional explicit index mode ('data_stream' or 'lookup')
             progress_callback: Optional progress callback
 
         Returns:
@@ -101,6 +111,7 @@ class IndexingOrchestrator:
                     df=df,
                     dataset_name=dataset_name,
                     semantic_fields=semantic_fields,
+                    index_mode=index_mode,
                     progress_callback=progress_callback
                 )
 

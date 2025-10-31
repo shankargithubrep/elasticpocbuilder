@@ -170,9 +170,19 @@ class ModularDemoOrchestrator:
             if hasattr(data_gen, 'get_semantic_fields'):
                 semantic_fields = data_gen.get_semantic_fields()
 
+            # Extract index_mode mapping from query strategy
+            index_modes = {}
+            for dataset in query_strategy.get('datasets', []):
+                dataset_name = dataset.get('name')
+                dataset_index_mode = dataset.get('index_mode')
+                if dataset_name and dataset_index_mode:
+                    index_modes[dataset_name] = dataset_index_mode
+                    logger.info(f"Strategy specifies {dataset_name} -> {dataset_index_mode}")
+
             indexing_results = indexing_orch.index_all_datasets(
                 exec_results['datasets'],
                 semantic_fields,
+                index_modes,
                 progress_callback
             )
 

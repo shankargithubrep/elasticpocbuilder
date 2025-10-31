@@ -589,16 +589,50 @@ def display_context_summary():
     # Progress bar at top
     st.progress(progress, text=f"{int(progress * 100)}% complete")
 
-    # Checklist of fields
+    # Checklist of fields as color-coded table
+    table_html = """
+    <style>
+    .context-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 10px 0;
+    }
+    .context-table td {
+        padding: 8px;
+        border: 1px solid #ddd;
+    }
+    .context-complete {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    .context-incomplete {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    </style>
+    <table class="context-table">
+    """
+
     for field_key, field_status in status.items():
-        icon = "✅" if field_status['is_complete'] else "⬜"
         name = field_status['display_name']
         value = field_status['display_value']
 
         if field_status['is_complete']:
-            st.markdown(f"{icon} **{name}:** {value}")
+            row_class = "context-complete"
+            display_value = value
         else:
-            st.markdown(f"{icon} {name}")
+            row_class = "context-incomplete"
+            display_value = "(not set)"
+
+        table_html += f"""
+        <tr class="{row_class}">
+            <td><strong>{name}</strong></td>
+            <td>{display_value}</td>
+        </tr>
+        """
+
+    table_html += "</table>"
+    st.markdown(table_html, unsafe_allow_html=True)
 
     # Status message
     st.markdown("---")
@@ -714,6 +748,12 @@ You can now refine the generated modules or start a new demo!"""
                         st.markdown(response)
                         st.session_state.messages.append({"role": "assistant", "content": response})
 
+                        # Add button to view in browse mode
+                        if st.button("📂 View Demo Details", key="view_demo_btn", type="primary"):
+                            st.session_state.view_mode = "browse"
+                            st.session_state.current_demo_module = results['module_name']
+                            st.rerun()
+
                     except Exception as e:
                         error_msg = f"Error generating demo: {str(e)}"
                         st.error(error_msg)
@@ -774,21 +814,11 @@ def render_browse_demos_view():
         loader = manager.get_module(st.session_state.current_demo_module)
 
         if loader:
-            tabs = st.tabs(["📋 Config", "🗂️ Data", "🔍 Queries", "📝 Guide"])
+            tabs = st.tabs(["📋 Config", "🗂️ Data", "🔍 Queries", "📝 Guide", "💬 Conversation"])
 
             with tabs[0]:
                 st.markdown("### Generate Demo Assets")
-                st.warning("""
-                ⚠️ **Generation Time: 5-20 minutes**
-
-                Large datasets (10,000+ rows) can take significant time to generate.
-                The page will appear frozen but is actively processing. Please be patient!
-
-                **Progress:**
-                - Data generation: 80-90% of time (slowest)
-                - Query generation: 5-10% of time
-                - Guide generation: 5-10% of time
-                """)
+                st.info("⚠️ **Generation may take 5-20 minutes** — Page will appear frozen. Data: 80-90% | Queries: 5-10% | Guide: 5-10%")
 
                 if st.button("🚀 Generate Assets", use_container_width=True):
                     with st.spinner("Generating demo assets..."):
@@ -835,6 +865,45 @@ def render_browse_demos_view():
                             semantic_fields_spec = {}
 
                         if datasets:
+                            # Index All button at the top
+                            if st.button("📤 Index All Datasets", use_container_width=True, type="primary"):
+                                from src.services.elasticsearch_indexer import ElasticsearchIndexer
+
+                                st.info(f"Starting batch indexing for {len(datasets)} datasets...")
+
+                                indexer = ElasticsearchIndexer()
+                                for idx, (name, df) in enumerate(datasets.items(), 1):
+                                    st.markdown(f"**[{idx}/{len(datasets)}] Indexing {name}...**")
+
+                                    # Get semantic fields for this dataset
+                                    semantic_fields = semantic_fields_spec.get(name, [])
+
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+
+                                    def progress_callback(pct, msg):
+                                        progress_bar.progress(pct)
+                                        status_text.text(msg)
+
+                                    try:
+                                        result = indexer.index_dataset(
+                                            df,
+                                            name,
+                                            semantic_fields=semantic_fields,
+                                            progress_callback=progress_callback
+                                        )
+
+                                        if result.success:
+                                            st.success(f"✅ {name}: {result.documents_indexed:,} docs indexed in {result.duration_seconds}s")
+                                        else:
+                                            st.error(f"❌ {name}: Indexing failed")
+                                    except Exception as e:
+                                        st.error(f"❌ {name}: {str(e)}")
+
+                                st.success("🎉 Batch indexing complete!")
+
+                            st.divider()
+
                             for name, df in datasets.items():
                                 st.markdown(f"### {name}")
 
@@ -900,31 +969,71 @@ def render_browse_demos_view():
                                             # Clear stop button
                                             stop_button_container.empty()
 
-                                            if result.success:
-                                                was_stopped = result.documents_indexed < len(df)
-                                                if was_stopped:
-                                                    st.warning(
-                                                        f"⏸️ Indexing stopped by user\n\n"
-                                                        f"**Indexed:** {result.documents_indexed:,} / {len(df):,} documents\n\n"
-                                                        f"**Index:** {result.index_name} ({result.index_type})\n\n"
-                                                        f"**Semantic fields:** {', '.join(result.semantic_fields) if result.semantic_fields else 'None'}\n\n"
-                                                        f"**Duration:** {result.duration_seconds}s"
-                                                    )
-                                                else:
-                                                    st.success(
-                                                        f"✅ Indexed {result.documents_indexed:,} documents\n\n"
-                                                        f"**Index:** {result.index_name} ({result.index_type})\n\n"
-                                                        f"**Semantic fields:** {', '.join(result.semantic_fields) if result.semantic_fields else 'None'}\n\n"
-                                                        f"**Duration:** {result.duration_seconds}s"
-                                                    )
-                                            else:
-                                                st.error(f"❌ Indexing failed:\n{chr(10).join(result.errors)}")
+                                            # Store result in session state to display outside column
+                                            st.session_state[f"index_result_{name}"] = {
+                                                'success': result.success,
+                                                'documents_indexed': result.documents_indexed,
+                                                'total_docs': len(df),
+                                                'index_name': result.index_name,
+                                                'index_type': result.index_type,
+                                                'semantic_fields': result.semantic_fields,
+                                                'duration_seconds': result.duration_seconds,
+                                                'errors': result.errors if not result.success else [],
+                                                'was_stopped': st.session_state.get(stop_key, False)
+                                            }
 
                                         except Exception as e:
                                             stop_button_container.empty()
-                                            st.error(f"❌ Indexing error: {e}")
-                                            import traceback
-                                            st.code(traceback.format_exc())
+                                            st.session_state[f"index_result_{name}"] = {
+                                                'success': False,
+                                                'error': str(e),
+                                                'traceback': __import__('traceback').format_exc()
+                                            }
+
+                                # Display indexing result outside columns (full width)
+                                if f"index_result_{name}" in st.session_state:
+                                    result_data = st.session_state[f"index_result_{name}"]
+
+                                    if 'error' in result_data:
+                                        # Exception occurred
+                                        st.error(f"❌ Indexing error: {result_data['error']}")
+                                        st.code(result_data['traceback'])
+                                    elif result_data['success']:
+                                        # Check if actually stopped by user
+                                        was_stopped_by_user = result_data['was_stopped']
+                                        incomplete_indexing = result_data['documents_indexed'] < result_data['total_docs']
+
+                                        if was_stopped_by_user and incomplete_indexing:
+                                            st.warning(
+                                                f"⏸️ Indexing stopped by user\n\n"
+                                                f"**Indexed:** {result_data['documents_indexed']:,} / {result_data['total_docs']:,} documents\n\n"
+                                                f"**Index:** {result_data['index_name']} ({result_data['index_type']})\n\n"
+                                                f"**Semantic fields:** {', '.join(result_data['semantic_fields']) if result_data['semantic_fields'] else 'None'}\n\n"
+                                                f"**Duration:** {result_data['duration_seconds']}s"
+                                            )
+                                        elif incomplete_indexing and result_data['documents_indexed'] == 0:
+                                            st.error(
+                                                f"❌ Indexing failed: No documents were indexed\n\n"
+                                                f"This usually indicates a connection issue or mapping error. "
+                                                f"Check your Elasticsearch connection and try again."
+                                            )
+                                        elif incomplete_indexing:
+                                            st.warning(
+                                                f"⚠️ Partial indexing\n\n"
+                                                f"**Indexed:** {result_data['documents_indexed']:,} / {result_data['total_docs']:,} documents\n\n"
+                                                f"**Index:** {result_data['index_name']} ({result_data['index_type']})\n\n"
+                                                f"**Semantic fields:** {', '.join(result_data['semantic_fields']) if result_data['semantic_fields'] else 'None'}\n\n"
+                                                f"**Duration:** {result_data['duration_seconds']}s"
+                                            )
+                                        else:
+                                            st.success(
+                                                f"✅ Indexed {result_data['documents_indexed']:,} documents\n\n"
+                                                f"**Index:** {result_data['index_name']} ({result_data['index_type']})\n\n"
+                                                f"**Semantic fields:** {', '.join(result_data['semantic_fields']) if result_data['semantic_fields'] else 'None'}\n\n"
+                                                f"**Duration:** {result_data['duration_seconds']}s"
+                                            )
+                                    else:
+                                        st.error(f"❌ Indexing failed:\n{chr(10).join(result_data['errors'])}")
 
                                 # Show semantic fields info if specified
                                 if name in semantic_fields_spec and semantic_fields_spec[name]:
@@ -1033,6 +1142,44 @@ def render_browse_demos_view():
                         st.info("Try clicking 'Generate Assets' in the Config tab.")
                 else:
                     st.info("📋 Click 'Generate Assets' in the Config tab to view the demo guide")
+
+            with tabs[4]:
+                # Load and display conversation history
+                st.markdown("### Original Conversation")
+                st.markdown("This is the conversation that led to the creation of this demo.")
+
+                conversation_file = loader.module_path / 'conversation.json'
+                if conversation_file.exists():
+                    try:
+                        import json
+                        with open(conversation_file, 'r') as f:
+                            conversation_data = json.load(f)
+
+                        messages = conversation_data.get('messages', [])
+
+                        if messages:
+                            st.markdown(f"**Generated:** {conversation_data.get('timestamp', 'Unknown')}")
+                            st.divider()
+
+                            # Display messages in chat format
+                            for msg in messages:
+                                role = msg.get('role', 'unknown')
+                                content = msg.get('content', '')
+
+                                if role == 'user':
+                                    with st.chat_message("user"):
+                                        st.markdown(content)
+                                elif role == 'assistant':
+                                    with st.chat_message("assistant"):
+                                        st.markdown(content)
+                        else:
+                            st.info("No conversation messages found.")
+                    except Exception as e:
+                        st.error(f"Error loading conversation: {e}")
+                        st.code(str(e))
+                else:
+                    st.info("💬 No conversation history found for this demo. This feature was added in a recent update.")
+
     else:
         st.info("👈 Select a demo from the sidebar to view details")
 
@@ -1070,41 +1217,41 @@ def main():
                 st.session_state.view_mode = "browse"
                 st.rerun()
 
-        # Dataset size preference (always visible)
-        st.markdown("---")
-        st.markdown("#### Dataset Size")
-
-        # Initialize dataset_size_preference if not exists
-        if "dataset_size_preference" not in st.session_state:
-            st.session_state.dataset_size_preference = "medium"
-
-        # Slider with options
-        size_options = ["small", "medium", "large"]
-        size_index = size_options.index(st.session_state.dataset_size_preference)
-
-        selected_index = st.select_slider(
-            "Size",
-            options=range(len(size_options)),
-            value=size_index,
-            format_func=lambda x: size_options[x].capitalize(),
-            key="dataset_size_slider",
-            label_visibility="collapsed"
-        )
-
-        st.session_state.dataset_size_preference = size_options[selected_index]
-
-        # Display legend based on selection
-        size_legends = {
-            "small": "**Small:** < 5,000 records per dataset",
-            "medium": "**Medium:** 5,000-15,000 records per dataset",
-            "large": "**Large:** 15,000-50,000 records per dataset"
-        }
-
-        st.caption(size_legends[st.session_state.dataset_size_preference])
-        st.markdown("---")
-
         if st.session_state.view_mode == "create":
             display_context_summary()
+
+            # Dataset size preference (only in create mode)
+            st.markdown("---")
+            st.markdown("#### Dataset Size")
+
+            # Initialize dataset_size_preference if not exists
+            if "dataset_size_preference" not in st.session_state:
+                st.session_state.dataset_size_preference = "small"
+
+            # Slider with options
+            size_options = ["small", "medium", "large"]
+            size_index = size_options.index(st.session_state.dataset_size_preference)
+
+            selected_index = st.select_slider(
+                "Size",
+                options=range(len(size_options)),
+                value=size_index,
+                format_func=lambda x: size_options[x].capitalize(),
+                key="dataset_size_slider",
+                label_visibility="collapsed"
+            )
+
+            st.session_state.dataset_size_preference = size_options[selected_index]
+
+            # Display legend based on selection
+            size_legends = {
+                "small": "**Small:** < 5,000 records per dataset",
+                "medium": "**Medium:** 5,000-15,000 records per dataset",
+                "large": "**Large:** 15,000-50,000 records per dataset"
+            }
+
+            st.caption(size_legends[st.session_state.dataset_size_preference])
+            st.markdown("---")
 
             if st.button("🔄 Start Fresh", use_container_width=True):
                 st.session_state.messages = []
