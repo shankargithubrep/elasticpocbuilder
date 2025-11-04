@@ -1145,7 +1145,7 @@ CRITICAL - ESCAPING ES|QL QUERIES IN PYTHON:
 - Example CORRECT: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{{{"boost": 1.5}}}})\"\"\"
 - Example WRONG: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{"boost": 1.5}})\"\"\"
 
-Template:
+Template - MUST IMPLEMENT ALL THREE METHODS:
 ```python
 from src.framework.base import QueryGeneratorModule, DemoConfig
 from typing import Dict, List, Any
@@ -1158,12 +1158,60 @@ class {config["company_name"].replace(" ", "")}QueryGenerator(QueryGeneratorModu
     # self.config, self.datasets
 
     def generate_queries(self) -> List[Dict[str, Any]]:
-        \"\"\"Generate ES|QL queries from pre-planned strategy\"\"\"
+        \"\"\"Generate ALL ES|QL queries from pre-planned strategy
 
+        CRITICAL: Categorize each query with query_type field:
+        - "scripted": Basic queries that don't take user parameters
+        - "parameterized": Queries that can be customized with user input
+        - "rag": RAG queries using MATCH -> RERANK -> COMPLETION pipeline
+        \"\"\"
         queries = []
 
-        # Implement each query from the strategy above
-        # Make sure to use EXACT field names that exist in the datasets
+        # Implement SCRIPTED queries (simple, no parameters)
+        # Each query should have: name, description, query, query_type="scripted"
+
+        # Implement PARAMETERIZED queries (user can customize)
+        # Each query should have: name, description, query, query_type="parameterized", parameters
+
+        # Implement RAG queries for semantic_text fields
+        # Each query should have: name, description, query, query_type="rag"
+        # RAG queries MUST use: MATCH -> RERANK (optional) -> COMPLETION pipeline
+
+        return queries
+
+    def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
+        \"\"\"Generate parameterized queries that accept user input
+
+        These are Agent Builder Tool queries that let users customize parameters.
+        Include parameter definitions for each query.
+        \"\"\"
+        queries = []
+
+        # Implement parameterized queries from strategy
+        # Each should define parameters users can customize
+
+        return queries
+
+    def generate_rag_queries(self) -> List[Dict[str, Any]]:
+        \"\"\"Generate RAG queries using COMPLETION command
+
+        CRITICAL - RAG Pipeline Requirements:
+        1. MUST use MATCH to find semantically similar documents
+        2. OPTIONALLY use RERANK to improve relevance
+        3. MUST use COMPLETION to generate LLM-powered answers
+        4. Target semantic_text fields from the strategy
+
+        Example RAG query structure:
+        FROM index METADATA _id
+        | WHERE MATCH(semantic_field, "{{user_question}}")
+        | RERANK(semantic_field, "{{user_question}}")
+        | LIMIT 5
+        | COMPLETION "You are an expert assistant. Use these documents to answer: {{user_question}}"
+        \"\"\"
+        queries = []
+
+        # Extract semantic_text fields from strategy datasets
+        # For each semantic_text field, generate a RAG query
 
         return queries
 
@@ -1173,6 +1221,12 @@ class {config["company_name"].replace(" ", "")}QueryGenerator(QueryGeneratorModu
             # Query names in presentation order from strategy
         ]
 ```
+
+CRITICAL REQUIREMENTS:
+1. ALL THREE methods must be implemented (generate_queries, generate_parameterized_queries, generate_rag_queries)
+2. RAG queries MUST use the COMPLETION command with semantic_text fields from the strategy
+3. Each query must have proper query_type metadata ("scripted", "parameterized", or "rag")
+4. Extract semantic_text fields from the strategy datasets to guide RAG generation
 
 Generate the complete implementation with ALL queries from the strategy:"""
 
