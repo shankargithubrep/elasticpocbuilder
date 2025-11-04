@@ -97,14 +97,18 @@ Parameters are ALWAYS required when used. If optional behavior is needed:
 ❌ WRONG: `| RERANK field WITH query` - Wrong syntax
 ❌ WRONG: `WHERE RERANK(...)` - RERANK is a pipe operation
 
-### 6. STATS Conditional Aggregation ⚠️
+### 6. COUNT_DISTINCT Syntax ⚠️
+✅ CORRECT: `COUNT_DISTINCT(field)` - Single function name
+❌ WRONG: `COUNT(DISTINCT field)` - SQL syntax doesn't work in ES|QL
+
+### 7. STATS Conditional Aggregation ⚠️
 ✅ CORRECT: `STATS denied = SUM(CASE(status == "denied", 1, 0))`
 ✅ CORRECT: `STATS high_risk = COUNT(*) WHERE risk > 0.8` (ES|QL 8.13+)
 ❌ WRONG: `STATS denied = COUNT(*) WHERE status == "denied"` in older versions
 ❌ WRONG: `STATS denied = COUNT_IF(status == "denied")` - No COUNT_IF function
 ❌ WRONG: `COUNT(CASE(...))` - Use SUM(CASE(...)) for conditional counting
 
-### 7. DATE Functions - Parameter Order ⚠️
+### 8. DATE Functions - Parameter Order ⚠️
 ✅ CORRECT: `DATE_TRUNC(1 hour, @timestamp)`
 ✅ CORRECT: `DATE_EXTRACT("month", @timestamp)`
 ❌ WRONG: `DATE_TRUNC(@timestamp, 1 hour)` - Wrong order
@@ -132,17 +136,68 @@ When using LOOKUP JOIN, the target index MUST be in lookup mode:
 - Never invent field names - use only fields from the schema
 - After STATS, only grouped fields and calculated fields are available
 
-### 10. Division and Type Casting ⚠️
+### 10. Date Arithmetic - ALWAYS Use TO_LONG() ⚠️⚠️ CRITICAL
+**Common Error**: `[-] has arguments with incompatible types [datetime] and [datetime]`
+
+✅ CORRECT: `EVAL days_diff = (TO_LONG(NOW()) - TO_LONG(last_updated)) / 86400000`
+✅ CORRECT: `EVAL hours_diff = (TO_LONG(end_time) - TO_LONG(start_time)) / 3600000`
+❌ WRONG: `EVAL days_diff = (NOW() - last_updated) / 86400000` - Datetime subtraction fails
+❌ WRONG: `EVAL hours = (end_time - start_time) / 3600000` - Type error
+
+**Rule**: You CANNOT subtract datetime values directly. Always wrap both sides in TO_LONG() first.
+
+### 11. Division and Type Casting ⚠️
 ✅ CORRECT: `EVAL rate = TO_DOUBLE(numerator) / denominator`
 ✅ CORRECT: `EVAL pct = numerator * 100.0 / denominator`
 ❌ WRONG: `EVAL rate = numerator / denominator` - Integer division loses precision
 
-### 11. COMPLETION Syntax (RAG Queries) ⚠️
+### 12. LOOKUP JOIN Schema Validation ⚠️⚠️⚠️ CRITICAL - CANNOT BE AUTO-FIXED
+**Common Error**: `Unknown column [field_name] in right/left side of join`
+
+This is the MOST COMMON failure that CANNOT be automatically fixed. The join key MUST exist in BOTH datasets.
+
+**Example Failure Pattern:**
+```esql
+FROM aem_pages
+| LOOKUP JOIN aem_products ON product_references  -- ❌ FAILS if product_references not in aem_products
+```
+
+**Error Messages You'll See:**
+- "Unknown column [product_references] in right side of join" → Join key missing in lookup dataset
+- "Unknown column [product_id] in left side of join" → Join key missing in source dataset
+
+**PREVENTION STRATEGY:**
+Before writing ANY LOOKUP JOIN query, you MUST:
+1. ✅ Verify the join key exists in the source dataset schema (FROM dataset)
+2. ✅ Verify the join key exists in the lookup dataset schema
+3. ✅ Use the EXACT field name (case-sensitive) from both schemas
+4. ❌ NEVER invent, assume, or guess join key names
+
+**Correct Pattern:**
+```esql
+-- FIRST: Verify 'user_id' exists in BOTH events schema AND users schema
+FROM events
+| LOOKUP JOIN users ON user_id  -- ✅ Only works if user_id is in BOTH
+| STATS count = COUNT(*) BY tier  -- Access users fields directly after join
+```
+
+**Anti-Pattern (WILL FAIL):**
+```esql
+FROM pages
+| LOOKUP JOIN products ON product_references  -- ❌ Assumes product_references exists - probably doesn't
+```
+
+**When You See This Error:**
+- It means the schema doesn't support the join you're trying to do
+- Auto-fix CANNOT resolve this - it requires data model changes
+- You must either: use a different join key that exists in both, or abandon the join
+
+### 13. COMPLETION Syntax (RAG Queries) ⚠️
 ✅ CORRECT: `| COMPLETION "prompt" WITH ?user_question`
 ❌ WRONG: `| COMPLETION "prompt" ON field` - Wrong syntax
 Note: COMPLETION may not be available in all Elasticsearch versions
 
-### 12. Experimental Features ⚠️
+### 14. Experimental Features ⚠️
 These may fail depending on ES version:
 - CHANGE_POINT - Use INLINESTATS with z-score calculation instead
 - LAG/LEAD - Window functions may not be supported
@@ -281,6 +336,8 @@ COMMON_ERROR_FIXES = """
 
 | Error Pattern | Root Cause | Fix |
 |--------------|------------|-----|
+| "Unknown column [field] in right/left side of join" | Join key doesn't exist in both datasets | **CANNOT AUTO-FIX** - Verify schemas and use field that exists in BOTH |
+| "[-] has arguments with incompatible types [datetime]" | Direct datetime subtraction | Wrap both sides in TO_LONG(): `(TO_LONG(NOW()) - TO_LONG(field))` |
 | "Unknown index [x_lookup]" | Adding _lookup suffix | Remove _lookup suffix entirely |
 | "Unknown column [providers_lookup.field]" | Using table prefix after JOIN | Remove prefix: `providers.field` → `field` |
 | "Unknown column [table.field]" after JOIN | Field reference with prefix | Reference fields directly without table prefix |
@@ -295,6 +352,8 @@ COMMON_ERROR_FIXES = """
 | "Unknown column [agents_lookup]" | Auto-fix adding suffix | Remove the _lookup suffix |
 | "RERANK" errors | Wrong syntax | Use RERANK query ON field |
 | "MATCH WITH" syntax error | Invalid MATCH syntax | Use WHERE MATCH(field, query) |
+
+**Note**: The first two errors are the MOST COMMON failures from production testing.
 """
 
 # ============================================================================
@@ -305,25 +364,29 @@ LLM_PROMPTING_GUIDELINES = """
 ## Guidelines for LLM Query Generation
 
 ### DO's:
-1. ALWAYS validate field names against the actual schema
-2. ALWAYS use scripted queries for testing before making parameterized versions
-3. ALWAYS use TO_DOUBLE() for division operations
-4. ALWAYS use @timestamp for time fields
-5. ALWAYS put MATCH inside WHERE clause
-6. ALWAYS check index mode compatibility for LOOKUP JOIN
-7. PREFER INLINESTATS over window functions
-8. PREFER SUM(CASE()) over conditional COUNT
+1. ALWAYS validate field names against the actual schema before using them
+2. ALWAYS verify LOOKUP JOIN keys exist in BOTH source AND lookup dataset schemas (CRITICAL!)
+3. ALWAYS use TO_LONG() when subtracting datetime values
+4. ALWAYS use scripted queries for testing before making parameterized versions
+5. ALWAYS use TO_DOUBLE() for division operations
+6. ALWAYS use @timestamp for time fields
+7. ALWAYS put MATCH inside WHERE clause
+8. ALWAYS check index mode compatibility for LOOKUP JOIN
+9. PREFER INLINESTATS over window functions
+10. PREFER SUM(CASE()) over conditional COUNT
 
 ### DON'Ts:
 1. NEVER use table prefixes after LOOKUP JOIN (use `specialty` not `providers.specialty`)
 2. NEVER add _lookup suffix to index names
-3. NEVER check if parameters are NULL
-4. NEVER use named branches in FORK
-5. NEVER put comments inside FORK branches
-6. NEVER use MATCH as a pipe operation
-7. NEVER assume fields exist after STATS without including in GROUP BY
-8. NEVER use COUNT_IF or other non-existent functions
-9. NEVER mix parameter order in DATE functions
+3. NEVER invent or assume LOOKUP JOIN keys - verify they exist in BOTH schemas first
+4. NEVER subtract datetime values directly - always use TO_LONG() wrapper
+5. NEVER check if parameters are NULL
+6. NEVER use named branches in FORK
+7. NEVER put comments inside FORK branches
+8. NEVER use MATCH as a pipe operation
+9. NEVER assume fields exist after STATS without including in GROUP BY
+10. NEVER use COUNT_IF or other non-existent functions
+11. NEVER mix parameter order in DATE functions
 
 ### Query Generation Process:
 1. Start with scripted query (concrete values)

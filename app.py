@@ -711,11 +711,99 @@ def render_create_demo_view():
                             "dataset_size_preference": st.session_state.get("dataset_size_preference", "medium")
                         }
 
-                        # Create progress placeholder
-                        progress_placeholder = st.empty()
+                        # Create enhanced progress display with phase tracking using empty placeholders
+                        st.markdown(f"### 🚀 Demo Generation Progress")
+
+                        # Define all 8 phases
+                        phases = [
+                            {"name": "Strategy", "icon": "🎯", "desc": "Planning query strategy"},
+                            {"name": "Data Module", "icon": "🤖", "desc": "Generating data module"},
+                            {"name": "Datasets", "icon": "📦", "desc": "Creating datasets"},
+                            {"name": "Indexing", "icon": "🔍", "desc": "Indexing in Elasticsearch"},
+                            {"name": "Profiling", "icon": "📊", "desc": "Profiling indexed data"},
+                            {"name": "Queries", "icon": "🔧", "desc": "Generating ES|QL queries"},
+                            {"name": "Testing", "icon": "🧪", "desc": "Testing queries"},
+                            {"name": "Cleanup", "icon": "✨", "desc": "Finalizing demo"}
+                        ]
+
+                        # Create placeholders for dynamic updates
+                        progress_bar_placeholder = st.empty()
+                        phases_placeholder = st.empty()
+                        current_status_placeholder = st.empty()
+
+                        phase_status = {phase["name"]: "pending" for phase in phases}
+                        last_update_state = {"progress": 0.0, "phase": None}
 
                         def update_progress(progress: float, message: str):
-                            progress_placeholder.progress(progress, text=message)
+                            """Update progress with enhanced phase tracking (only updates changed elements)"""
+                            # Determine current phase based on progress and message
+                            if progress <= 0.05:
+                                current_phase = "Strategy"
+                                current_phase_num = 1
+                            elif progress <= 0.15:
+                                phase_status["Strategy"] = "complete"
+                                current_phase = "Data Module"
+                                current_phase_num = 2
+                            elif progress <= 0.3:
+                                phase_status["Data Module"] = "complete"
+                                current_phase = "Datasets"
+                                current_phase_num = 3
+                            elif progress <= 0.5:
+                                phase_status["Datasets"] = "complete"
+                                current_phase = "Indexing"
+                                current_phase_num = 4
+                            elif progress <= 0.6:
+                                phase_status["Indexing"] = "complete"
+                                current_phase = "Profiling"
+                                current_phase_num = 5
+                            elif progress <= 0.65:
+                                phase_status["Profiling"] = "complete"
+                                current_phase = "Queries"
+                                current_phase_num = 6
+                            elif progress <= 0.85:
+                                phase_status["Queries"] = "complete"
+                                current_phase = "Testing"
+                                current_phase_num = 7
+                            else:
+                                phase_status["Testing"] = "complete"
+                                current_phase = "Cleanup"
+                                current_phase_num = 8
+
+                            if current_phase in phase_status:
+                                phase_status[current_phase] = "in_progress"
+
+                            # Only update UI if phase changed OR progress increased by at least 5%
+                            phase_changed = last_update_state["phase"] != current_phase
+                            progress_jump = progress - last_update_state["progress"] >= 0.05
+
+                            if not (phase_changed or progress_jump):
+                                return  # Skip update to reduce UI churn
+
+                            last_update_state["progress"] = progress
+                            last_update_state["phase"] = current_phase
+
+                            # Update progress bar with phase name
+                            progress_bar_placeholder.progress(
+                                progress,
+                                text=f"{int(progress * 100)}% - Step {current_phase_num}/8: {current_phase}"
+                            )
+
+                            # Update phase checklist (only if phase changed)
+                            if phase_changed:
+                                with phases_placeholder.container():
+                                    st.markdown("#### Pipeline Steps:")
+                                    for idx, phase in enumerate(phases, 1):
+                                        status = phase_status.get(phase["name"], "pending")
+                                        if status == "complete":
+                                            st.markdown(f"**{idx}.** ✅ {phase['icon']} {phase['name']}")
+                                        elif status == "in_progress":
+                                            st.markdown(f"**{idx}.** 🔄 {phase['icon']} **{phase['name']}** - _{phase['desc']}_")
+                                        else:
+                                            st.markdown(f"**{idx}.** ⏸️ {phase['icon']} {phase['name']}")
+
+                            # Always update current status (this is the only line that changes frequently)
+                            current_status_placeholder.info(f"**Current:** {message}")
+
 
                         # Generate demo using modular orchestrator
                         orchestrator = ModularDemoOrchestrator()
@@ -796,9 +884,7 @@ def load_demo_queries(module_name: str):
         'rag': [...]
     }
 
-    Handles both patterns:
-    1. Path 1 modules: Separate methods (generate_parameterized_queries, generate_rag_queries)
-    2. Path 2 modules: Single generate_queries() with type field
+    Automatically merges in auto-fixed queries from query_testing_results.json if available.
     """
     manager = DemoModuleManager()
     loader = manager.get_module(module_name)
@@ -806,21 +892,35 @@ def load_demo_queries(module_name: str):
         datasets = load_demo_datasets(module_name)
         query_gen = loader.load_query_generator(datasets)
 
-        # Get all queries from generate_queries()
-        all_queries = query_gen.generate_queries()
+        # Always call all three methods - modern modules implement all three
+        scripted = query_gen.generate_queries()
+        parameterized = query_gen.generate_parameterized_queries()
+        rag = query_gen.generate_rag_queries()
 
-        # Check if queries have 'type' or 'query_type' field (Path 2 pattern)
-        # Note: Some modules use 'type', others use 'query_type'
-        if all_queries and isinstance(all_queries[0], dict) and ('type' in all_queries[0] or 'query_type' in all_queries[0]):
-            # Path 2: Filter by type - check both 'type' and 'query_type' fields
-            scripted = [q for q in all_queries if q.get('type') == 'scripted' or q.get('query_type') == 'scripted']
-            parameterized = [q for q in all_queries if q.get('type') == 'parameterized' or q.get('query_type') == 'parameterized']
-            rag = [q for q in all_queries if q.get('type') == 'rag' or q.get('query_type') == 'rag']
-        else:
-            # Path 1: Use separate methods
-            scripted = all_queries
-            parameterized = query_gen.generate_parameterized_queries()
-            rag = query_gen.generate_rag_queries()
+        # Merge in auto-fixed queries from test results if available
+        try:
+            from pathlib import Path
+            import json
+            test_results_path = Path('demos') / module_name / 'query_testing_results.json'
+            if test_results_path.exists():
+                with open(test_results_path, 'r') as f:
+                    test_results = json.load(f)
+
+                # Create a map of query names to fixed queries
+                fixed_queries = {}
+                for result in test_results.get('queries', []):
+                    if result.get('was_fixed') and result.get('final_esql'):
+                        fixed_queries[result['name']] = result['final_esql']
+
+                # Replace original queries with fixed versions
+                for i, query in enumerate(scripted):
+                    if query['name'] in fixed_queries:
+                        scripted[i] = query.copy()
+                        scripted[i]['query'] = fixed_queries[query['name']]
+                        scripted[i]['_auto_fixed'] = True  # Mark as auto-fixed
+        except Exception as e:
+            # Silently fail - just use original queries
+            pass
 
         return {
             'scripted': scripted,
@@ -974,32 +1074,6 @@ def render_browse_demos_view():
                                         st.error(f"❌ {name}: {str(e)}")
 
                                 st.success("🎉 Batch indexing complete!")
-
-                                # Profile the indexed data
-                                st.info("🔍 Profiling indexed data...")
-                                try:
-                                    from src.services.data_profiler import profile_indexed_data
-                                    from src.services.elasticsearch_client import ElasticsearchClient
-                                    from pathlib import Path
-
-                                    es_client = ElasticsearchClient()
-                                    demo_path = Path(f"demos/{st.session_state.current_demo_module}")
-
-                                    profile_progress = st.empty()
-
-                                    def profile_callback(msg):
-                                        profile_progress.text(msg)
-
-                                    profile = profile_indexed_data(
-                                        es_client,
-                                        datasets,
-                                        demo_path,
-                                        progress_callback=profile_callback
-                                    )
-
-                                    st.success(f"✅ Data profile created - {len(profile['datasets'])} datasets profiled")
-                                except Exception as e:
-                                    st.warning(f"⚠️ Could not create data profile: {e}")
 
                             st.divider()
 

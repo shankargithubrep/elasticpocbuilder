@@ -399,16 +399,33 @@ class ModularDemoOrchestrator:
             # Reload module to get the new queries
             loader = ModuleLoader(module_path)
             query_gen = loader.load_query_generator(datasets)  # ← Changed from exec_results['datasets']
-            all_queries = query_gen.generate_queries()
+
+            # Load all three query types
+            scripted_queries = query_gen.generate_queries()
+            parameterized_queries = query_gen.generate_parameterized_queries()
+            rag_queries = query_gen.generate_rag_queries()
+
+            # Combine all queries
+            all_queries = scripted_queries + parameterized_queries + rag_queries
+
+            # Store queries with type breakdown
             results['all_queries'] = all_queries
             results['queries'] = all_queries  # For backward compatibility
-            logger.info(f"Loaded {len(all_queries)} generated queries")
+            results['scripted_queries'] = scripted_queries  # Only these get tested
+            results['parameterized_queries'] = parameterized_queries
+            results['rag_queries'] = rag_queries
+
+            logger.info(f"Loaded {len(all_queries)} total queries: "
+                       f"{len(scripted_queries)} scripted, "
+                       f"{len(parameterized_queries)} parameterized, "
+                       f"{len(rag_queries)} RAG")
 
         except Exception as e:
             logger.error(f"Query module generation failed: {e}", exc_info=True)
             results['phases']['query_generation'] = {'status': 'failed', 'error': str(e)}
             # Don't fail the entire generation if query generation fails
             all_queries = []
+            scripted_queries = []
 
         # Phase 6: Test and Fix Queries
         if indexing_results and progress_callback:
@@ -425,10 +442,11 @@ class ModularDemoOrchestrator:
                 if result.get('status') == 'success'
             }
 
-            if successful_indices and all_queries:
+            # Only test scripted queries (parameterized/RAG queries have parameters)
+            if successful_indices and scripted_queries:
                 test_runner = QueryTestRunner(indexer, self.llm_client, data_profile=data_profile)
                 query_test_results = test_runner.test_all_queries(
-                    all_queries,
+                    scripted_queries,
                     successful_indices,
                     max_attempts=3
                 )
