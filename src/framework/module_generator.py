@@ -116,6 +116,79 @@ class ModuleGenerator:
         logger.info(f"Generated demo module with strategy at: {module_path}")
         return str(module_path)
 
+    def generate_data_and_infrastructure_only(self, config: Dict[str, Any], query_strategy: Dict[str, Any]) -> str:
+        """Generate module infrastructure and data generator only (NO QUERIES YET)
+
+        This is Phase 1 of the split generation workflow. Query generation happens later
+        after data is indexed and profiled.
+
+        Args:
+            config: Demo configuration with customer context
+            query_strategy: Pre-generated query strategy with data requirements
+
+        Returns:
+            Path to the generated module directory (ready for data generation)
+        """
+        # Create unique module name
+        company_slug = config['company_name'].lower().replace(' ', '_')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        module_name = f"{company_slug}_{config['department'].lower()}_{timestamp}"
+        module_path = self.base_path / module_name
+
+        # Create module directory structure
+        module_path.mkdir(parents=True, exist_ok=True)
+        (module_path / '__init__.py').touch()
+
+        # Save query strategy
+        strategy_file = module_path / 'query_strategy.json'
+        strategy_file.write_text(json.dumps(query_strategy, indent=2))
+        logger.info("Saved query_strategy.json")
+
+        # Extract data requirements from strategy
+        from src.services.query_strategy_generator import QueryStrategyGenerator
+        strategy_gen = QueryStrategyGenerator(self.llm_client)
+        data_requirements = strategy_gen.extract_data_requirements(query_strategy)
+
+        # Generate ONLY data module and supporting files (NO QUERIES)
+        self._generate_data_module_with_requirements(config, module_path, data_requirements)
+        self._generate_guide_module(config, module_path)
+        self._generate_config_file(config, module_path)
+
+        # Generate static files for quick loading
+        self._generate_static_files(module_path)
+
+        logger.info(f"Generated module infrastructure and data at: {module_path} (queries will be generated after profiling)")
+        return str(module_path)
+
+    def generate_query_module_with_profile(self, module_path: str, config: Dict[str, Any],
+                                          query_strategy: Dict[str, Any],
+                                          data_profile: Optional[Dict[str, Any]] = None) -> None:
+        """Generate query module using actual profiled data (Phase 2 of split workflow)
+
+        This method is called AFTER data is generated, indexed, and profiled.
+        It uses the data profile to generate queries with accurate field names and values.
+
+        Args:
+            module_path: Path to existing module directory
+            config: Demo configuration
+            query_strategy: Query strategy (for context)
+            data_profile: Profiled data from Elasticsearch (field names, values, combinations)
+        """
+        module_path_obj = Path(module_path)
+
+        if not module_path_obj.exists():
+            raise ValueError(f"Module path does not exist: {module_path}")
+
+        # Generate query module WITH data profile
+        self._generate_query_module_with_strategy(
+            config,
+            module_path_obj,
+            query_strategy,
+            data_profile=data_profile
+        )
+
+        logger.info(f"Generated query module with data profile at: {module_path}")
+
     def _generate_data_module(self, config: Dict[str, Any], module_path: Path):
         """Generate the data generation module"""
 
@@ -1108,14 +1181,42 @@ Generate the complete implementation with ALL required fields:"""
 
     def _generate_query_module_with_strategy(self, config: Dict[str, Any],
                                              module_path: Path,
-                                             query_strategy: Dict):
+                                             query_strategy: Dict,
+                                             data_profile: Optional[Dict[str, Any]] = None):
         """Generate query module using pre-planned query strategy
 
         Args:
             config: Demo configuration
             module_path: Path to module directory
             query_strategy: Complete query strategy with planned queries
+            data_profile: Optional profiled data from Elasticsearch (field names, values, combinations)
         """
+        # Format data profile for prompt if available
+        data_profile_section = ""
+        if data_profile and 'datasets' in data_profile:
+            from src.services.data_profiler import DataProfiler
+            data_profile_section = f"""
+
+**ACTUAL INDEXED DATA PROFILE:**
+The following data has been generated, indexed in Elasticsearch, and profiled.
+USE THESE EXACT FIELD NAMES AND VALUE EXAMPLES IN YOUR QUERIES.
+
+{DataProfiler.format_profile_for_llm(data_profile, compact=True)}
+
+CRITICAL - ACCURACY REQUIREMENTS:
+1. Use ONLY field names that appear in the data profile above
+2. Use realistic values from the examples shown (don't invent values)
+3. Check field name spelling carefully (common errors: timestamp vs @timestamp, userId vs user_id)
+4. Verify field types match query operations (text fields for MATCH, numeric for math operations)
+"""
+        else:
+            data_profile_section = """
+
+**WARNING - NO DATA PROFILE AVAILABLE:**
+Data profile was not available during query generation. Field names must be inferred from strategy.
+This may result in field name mismatches or typos. Use extreme care with field naming.
+"""
+
         prompt = f"""Generate a Python module that implements QueryGeneratorModule for this customer:
 
 Company: {config["company_name"]}
@@ -1125,6 +1226,7 @@ Use Cases: {", ".join(config["use_cases"])}
 
 **Pre-Planned Query Strategy:**
 {json.dumps(query_strategy, indent=2)}
+{data_profile_section}
 
 CRITICAL - IMPLEMENT THE QUERIES FROM THE STRATEGY ABOVE.
 

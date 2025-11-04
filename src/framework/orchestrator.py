@@ -248,24 +248,33 @@ class ModularDemoOrchestrator:
             logger.error(f"Strategy generation failed: {e}", exc_info=True)
             raise ValueError(f"Failed to generate query strategy: {e}")
 
-        # Phase 2: Generate Module with Strategy
+        # Phase 2: Generate Data Module ONLY (queries will be generated AFTER profiling)
         if progress_callback:
-            progress_callback(0.15, "🤖 Generating custom demo module...")
+            progress_callback(0.15, "🤖 Generating data module...")
 
-        module_path = self.module_generator.generate_demo_module_with_strategy(config, query_strategy)
+        module_path = self.module_generator.generate_data_and_infrastructure_only(config, query_strategy)
 
-        # Phase 3: Load and Execute the Module
+        # Phase 3: Load and Execute Data Generation ONLY (queries come later in Phase 5!)
         if progress_callback:
-            progress_callback(0.3, "📦 Loading demo module...")
+            progress_callback(0.3, "📦 Generating datasets...")
 
         loader = ModuleLoader(module_path)
-        exec_results = loader.execute_demo(progress_callback)
 
-        # Merge execution results
-        results.update(exec_results)
+        # Only generate datasets, NOT queries yet
+        data_generator = loader.load_data_generator()
+        datasets = data_generator.generate_datasets()
+        relationships = data_generator.get_relationships()
+        data_descriptions = data_generator.get_data_descriptions()
+
+        # Store dataset results
+        results['datasets'] = datasets
+        results['relationships'] = relationships
+        results['data_descriptions'] = data_descriptions
         results['module_path'] = module_path
         results['module_name'] = Path(module_path).name
         results['query_strategy'] = query_strategy
+
+        logger.info(f"Generated {len(datasets)} datasets (queries will be generated after profiling)")
 
         # Phase 4: Index Data in Elasticsearch (NEW)
         if progress_callback:
@@ -318,7 +327,7 @@ class ModularDemoOrchestrator:
                     index_modes[dataset_name] = index_mode
 
             indexing_results = indexing_orch.index_all_datasets(
-                exec_results['datasets'],
+                datasets,  # ← Changed from exec_results['datasets']
                 semantic_fields,
                 index_modes,
                 progress_callback
@@ -354,7 +363,7 @@ class ModularDemoOrchestrator:
                 # Profile the indexed datasets
                 data_profile = profile_indexed_data(
                     es_client,
-                    exec_results['datasets'],
+                    datasets,  # ← Changed from exec_results['datasets']
                     demo_path_obj,
                     progress_callback=None  # Don't need sub-progress for this
                 )
@@ -373,9 +382,37 @@ class ModularDemoOrchestrator:
             results['phases']['profiling'] = {'status': 'failed', 'error': str(e)}
             # Don't fail the entire generation if profiling fails
 
-        # Phase 5: Test and Fix Queries (NEW)
+        # Phase 5: Generate Query Module (NOW with data profile!)
+        if progress_callback:
+            progress_callback(0.65, "🔧 Generating queries with data profile...")
+
+        try:
+            self.module_generator.generate_query_module_with_profile(
+                module_path,
+                config,
+                query_strategy,
+                data_profile=data_profile
+            )
+            results['phases']['query_generation'] = {'status': 'completed'}
+            logger.info(f"Query module generated with data profile")
+
+            # Reload module to get the new queries
+            loader = ModuleLoader(module_path)
+            query_gen = loader.load_query_generator(datasets)  # ← Changed from exec_results['datasets']
+            all_queries = query_gen.generate_queries()
+            results['all_queries'] = all_queries
+            results['queries'] = all_queries  # For backward compatibility
+            logger.info(f"Loaded {len(all_queries)} generated queries")
+
+        except Exception as e:
+            logger.error(f"Query module generation failed: {e}", exc_info=True)
+            results['phases']['query_generation'] = {'status': 'failed', 'error': str(e)}
+            # Don't fail the entire generation if query generation fails
+            all_queries = []
+
+        # Phase 6: Test and Fix Queries
         if indexing_results and progress_callback:
-            progress_callback(0.7, "🧪 Testing and fixing queries...")
+            progress_callback(0.75, "🧪 Testing and fixing queries...")
 
         query_test_results = None
         try:
@@ -388,10 +425,10 @@ class ModularDemoOrchestrator:
                 if result.get('status') == 'success'
             }
 
-            if successful_indices:
+            if successful_indices and all_queries:
                 test_runner = QueryTestRunner(indexer, self.llm_client, data_profile=data_profile)
                 query_test_results = test_runner.test_all_queries(
-                    exec_results.get('all_queries', exec_results.get('queries', [])),
+                    all_queries,
                     successful_indices,
                     max_attempts=3
                 )
@@ -409,7 +446,7 @@ class ModularDemoOrchestrator:
             logger.error(f"Query testing failed: {e}", exc_info=True)
             results['phases']['query_testing'] = {'status': 'failed', 'error': str(e)}
 
-        # Phase 6: Cleanup Test Indices
+        # Phase 7: Cleanup Test Indices
         if indexing_results and progress_callback:
             progress_callback(0.85, "🧹 Cleaning up test indices...")
 
@@ -433,7 +470,7 @@ class ModularDemoOrchestrator:
             results['phases']['cleanup'] = {'status': 'failed', 'error': str(e)}
             # Don't fail the entire generation if cleanup fails
 
-        # Phase 7: Save conversation history if provided
+        # Phase 8: Save conversation history if provided
         if conversation:
             if progress_callback:
                 progress_callback(0.95, "💾 Saving conversation history...")
