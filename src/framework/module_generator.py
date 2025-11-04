@@ -21,11 +21,12 @@ class ModuleGenerator:
         self.llm_client = llm_client
         self.base_path = Path("demos")  # Where demo modules are stored
 
-    def generate_demo_module(self, config: Dict[str, Any]) -> str:
+    def generate_demo_module(self, config: Dict[str, Any], query_plan: Optional[Dict[str, Any]] = None) -> str:
         """Generate a complete demo module for a customer
 
         Args:
             config: Demo configuration with customer context
+            query_plan: Optional query plan with field requirements (from LightweightQueryPlanner)
 
         Returns:
             Path to the generated module directory
@@ -40,11 +41,32 @@ class ModuleGenerator:
         module_path.mkdir(parents=True, exist_ok=True)
         (module_path / '__init__.py').touch()
 
-        # Generate each component (Python modules)
-        self._generate_data_module(config, module_path)
-        self._generate_query_module(config, module_path)
-        self._generate_guide_module(config, module_path)
-        self._generate_config_file(config, module_path)
+        # If query_plan provided, use requirements-based generation
+        if query_plan:
+            logger.info("Using query plan for coordinated data/query generation")
+
+            # Save query plan
+            plan_file = module_path / 'query_plan.json'
+            plan_file.write_text(json.dumps(query_plan, indent=2))
+            logger.info("Saved query_plan.json")
+
+            # Extract field requirements from query plan
+            from src.services.query_planner import LightweightQueryPlanner
+            planner = LightweightQueryPlanner(self.llm_client)
+            data_requirements = planner.extract_field_requirements(query_plan)
+
+            # Generate each component with field requirements
+            self._generate_data_module_with_requirements(config, module_path, data_requirements)
+            self._generate_query_module_with_plan(config, module_path, query_plan)
+            self._generate_guide_module(config, module_path)
+            self._generate_config_file(config, module_path)
+        else:
+            logger.info("Using original data-first generation (no query plan)")
+            # Generate each component (Python modules) - original flow
+            self._generate_data_module(config, module_path)
+            self._generate_query_module(config, module_path)
+            self._generate_guide_module(config, module_path)
+            self._generate_config_file(config, module_path)
 
         # Generate static files for quick loading
         self._generate_static_files(module_path)
@@ -124,12 +146,12 @@ class ModuleGenerator:
 
         prompt = f"""Generate a Python module that implements DataGeneratorModule for this customer:
 
-Company: {config['company_name']}
-Department: {config['department']}
-Industry: {config['industry']}
-Pain Points: {', '.join(config['pain_points'])}
-Use Cases: {', '.join(config['use_cases'])}
-Scale: {config['scale']}
+Company: {config["company_name"]}
+Department: {config["department"]}
+Industry: {config["industry"]}
+Pain Points: {", ".join(config["pain_points"])}
+Use Cases: {", ".join(config["use_cases"])}
+Scale: {config["scale"]}
 Dataset Size Preference: {size_preference.upper()}
 
 The module should:
@@ -151,7 +173,7 @@ CRITICAL - TIMESTAMP REQUIREMENTS:
 CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
 - Primary timeseries datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
-- Scale mentioned ({config['scale']}) is for REALISM only, don't generate that many!
+- Scale mentioned ({config["scale"]}) is for REALISM only, don't generate that many!
 
 Template:
 ```python
@@ -161,11 +183,11 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List
 
-class {config['company_name'].replace(' ', '')}DataGenerator(DataGeneratorModule):
-    \"\"\"Data generator for {config['company_name']} - {config['department']}\"\"\"
+class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule):
+    \"\"\"Data generator for {config["company_name"]} - {config["department"]}\"\"\"
 
     def generate_datasets(self) -> Dict[str, pd.DataFrame]:
-        \"\"\"Generate datasets specific to {config['company_name']}'s needs\"\"\"
+        \"\"\"Generate datasets specific to {config["company_name"]}'s needs\"\"\"
         datasets = {{}}
 
         # Generate main dataset with columns specific to their business
@@ -183,7 +205,7 @@ class {config['company_name'].replace(' ', '')}DataGenerator(DataGeneratorModule
         # IMPORTANT: Size preference is {size_preference.upper()}
         # - Primary datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
         # - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
-        # Scale mentioned: {config['scale']} (for context only, don't generate that many rows!)
+        # Scale mentioned: {config["scale"]} (for context only, don't generate that many rows!)
 
         return datasets
 
@@ -215,58 +237,573 @@ Generate the complete implementation:"""
         module_file.write_text(code)
 
     def _generate_query_module(self, config: Dict[str, Any], module_path: Path):
-        """Generate the query generation module with THREE query types:
-        1. Scripted queries (tested, non-parameterized)
-        2. Parameterized queries (Agent Builder tools)
-        3. RAG queries (MATCH → RERANK → COMPLETION)
-        """
+        """Generate the query generation module with THREE query types via 3 separate LLM calls.
 
-        # Read ES|QL documentation for reference
+        This method orchestrates three separate LLM calls for cost efficiency and resilience:
+        1. _generate_scripted_queries() - ~5K tokens
+        2. _generate_parameterized_queries() - ~4K tokens
+        3. _generate_rag_queries() - ~6K tokens
+
+        Total ~15K tokens vs single 16K call, but only pay for what's used.
+        """
+        logger.info("🏗️  Generating query module via 3-call approach...")
+
+        # Read ES|QL documentation once (shared across all calls)
         esql_docs = self._read_esql_docs()
 
-        prompt = f"""Generate a Python module that implements QueryGeneratorModule with THREE types of queries.
+        # Generate each query type separately
+        logger.info("📤 Call 1/3: Generating scripted queries...")
+        scripted_code = self._generate_scripted_queries(config, esql_docs)
+
+        logger.info("📤 Call 2/3: Generating parameterized queries...")
+        parameterized_code = self._generate_parameterized_queries(config, esql_docs)
+
+        logger.info("📤 Call 3/3: Generating RAG queries...")
+        rag_code = self._generate_rag_queries(config, esql_docs)
+
+        # Combine all three methods into single module
+        logger.info("🔧 Combining query methods into single module...")
+        full_code = self._combine_query_methods(config, scripted_code, parameterized_code, rag_code)
+
+        # Validate syntax before saving
+        self._validate_python_syntax(full_code, 'query_generator.py')
+
+        # Validate that all required methods are present
+        methods_present = self._validate_query_module_methods(full_code)
+        missing_methods = [method for method, present in methods_present.items() if not present]
+
+        if missing_methods:
+            logger.warning(f"⚠️  Query module is missing methods: {', '.join(missing_methods)}")
+            logger.warning("⚠️  Framework will use default implementations (return empty lists)")
+
+        # Save the module
+        module_file = module_path / 'query_generator.py'
+        module_file.write_text(full_code)
+        logger.info("✅ Generated complete query_generator.py with all 3 query types")
+
+    def _generate_query_module_with_plan(self, config: Dict[str, Any], module_path: Path, query_plan: Dict):
+        """Generate query module using query plan for schema coordination
+
+        This ensures generated queries use EXACT field names from the data.
+        Similar to 3-call approach but with schema context from query plan.
+        """
+        logger.info("🏗️  Generating query module with query plan schema...")
+
+        # Read ES|QL documentation
+        esql_docs = self._read_esql_docs()
+
+        # Format schema context from query plan
+        from src.services.query_planner import LightweightQueryPlanner
+        planner = LightweightQueryPlanner(self.llm_client)
+        schema_context = planner.format_requirements_for_data_prompt(query_plan)
+
+        # Generate each query type with schema context
+        logger.info("📤 Call 1/3: Generating scripted queries (with schema)...")
+        scripted_code = self._generate_scripted_queries_with_schema(config, esql_docs, schema_context, query_plan)
+
+        logger.info("📤 Call 2/3: Generating parameterized queries (with schema)...")
+        parameterized_code = self._generate_parameterized_queries_with_schema(config, esql_docs, schema_context, query_plan)
+
+        logger.info("📤 Call 3/3: Generating RAG queries (with schema)...")
+        rag_code = self._generate_rag_queries_with_schema(config, esql_docs, schema_context, query_plan)
+
+        # Combine all three methods into single module
+        logger.info("🔧 Combining query methods into single module...")
+        full_code = self._combine_query_methods(config, scripted_code, parameterized_code, rag_code)
+
+        # Validate syntax
+        self._validate_python_syntax(full_code, 'query_generator.py')
+
+        # Validate methods
+        methods_present = self._validate_query_module_methods(full_code)
+        missing_methods = [method for method, present in methods_present.items() if not present]
+
+        if missing_methods:
+            logger.warning(f"⚠️  Query module is missing methods: {', '.join(missing_methods)}")
+            logger.warning("⚠️  Framework will use default implementations (return empty lists)")
+
+        # Save the module
+        module_file = module_path / 'query_generator.py'
+        module_file.write_text(full_code)
+        logger.info("✅ Generated query_generator.py with schema-coordinated queries")
+
+    def _generate_scripted_queries_with_schema(self, config: Dict, esql_docs: str, schema_context: str, query_plan: Dict) -> str:
+        """Generate scripted queries using schema from query plan"""
+        # Get query plans for this type
+        scripted_plans = [q for q in query_plan.get('query_plans', []) if q.get('query_type') == 'scripted']
+
+        # Call existing method with enhanced prompt including schema
+        base_prompt = f"""Generate the `generate_queries()` method for a QueryGeneratorModule.
 
 **Customer Context:**
-Company: {config['company_name']}
-Department: {config['department']}
-Pain Points: {', '.join(config['pain_points'])}
-Use Cases: {', '.join(config['use_cases'])}
+Company: {config["company_name"]}
+Department: {config["department"]}
+Pain Points: {", ".join(config["pain_points"])}
 
-**CRITICAL - Generate ALL THREE Query Types:**
+{schema_context}
 
-1. **SCRIPTED QUERIES** (generate_queries method):
-   - Non-parameterized, fully tested ES|QL queries
-   - Hard-coded values addressing specific pain points
-   - These serve as the foundation for parameterized versions
+**Planned Scripted Queries:**
+{json.dumps(scripted_plans, indent=2)}
 
-2. **PARAMETERIZED QUERIES** (generate_parameterized_queries method):
-   - Based on validated scripted queries
-   - Use ?parameter syntax for Agent Builder ES|QL tools
-   - NOT executed in this app - tool definitions only
-   - AVOID LIKE/RLIKE operators (not supported with parameters!)
+**CRITICAL - Method Signature:**
+```python
+def generate_queries(self) -> List[Dict[str, Any]]:
+    \"\"\"Generate scripted (non-parameterized) ES|QL queries
 
-3. **RAG QUERIES** (generate_rag_queries method):
-   - MATCH → RERANK → COMPLETION pipeline
-   - For open-ended question answering
-   - Use INLINE STATS (NOT STATS) to preserve fields!
+    Access datasets via self.datasets
+    \"\"\"
+    queries = []
+    # ... implementation using self.datasets ...
+    return queries
+```
 
-**ES|QL Reference Documentation:**
+**CRITICAL - Query Dictionary Format:**
+Each query MUST include a "type" field with the EXACT value "scripted":
+```python
+queries.append({{
+    "type": "scripted",  # REQUIRED - MUST be exactly "scripted" for non-parameterized queries
+    "name": "Query Name",
+    "description": "What it does",
+    "esql": \"\"\"FROM index | WHERE condition | STATS aggregation\"\"\",
+    # ... other fields ...
+}})
+```
+
+**CRITICAL ES|QL Syntax Rules:**
+1. **LOOKUP JOIN**: Use `LOOKUP JOIN table ON field` (JOIN keyword is required)
+   Example: `| LOOKUP JOIN agents ON agent_id`
+   WRONG: `| LOOKUP agents ON agent_id` (missing JOIN keyword)
+2. **MATCH (must be in WHERE)**: `WHERE MATCH(field, "search term")`
+   WRONG: `| MATCH field "term"` (MATCH is not a pipe operation)
+3. **FORK (no commas)**: `| FORK (WHERE a == 1) (WHERE b == 2)`
+   WRONG: `| FORK (...), (...)` (NO COMMAS between branches)
+4. **Field names**: Use EXACT field names from schema above
+5. **Timeseries data**: Use @timestamp for time-based datasets
+
+Generate ONLY the generate_queries() method with the EXACT signature above (no datasets parameter!).
+Access data via self.datasets. Use EXACT field names from the schema. ALWAYS use "type": "scripted" for ALL queries."""
+
+        # Call LLM
+        return self._call_llm(base_prompt + "\n\n" + esql_docs[:1000])
+
+    def _generate_parameterized_queries_with_schema(self, config: Dict, esql_docs: str, schema_context: str, query_plan: Dict) -> str:
+        """Generate parameterized queries using schema from query plan"""
+        # Get query plans for this type
+        param_plans = [q for q in query_plan.get('query_plans', []) if q.get('query_type') == 'parameterized']
+
+        base_prompt = f"""Generate the `generate_parameterized_queries()` method for a QueryGeneratorModule.
+
+**Customer Context:**
+Company: {config["company_name"]}
+Department: {config["department"]}
+Pain Points: {", ".join(config["pain_points"])}
+
+{schema_context}
+
+**Planned Parameterized Queries:**
+{json.dumps(param_plans, indent=2)}
+
+**CRITICAL - Method Signature:**
+```python
+def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
+    \"\"\"Generate parameterized ES|QL queries with ?parameter syntax for Agent Builder
+
+    Access datasets via self.datasets
+    \"\"\"
+    queries = []
+    # ... implementation using self.datasets ...
+    return queries
+```
+
+**CRITICAL - Query Dictionary Format:**
+Each query MUST include a "type" field with the EXACT value "parameterized":
+```python
+queries.append({{
+    "type": "parameterized",  # REQUIRED - MUST be exactly "parameterized" for Agent Builder queries
+    "name": "Query Name",
+    "description": "What it does",
+    "esql": \"\"\"FROM index | WHERE field == ?param_name\"\"\",
+    "parameters": {{"param_name": "example_value"}},
+    # ... other fields ...
+}})
+```
+
+**CRITICAL ES|QL Syntax Rules:**
+1. **LOOKUP JOIN**: Use `LOOKUP JOIN table ON field` (JOIN keyword is required)
+   Example: `| LOOKUP JOIN agents ON agent_id`
+   WRONG: `| LOOKUP agents ON agent_id` (missing JOIN keyword)
+2. **Parameters**: Use ?field syntax for parameterized values
+3. **Field names**: Use EXACT field names from schema above
+
+Generate ONLY the generate_parameterized_queries() method with the EXACT signature above (no datasets parameter!).
+Access data via self.datasets. Use ?parameter syntax for Agent Builder tools. Use EXACT field names from schema. ALWAYS use "type": "parameterized" for ALL queries."""
+
+        return self._call_llm(base_prompt + "\n\n" + esql_docs[:1000])
+
+    def _generate_rag_queries_with_schema(self, config: Dict, esql_docs: str, schema_context: str, query_plan: Dict) -> str:
+        """Generate RAG queries using schema from query plan"""
+        # Get query plans for this type
+        rag_plans = [q for q in query_plan.get('query_plans', []) if q.get('query_type') == 'rag']
+
+        base_prompt = f"""Generate the `generate_rag_queries()` method for a QueryGeneratorModule.
+
+**Customer Context:**
+Company: {config["company_name"]}
+Department: {config["department"]}
+Pain Points: {", ".join(config["pain_points"])}
+
+{schema_context}
+
+**Planned RAG Queries:**
+{json.dumps(rag_plans, indent=2)}
+
+**CRITICAL - Method Signature:**
+```python
+def generate_rag_queries(self) -> List[Dict[str, Any]]:
+    \"\"\"Generate RAG queries with MATCH -> RERANK -> COMPLETION pipeline
+
+    Access datasets via self.datasets
+    \"\"\"
+    queries = []
+    # ... implementation using self.datasets ...
+    return queries
+```
+
+**CRITICAL - Query Dictionary Format:**
+Each query MUST include a "type" field with the EXACT value "rag":
+```python
+queries.append({{
+    "type": "rag",  # REQUIRED - MUST be exactly "rag" for semantic search queries
+    "name": "Query Name",
+    "description": "What it does",
+    "esql": \"\"\"FROM knowledge_base | WHERE MATCH(content, ?question)\"\"\",
+    # ... other fields ...
+}})
+```
+
+**CRITICAL ES|QL Syntax Rules:**
+1. **LOOKUP JOIN**: Use `LOOKUP JOIN table ON field` (JOIN keyword is required)
+   Example: `| LOOKUP JOIN agents ON agent_id`
+   WRONG: `| LOOKUP agents ON agent_id` (missing JOIN keyword)
+2. **RAG Pipeline**: Use MATCH → RERANK → semantic text fields
+3. **Field names**: Use EXACT field names from schema above
+
+Generate ONLY the generate_rag_queries() method with the EXACT signature above (no datasets parameter!).
+Access data via self.datasets. Use MATCH -> RERANK -> COMPLETION pipeline. Use EXACT field names from schema. ALWAYS use "type": "rag" for ALL queries."""
+
+        return self._call_llm(base_prompt + "\n\n" + esql_docs[:1000])
+
+    def _generate_scripted_queries(self, config: Dict[str, Any], esql_docs: str) -> str:
+        """Generate ONLY the generate_queries() method (scripted queries)
+
+        Target: ~5K tokens
+        Returns: Just the method code, not the full class
+        """
+        prompt = f"""Generate the `generate_queries()` method for a QueryGeneratorModule.
+
+**Customer Context:**
+Company: {config["company_name"]}
+Department: {config["department"]}
+Pain Points: {", ".join(config["pain_points"])}
+Use Cases: {", ".join(config["use_cases"])}
+
+**Task**: Generate 5-7 SCRIPTED (non-parameterized) ES|QL queries that address their pain points.
+
+**Requirements:**
+- All queries must use hard-coded values (no ?parameters)
+- Start simple, progress to complex
+- Each query should address a specific pain point
+- All will be tested against indexed data
+
+**ES|QL Reference (Basics):**
+{esql_docs[:1500]}
+
+**Method Template:**
+```python
+def generate_queries(self) -> List[Dict[str, Any]]:
+    \"\"\"Generate SCRIPTED (non-parameterized) ES|QL queries
+
+    These are fully tested queries with hard-coded values.
+    Address pain points: {", ".join(config["pain_points"])}
+    \"\"\"
+    queries = []
+
+    # Query 1: [Simple aggregation]
+    queries.append({{
+        "query_type": "scripted",
+        "name": "descriptive_name",
+        "description": "What it demonstrates",
+        "esql": \"\"\"
+            FROM index_name
+            | WHERE condition
+            | STATS aggregation
+            | SORT field DESC
+            | LIMIT 10
+        \"\"\",
+        "expected_insight": "What customer learns",
+        "tested": True
+    }})
+
+    # Add 4-6 more queries of increasing complexity...
+
+    return queries
+```
+
+Generate ONLY the method implementation (including the def line and all queries). Do NOT include class definition or imports."""
+
+        if self.llm_client:
+            code = self._call_llm_for_method(prompt, max_tokens=6000)
+        else:
+            code = """    def generate_queries(self) -> List[Dict[str, Any]]:
+        return []"""
+
+        return code
+
+    def _generate_parameterized_queries(self, config: Dict[str, Any], esql_docs: str) -> str:
+        """Generate ONLY the generate_parameterized_queries() method
+
+        Target: ~4K tokens
+        Returns: Just the method code, not the full class
+        """
+        prompt = f"""Generate the `generate_parameterized_queries()` method for a QueryGeneratorModule.
+
+**Customer Context:**
+Company: {config["company_name"]}
+Department: {config["department"]}
+Pain Points: {", ".join(config["pain_points"])}
+
+**Task**: Generate 3-5 PARAMETERIZED queries for Agent Builder ES|QL tools.
+
+**Requirements:**
+- Based on typical analytics queries for their use case
+- Use ?parameter syntax for user-configurable values
+- NO LIKE or RLIKE operators (not supported with parameters!)
+- Include parameter definitions with types and defaults
+- Link to conceptual base query for trust
+
+**ES|QL Parameter Syntax:**
+```
+WHERE field == ?value
+WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date
+LIMIT ?limit
+```
+
+**Method Template:**
+```python
+def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
+    \"\"\"Generate PARAMETERIZED versions for Agent Builder
+
+    Use ?parameter syntax. NO LIKE/RLIKE operators!
+    \"\"\"
+    param_queries = []
+
+    param_queries.append({{
+        "query_type": "parameterized",
+        "name": "parameterized_query_name",
+        "description": "Configurable version of X",
+        "esql": \"\"\"
+            FROM index_name
+            | WHERE field == ?value
+            | WHERE @timestamp >= ?start_date
+            | STATS aggregation BY category
+            | SORT _count DESC
+            | LIMIT ?limit
+        \"\"\",
+        "parameters": {{
+            "value": {{
+                "type": "keyword",
+                "description": "Filter value",
+                "default": "example_value",
+                "required": True
+            }},
+            "start_date": {{
+                "type": "date",
+                "description": "Start of date range",
+                "default": "NOW() - 7 days",
+                "required": True
+            }},
+            "limit": {{
+                "type": "integer",
+                "description": "Max results",
+                "default": "10",
+                "required": False
+            }}
+        }},
+        "base_query": "related_scripted_query_name",
+        "agent_builder_ready": True
+    }})
+
+    # Add 2-4 more parameterized queries...
+
+    return param_queries
+```
+
+Generate ONLY the method implementation. Do NOT include class definition or imports."""
+
+        if self.llm_client:
+            code = self._call_llm_for_method(prompt, max_tokens=5000)
+        else:
+            code = """    def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
+        return []"""
+
+        return code
+
+    def _generate_rag_queries(self, config: Dict[str, Any], esql_docs: str) -> str:
+        """Generate ONLY the generate_rag_queries() method
+
+        Target: ~6K tokens
+        Returns: Just the method code, not the full class
+        """
+        prompt = f"""Generate the `generate_rag_queries()` method for a QueryGeneratorModule.
+
+**Customer Context:**
+Company: {config["company_name"]}
+Department: {config["department"]}
+Pain Points: {", ".join(config["pain_points"])}
+
+**Task**: Generate 1-3 RAG queries using MATCH -> RERANK -> INLINE STATS -> COMPLETION pipeline.
+
+**CRITICAL RAG Architecture:**
+1. MATCH: Semantic search across text fields with relevance tuning
+2. RERANK: ML-based relevance scoring
+3. INLINE STATS (NOT STATS!): Aggregate context without losing fields
+4. COMPLETION: LLM generates answer from context
+
+**IMPORTANT - Use Relevance Tuning:**
+ALWAYS use MATCH with named parameters for relevance tuning:
+- `boost`: Increase/decrease field importance (e.g., {{"boost": 2.0}} for titles, {{"boost": 0.5}} for descriptions)
+- `fuzziness`: Allow typos/variations (e.g., {{"fuzziness": "AUTO"}} or {{"fuzziness": "1"}})
+
+Example:
+```esql
+WHERE MATCH(title, ?query, {{"boost": 2.0, "fuzziness": "AUTO"}})
+   OR MATCH(description, ?query, {{"boost": 1.0, "fuzziness": "1"}})
+   OR MATCH(content, ?query, {{"boost": 0.5}})
+```
+
+**ES|QL Reference (RAG Commands):**
 {esql_docs}
 
-**CRITICAL - ESCAPING ES|QL QUERIES IN PYTHON:**
-- ES|QL queries with JSON parameters use curly braces: MATCH(field, "term", {{"boost": 0.75}})
-- ALWAYS use double curly braces {{{{ }}}} to escape JSON in queries when using f-strings
-- Example CORRECT: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{"boost": 1.5}})\"\"\"
-- Example WRONG: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {"boost": 1.5})\"\"\"
+**CRITICAL - INLINE STATS vs STATS:**
+- WRONG: `| STATS context = MV_CONCAT(field, "\\n")`  ← Loses all fields except context!
+- CORRECT: `| INLINE STATS all_context = MV_CONCAT(context, "\\n\\n")`  ← Preserves fields!
 
-**Template Structure:**
+**Method Template:**
 ```python
-from src.framework.base import QueryGeneratorModule, DemoConfig
+def generate_rag_queries(self) -> List[Dict[str, Any]]:
+    \"\"\"Generate RAG queries (MATCH -> RERANK -> COMPLETION)
+
+    For semantic search + AI-powered answers via Agent Builder.
+    CRITICAL: Use INLINE STATS not STATS!
+    \"\"\"
+    rag_queries = []
+
+    rag_queries.append({{
+        "query_type": "rag",
+        "name": "semantic_search_rag",
+        "description": "Ask questions about [data type]",
+        "esql": \"\"\"
+            FROM index_name METADATA _score
+            | WHERE MATCH(text_field1, ?user_question, {{"boost": 2.0, "fuzziness": "AUTO"}})
+                OR MATCH(text_field2, ?user_question, {{"boost": 1.5, "fuzziness": "1"}})
+                OR MATCH(text_field3, ?user_question, {{"boost": 1.0}})
+            | WHERE @timestamp >= NOW() - 120 days
+            | SORT _score DESC
+            | LIMIT 100
+            | RERANK ?user_question
+                ON text_field1, text_field2, text_field3
+                WITH {{"inference_id": "rerank_endpoint"}}
+            | LIMIT 5
+            | EVAL context = CONCAT(
+                "Record: ", id_field, " | ",
+                "Field1: ", text_field1, " | ",
+                "Field2: ", text_field2
+              )
+            | INLINE STATS all_context = MV_CONCAT(context, "\\\\n\\\\n")
+            | EVAL prompt = CONCAT(
+                "Based on these records:\\\\n\\\\n",
+                all_context,
+                "\\\\n\\\\nQuestion: ", ?user_question,
+                "\\\\n\\\\nProvide a detailed answer:"
+              )
+            | COMPLETION answer = prompt
+                WITH {{"inference_id": "completion_endpoint"}}
+            | KEEP answer, all_context
+        \"\"\",
+        "parameters": {{
+            "user_question": {{
+                "type": "string",
+                "description": "Question to answer",
+                "required": True,
+                "example": "What are the main issues with...?"
+            }}
+        }},
+        "search_fields": ["text_field1", "text_field2"],
+        "rerank_fields": ["text_field1", "text_field2", "text_field3"],
+        "context_fields": ["id_field", "text_field1", "text_field2", "status"],
+        "time_boundary": "120 days",
+        "agent_builder_tool": {{
+            "tool_name": "search_dataset_name",
+            "tool_description": "Search and analyze [data type] with AI-powered answers"
+        }}
+    }})
+
+    # Optionally add 1-2 more RAG queries for different use cases...
+
+    return rag_queries
+```
+
+**IMPORTANT**:
+- **ALWAYS use boost and fuzziness parameters** in MATCH for relevance tuning
+- Identify 3-5 text fields for MATCH (description, content, feedback, notes, comments, etc.)
+- Use DIFFERENT boost values to prioritize fields (2.0 for important, 1.5 for medium, 1.0 or 0.5 for less important)
+- Add fuzziness ("AUTO" or "1") to handle typos and variations
+- Select 2-4 most important fields for RERANK
+- Use INLINE STATS to aggregate context
+- Set appropriate time boundary (30/90/120 days)
+
+Generate ONLY the method implementation. Do NOT include class definition or imports."""
+
+        if self.llm_client:
+            code = self._call_llm_for_method(prompt, max_tokens=7000)
+        else:
+            code = """    def generate_rag_queries(self) -> List[Dict[str, Any]]:
+        return []"""
+
+        return code
+
+    def _combine_query_methods(self, config: Dict[str, Any], scripted: str, parameterized: str, rag: str) -> str:
+        """Combine three method implementations into a complete QueryGeneratorModule
+
+        Args:
+            config: Demo configuration
+            scripted: generate_queries() method code
+            parameterized: generate_parameterized_queries() method code
+            rag: generate_rag_queries() method code
+
+        Returns:
+            Complete Python module with class definition and all three methods
+        """
+        company_class = config["company_name"].replace(" ", "")
+
+        # Indent each method to be part of the class (4 spaces)
+        def indent_method(code: str) -> str:
+            """Add 4-space indentation to each line of method code"""
+            lines = code.strip().split('\n')
+            indented_lines = ['    ' + line for line in lines]
+            return '\n'.join(indented_lines)
+
+        scripted_indented = indent_method(scripted)
+        parameterized_indented = indent_method(parameterized)
+        rag_indented = indent_method(rag)
+
+        # Build complete module with all three methods
+        full_module = f"""from src.framework.base import QueryGeneratorModule, DemoConfig
 from typing import Dict, List, Any
 import pandas as pd
 
-class {config['company_name'].replace(' ', '')}QueryGenerator(QueryGeneratorModule):
-    \"\"\"Query generator for {config['company_name']} - {config['department']}
+class {company_class}QueryGenerator(QueryGeneratorModule):
+    \"\"\"Query generator for {config["company_name"]} - {config["department"]}
 
     Generates three types of queries:
     1. Scripted (tested, non-parameterized)
@@ -274,198 +811,59 @@ class {config['company_name'].replace(' ', '')}QueryGenerator(QueryGeneratorModu
     3. RAG (semantic search + LLM completion)
     \"\"\"
 
-    def generate_queries(self) -> List[Dict[str, Any]]:
-        \"\"\"Generate SCRIPTED (non-parameterized) ES|QL queries
+{scripted_indented}
 
-        These are fully tested queries with hard-coded values.
-        Address pain points: {', '.join(config['pain_points'])}
-        \"\"\"
-        queries = []
+{parameterized_indented}
 
-        # Query 1: [Simple query addressing first pain point]
-        queries.append({{
-            "query_type": "scripted",
-            "name": "query_name_here",
-            "description": "What it demonstrates",
-            "esql": \"\"\"
-                FROM index_name
-                | WHERE condition
-                | STATS aggregation
-                | SORT field DESC
-                | LIMIT 10
-            \"\"\",
-            "expected_insight": "What customer learns",
-            "tested": True
-        }})
-
-        # Add 4-6 more scripted queries...
-
-        return queries
-
-    def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
-        \"\"\"Generate PARAMETERIZED versions for Agent Builder
-
-        Based on validated scripted queries above.
-        Use ?parameter syntax. NO LIKE/RLIKE operators!
-        \"\"\"
-        param_queries = []
-
-        # Parameterized version of Query 1
-        param_queries.append({{
-            "query_type": "parameterized",
-            "name": "parameterized_query_name",
-            "description": "Configurable version of X",
-            "esql": \"\"\"
-                FROM index_name
-                | WHERE field == ?value
-                | WHERE @timestamp >= ?start_date
-                | STATS aggregation
-                | SORT field DESC
-                | LIMIT ?limit
-            \"\"\",
-            "parameters": {{
-                "value": {{
-                    "type": "keyword",
-                    "description": "Filter value",
-                    "default": "original_value",
-                    "required": True
-                }},
-                "start_date": {{
-                    "type": "date",
-                    "description": "Start of date range",
-                    "default": "NOW() - 7 days",
-                    "required": True
-                }},
-                "limit": {{
-                    "type": "integer",
-                    "description": "Max results",
-                    "default": "10",
-                    "required": False
-                }}
-            }},
-            "base_query": "query_name_here",
-            "agent_builder_ready": True
-        }})
-
-        # Add parameterized versions for 2-3 more scripted queries...
-
-        return param_queries
-
-    def generate_rag_queries(self) -> List[Dict[str, Any]]:
-        \"\"\"Generate RAG queries (MATCH → RERANK → COMPLETION)
-
-        For semantic search + AI-powered answers via Agent Builder.
-        CRITICAL: Use INLINE STATS not STATS!
-        \"\"\"
-        rag_queries = []
-
-        # Identify text fields from datasets
-        # Example: description, content, feedback, notes, etc.
-
-        rag_queries.append({{
-            "query_type": "rag",
-            "name": "semantic_search_rag",
-            "description": "Ask questions about [data type]",
-            "esql": \"\"\"
-                FROM index_name METADATA _score
-                | WHERE MATCH(text_field1, ?user_question)
-                    OR MATCH(text_field2, ?user_question)
-                | WHERE @timestamp >= NOW() - 120 days
-                | SORT _score DESC
-                | LIMIT 100
-                | RERANK ?user_question
-                    ON text_field1, text_field2, text_field3
-                    WITH {{"inference_id": "rerank_endpoint"}}
-                | LIMIT 5
-                | EVAL context = CONCAT(
-                    "Record: ", id_field, " | ",
-                    "Field1: ", text_field1, " | ",
-                    "Field2: ", text_field2
-                  )
-                | INLINE STATS all_context = MV_CONCAT(context, "\\\\n\\\\n")
-                | EVAL prompt = CONCAT(
-                    "Based on these records:\\\\n\\\\n",
-                    all_context,
-                    "\\\\n\\\\nQuestion: ", ?user_question,
-                    "\\\\n\\\\nProvide a detailed answer:"
-                  )
-                | COMPLETION answer = prompt
-                    WITH {{"inference_id": "completion_endpoint"}}
-                | KEEP answer, all_context
-            \"\"\",
-            "parameters": {{
-                "user_question": {{
-                    "type": "string",
-                    "description": "Question to answer",
-                    "required": True,
-                    "example": "What are the main issues with...?"
-                }}
-            }},
-            "search_fields": ["text_field1", "text_field2"],
-            "rerank_fields": ["text_field1", "text_field2", "text_field3"],
-            "context_fields": ["id_field", "text_field1", "text_field2", "status"],
-            "time_boundary": "120 days",
-            "agent_builder_tool": {{
-                "tool_name": "search_dataset_name",
-                "tool_description": "Search and analyze [data type] with AI-powered answers"
-            }}
-        }})
-
-        # Optionally add 1-2 more RAG queries for different use cases...
-
-        return rag_queries
+{rag_indented}
 
     def get_query_progression(self) -> List[str]:
         \"\"\"Order to present SCRIPTED queries (for demos)\"\"\"
-        return [
-            # List scripted query names in presentation order
-        ]
-```
+        # Extract query names from scripted queries
+        queries = self.generate_queries()
+        return [q.get('name', f'query_{{i}}') for i, q in enumerate(queries)]
+"""
 
-**IMPORTANT GUIDELINES:**
+        return full_module
 
-1. **Scripted Queries** (5-7 queries):
-   - Start simple, progress to complex
-   - Hard-coded dates, values, filters
-   - Each solves a specific pain point
-   - All fully tested and validated
+    def _call_llm_for_method(self, prompt: str, max_tokens: int = 6000) -> str:
+        """Call LLM to generate a single method implementation
 
-2. **Parameterized Queries** (3-5 queries):
-   - Select 3-5 most useful scripted queries
-   - Replace hard-coded values with ?parameters
-   - Provide meaningful parameter descriptions
-   - Link to base_query for trust/validation
-   - NEVER use LIKE or RLIKE (not supported!)
+        Args:
+            prompt: LLM prompt requesting specific method
+            max_tokens: Maximum tokens for response
 
-3. **RAG Queries** (1-3 queries):
-   - Identify 3-5 text fields for MATCH
-   - Select 2-4 most important for RERANK
-   - Use INLINE STATS to aggregate context
-   - Include all relevant fields in context
-   - Set appropriate time boundary (30/90/120 days)
+        Returns:
+            Method code (including def line and body)
+        """
+        logger.info(f"📤 Calling LLM with prompt length: {len(prompt)} characters, max_tokens: {max_tokens}")
 
-4. **Field Selection for RAG:**
-   - Text fields: description, content, message, feedback, notes, comments
-   - Context: Include IDs, status, categories, timestamps
-   - Rerank: Prioritize primary content fields
-
-5. **Multi-Index Support:**
-   - Can query multiple indices: FROM index1,index2,index-*
-   - Useful for RAG across related datasets
-
-Generate the COMPLETE implementation with ALL THREE methods populated:"""
-
-        if self.llm_client:
-            code = self._call_llm(prompt)
+        if hasattr(self.llm_client, 'messages'):  # Anthropic
+            response = self.llm_client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=max_tokens,
+                temperature=0.7,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            code = response.content[0].text
+            logger.info(f"📥 LLM response length: {len(code)} characters")
+        elif hasattr(self.llm_client, 'chat'):  # OpenAI
+            response = self.llm_client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens
+            )
+            code = response.choices[0].message.content
+            logger.info(f"📥 LLM response length: {len(code)} characters")
         else:
-            code = self._generate_mock_query_module(config)
+            return ""
 
-        # Validate syntax before saving
-        self._validate_python_syntax(code, 'query_generator.py')
+        # Extract Python code if wrapped in markdown
+        if "```python" in code:
+            code = code.split("```python")[1].split("```")[0]
+            logger.info(f"✂️  Extracted Python code: {len(code)} characters")
 
-        # Save the module
-        module_file = module_path / 'query_generator.py'
-        module_file.write_text(code)
+        return code.strip()
 
     def _generate_guide_module(self, config: Dict[str, Any], module_path: Path):
         """Generate the demo guide module
@@ -584,12 +982,12 @@ class {company_class}DemoGuide(DemoGuideModule):
 
         prompt = f"""Generate a Python module that implements DataGeneratorModule for this customer:
 
-Company: {config['company_name']}
-Department: {config['department']}
-Industry: {config['industry']}
-Pain Points: {', '.join(config['pain_points'])}
-Use Cases: {', '.join(config['use_cases'])}
-Scale: {config['scale']}
+Company: {config["company_name"]}
+Department: {config["department"]}
+Industry: {config["industry"]}
+Pain Points: {", ".join(config["pain_points"])}
+Use Cases: {", ".join(config["use_cases"])}
+Scale: {config["scale"]}
 Dataset Size Preference: {size_preference.upper()}
 
 {formatted_requirements}
@@ -619,7 +1017,7 @@ CRITICAL - FIELD NAMING:
 CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
 - Primary timeseries datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
-- Scale mentioned ({config['scale']}) is for REALISM only, don't generate that many!
+- Scale mentioned ({config["scale"]}) is for REALISM only, don't generate that many!
 
 Template:
 ```python
@@ -629,8 +1027,8 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List
 
-class {config['company_name'].replace(' ', '')}DataGenerator(DataGeneratorModule):
-    \"\"\"Data generator for {config['company_name']} - {config['department']}\"\"\"
+class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule):
+    \"\"\"Data generator for {config["company_name"]} - {config["department"]}\"\"\"
 
     @staticmethod
     def safe_choice(choices, size=None, weights=None, replace=True):
@@ -720,10 +1118,10 @@ Generate the complete implementation with ALL required fields:"""
         """
         prompt = f"""Generate a Python module that implements QueryGeneratorModule for this customer:
 
-Company: {config['company_name']}
-Department: {config['department']}
-Pain Points: {', '.join(config['pain_points'])}
-Use Cases: {', '.join(config['use_cases'])}
+Company: {config["company_name"]}
+Department: {config["department"]}
+Pain Points: {", ".join(config["pain_points"])}
+Use Cases: {", ".join(config["use_cases"])}
 
 **Pre-Planned Query Strategy:**
 {json.dumps(query_strategy, indent=2)}
@@ -737,19 +1135,15 @@ The module should:
 4. Include query descriptions that explain the business value
 5. Return queries in the order that builds a compelling narrative
 
-IMPORTANT - ES|QL SYNTAX:
-- For lookup joins: "FROM timeseries | LOOKUP JOIN reference_lookup ON key"
-- Append "_lookup" to reference dataset names in LOOKUP JOIN
-- Use @timestamp not timestamp for indexed data
-- DATE_EXTRACT syntax: DATE_EXTRACT("month", @timestamp)
-- Include proper error handling for edge cases
+**ES|QL STRICT SYNTAX RULES - MUST FOLLOW:**
+{self._get_esql_strict_rules()}
 
 CRITICAL - ESCAPING ES|QL QUERIES IN PYTHON:
-- ES|QL queries with JSON parameters use curly braces: MATCH(field, "term", {{"boost": 0.75}})
-- ALWAYS use double curly braces {{{{ }}}} to escape JSON in queries when using f-strings
+- ES|QL queries with JSON parameters use curly braces: MATCH(field, "term", {{{{"boost": 0.75}}}})
+- ALWAYS use double curly braces {{{{{{{{ }}}}}}}} to escape JSON in queries when using f-strings
 - OR use regular strings with .format() instead of f-strings for queries
-- Example CORRECT: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{"boost": 1.5}})\"\"\"
-- Example WRONG: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {"boost": 1.5})\"\"\"
+- Example CORRECT: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{{{"boost": 1.5}}}})\"\"\"
+- Example WRONG: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{"boost": 1.5}})\"\"\"
 
 Template:
 ```python
@@ -757,8 +1151,8 @@ from src.framework.base import QueryGeneratorModule, DemoConfig
 from typing import Dict, List, Any
 import pandas as pd
 
-class {config['company_name'].replace(' ', '')}QueryGenerator(QueryGeneratorModule):
-    \"\"\"Query generator for {config['company_name']} - {config['department']}\"\"\"
+class {config["company_name"].replace(" ", "")}QueryGenerator(QueryGeneratorModule):
+    \"\"\"Query generator for {config["company_name"]} - {config["department"]}\"\"\"
 
     # DO NOT define __init__ - inherited from base class provides:
     # self.config, self.datasets
@@ -810,6 +1204,39 @@ Generate the complete implementation with ALL queries from the strategy:"""
 
         config_file = module_path / 'config.json'
         config_file.write_text(json.dumps(config_data, indent=2))
+
+    def _get_esql_strict_rules(self) -> str:
+        """Get strict ES|QL rules from the centralized rules module"""
+        try:
+            from src.prompts.esql_strict_rules import get_rules_for_module_generation
+            return get_rules_for_module_generation()
+        except ImportError:
+            logger.warning("Could not import ES|QL strict rules, using fallback")
+            # Fallback to minimal rules if import fails
+            return self._get_minimal_esql_reference()
+
+    def _get_minimal_esql_reference(self) -> str:
+        """Get minimal ES|QL reference as fallback"""
+        return """
+## CRITICAL ES|QL SYNTAX RULES
+
+### LOOKUP JOIN - NO SUFFIX CONVENTION ⚠️
+✅ CORRECT: `| LOOKUP JOIN products ON product_id`
+❌ WRONG: `| LOOKUP JOIN products_lookup ON product_id`
+NEVER add _lookup suffix to index names.
+
+### MATCH Syntax - ALWAYS WITHIN WHERE ⚠️
+✅ CORRECT: `| WHERE MATCH(field, "search term")`
+❌ WRONG: `| MATCH field "term"` - MATCH is NOT a pipe operation
+
+### Query Parameters - CANNOT CHECK NULL ⚠️
+❌ WRONG: `WHERE ?param IS NULL` - Cannot check if parameter is NULL
+Parameters are ALWAYS required when used.
+
+### DATE Functions - Parameter Order ⚠️
+✅ CORRECT: `DATE_TRUNC(1 hour, @timestamp)`
+❌ WRONG: `DATE_TRUNC(@timestamp, 1 hour)` - Wrong order
+"""
 
     def _read_esql_docs(self) -> str:
         """Read ES|QL documentation for RAG query generation
@@ -889,27 +1316,32 @@ FROM index METADATA _score
 
     def _call_llm(self, prompt: str) -> str:
         """Call LLM to generate code"""
+        logger.info(f"📤 Calling LLM with prompt length: {len(prompt)} characters")
+
         if hasattr(self.llm_client, 'messages'):  # Anthropic
             response = self.llm_client.messages.create(
                 model="claude-sonnet-4-5-20250929",
-                max_tokens=8000,
+                max_tokens=16000,  # Increased from 8000 to fit all 3 query methods
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
             )
             code = response.content[0].text
+            logger.info(f"📥 LLM response length: {len(code)} characters")
         elif hasattr(self.llm_client, 'chat'):  # OpenAI
             response = self.llm_client.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=8000
+                max_tokens=16000  # Increased from 8000
             )
             code = response.choices[0].message.content
+            logger.info(f"📥 LLM response length: {len(code)} characters")
         else:
             return ""
 
         # Extract Python code
         if "```python" in code:
             code = code.split("```python")[1].split("```")[0]
+            logger.info(f"✂️  Extracted Python code: {len(code)} characters")
 
         return code
 
@@ -930,6 +1362,46 @@ FROM index METADATA _score
             logger.error(f"❌ Syntax error in generated {module_name}: {e}")
             logger.error(f"Error at line {e.lineno}: {e.text}")
             raise SyntaxError(f"Generated code has syntax error at line {e.lineno}: {e.msg}")
+
+    def _validate_query_module_methods(self, code: str) -> Dict[str, bool]:
+        """Validate that query module has all required methods using AST parsing
+
+        Args:
+            code: Python code to validate
+
+        Returns:
+            Dict mapping method names to boolean (True if present)
+        """
+        import ast
+
+        required_methods = {
+            'generate_queries': False,
+            'generate_parameterized_queries': False,
+            'generate_rag_queries': False
+        }
+
+        try:
+            tree = ast.parse(code)
+
+            # Find all method definitions in classes
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    for item in node.body:
+                        if isinstance(item, ast.FunctionDef):
+                            if item.name in required_methods:
+                                required_methods[item.name] = True
+
+            # Log results
+            logger.info("🔍 Query module method validation:")
+            for method, present in required_methods.items():
+                status = "✅" if present else "❌"
+                logger.info(f"  {status} {method}: {'FOUND' if present else 'MISSING'}")
+
+            return required_methods
+
+        except Exception as e:
+            logger.error(f"❌ Failed to parse code for method validation: {e}")
+            return required_methods
 
     def _generate_mock_data_module(self, config: Dict[str, Any]) -> str:
         """Generate mock data module for testing"""
@@ -1082,7 +1554,11 @@ class {company}DemoGuide(DemoGuideModule):
 
             for name, df in datasets.items():
                 csv_path = data_dir / f"{name}.csv"
-                df.to_csv(csv_path, index=False)
+                # Convert numpy string types to regular strings to avoid formatting errors
+                df_copy = df.copy()
+                for col in df_copy.select_dtypes(include=['object']).columns:
+                    df_copy[col] = df_copy[col].astype(str)
+                df_copy.to_csv(csv_path, index=False)
                 logger.info(f"  Saved {name}.csv ({len(df)} rows)")
 
             # Generate and save queries as JSON

@@ -8,8 +8,10 @@ import logging
 from datetime import datetime
 from dataclasses import dataclass, asdict
 import json
+import re
 
 from .elasticsearch_indexer import ElasticsearchIndexer
+from .sample_values_extractor import SampleValuesExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,7 @@ class QueryTestRunner:
         """
         self.indexer = es_indexer
         self.llm_client = llm_client
+        self.sample_extractor = SampleValuesExtractor(es_indexer.client)
 
     def test_all_queries(
         self,
@@ -110,10 +113,17 @@ class QueryTestRunner:
             was_fixed=False,
             needs_manual_fix=False,
             fix_attempts=0,
-            original_esql=query['esql']
+            original_esql=query.get('esql') or query.get('query') or query.get('esql_query', '')
         )
 
-        current_esql = query['esql']
+        # Support 'esql', 'query', and 'esql_query' field names for backwards compatibility
+        current_esql = query.get('esql') or query.get('query') or query.get('esql_query', '')
+
+        # CRITICAL: Convert parameterized queries to scripted queries for testing
+        if self._is_parameterized_query(current_esql):
+            logger.info(f"Query '{query['name']}' is parameterized - converting to scripted query")
+            current_esql = self._convert_to_scripted_query(current_esql, indexed_datasets)
+            logger.info(f"Converted query: {current_esql[:200]}...")
 
         for attempt in range(max_attempts):
             result.fix_attempts = attempt + 1
@@ -176,6 +186,94 @@ class QueryTestRunner:
 
         return result
 
+    def _is_parameterized_query(self, esql: str) -> bool:
+        """Check if query contains ES|QL parameters
+
+        Args:
+            esql: ES|QL query string
+
+        Returns:
+            True if query contains parameters (?, ?name, ?1, etc.)
+        """
+        # Match ? followed by optional alphanumeric identifier
+        param_pattern = r'\?[\w]*'
+        return bool(re.search(param_pattern, esql))
+
+    def _convert_to_scripted_query(
+        self,
+        esql: str,
+        indexed_datasets: Dict[str, str]
+    ) -> str:
+        """Convert parameterized query to scripted query with real values
+
+        Args:
+            esql: Parameterized ES|QL query
+            indexed_datasets: Dict mapping dataset names to index names
+
+        Returns:
+            Scripted ES|QL query with actual values
+        """
+        logger.info("Converting parameterized query to scripted query")
+
+        # Find all parameters in the query
+        param_pattern = r'\?(\w+)'
+        parameters = re.findall(param_pattern, esql)
+
+        if not parameters:
+            logger.warning("No parameters found in query")
+            return esql
+
+        logger.info(f"Found {len(parameters)} parameters: {parameters}")
+
+        # Extract index name from query (FROM clause)
+        from_pattern = r'FROM\s+(\w+)'
+        from_match = re.search(from_pattern, esql)
+
+        if not from_match:
+            logger.warning("Could not find FROM clause in query")
+            return esql
+
+        dataset_name = from_match.group(1)
+        index_name = indexed_datasets.get(dataset_name)
+
+        if not index_name:
+            logger.warning(f"No index found for dataset {dataset_name}")
+            return esql
+
+        # Get sample values from Elasticsearch for each parameter
+        scripted_esql = esql
+
+        for param_name in set(parameters):  # Use set to avoid duplicates
+            # Try to get a real value for this parameter
+            sample_value = self.sample_extractor.get_value_for_field(
+                index_name=index_name,
+                field_name=param_name,
+                field_type="keyword"
+            )
+
+            if sample_value:
+                # Replace parameter with actual value
+                # Use quotes for string values
+                if isinstance(sample_value, str):
+                    replacement = f'"{sample_value}"'
+                else:
+                    replacement = str(sample_value)
+
+                # Replace ?param_name with actual value
+                scripted_esql = re.sub(
+                    rf'\?{param_name}\b',
+                    replacement,
+                    scripted_esql
+                )
+
+                logger.info(f"Replaced ?{param_name} with {replacement}")
+            else:
+                logger.warning(f"Could not find sample value for parameter: {param_name}")
+                # Keep parameter as-is if we can't find a value
+                # The LLM fixer will handle it later
+
+        return scripted_esql
+
     def _replace_index_names(self, esql: str, indexed_datasets: Dict[str, str]) -> str:
         """Replace dataset names with actual index names in query
 
@@ -190,8 +288,7 @@ class QueryTestRunner:
 
         for dataset_name, index_name in indexed_datasets.items():
             # Replace dataset name with index name
-            # Handle both regular and _lookup suffix
-            modified_esql = modified_esql.replace(f"{dataset_name}_lookup", f"{index_name}_lookup")
+            # NO _lookup suffix handling - we don't use that convention
             modified_esql = modified_esql.replace(dataset_name, index_name)
 
         return modified_esql
@@ -214,8 +311,13 @@ class QueryTestRunner:
         Returns:
             Fixed ES|QL query string
         """
-        # Read ES|QL skill for reference
-        esql_skill = self._read_esql_skill()
+        # Import and use our strict ES|QL rules
+        try:
+            from src.prompts.esql_strict_rules import get_rules_for_query_fixing
+            esql_rules = get_rules_for_query_fixing()
+        except ImportError:
+            # Fallback if import fails
+            esql_rules = self._read_esql_skill()
 
         prompt = f"""Fix this ES|QL query that failed with an error.
 
@@ -224,7 +326,7 @@ class QueryTestRunner:
 
 **Original Query:**
 ```esql
-{query['esql']}
+{query.get('esql') or query.get('query') or query.get('esql_query', '')}
 ```
 
 **Error:**
@@ -235,21 +337,19 @@ class QueryTestRunner:
 **Available Indices:**
 {json.dumps(indexed_datasets, indent=2)}
 
-**ES|QL Reference:**
-{esql_skill}
-
-**Common Fixes:**
-1. **DATE_EXTRACT syntax:** Use DATE_EXTRACT("month", @timestamp) NOT DATE_EXTRACT(@timestamp, "month")
-2. **Lookup indices:** Must end with _lookup: "product_catalog_lookup" NOT "product_catalog"
-3. **Field names:** Are case-sensitive and must match exactly
-4. **Timestamp field:** Use @timestamp NOT timestamp for indexed data
-5. **SEMANTIC function:** May not be available, use text matching or MATCH instead
-6. **CHANGE_POINT:** Is experimental, may need alternative approach like INLINESTATS with z-score
-7. **Window functions (LAG, LEAD):** Not all are supported, avoid or use alternatives
-8. **ENRICH:** Use if enrich policies exist, otherwise use LOOKUP JOIN
+**ES|QL Fix Rules:**
+{esql_rules}
 
 **Your Task:**
-Analyze the error and fix the query. Provide ONLY the corrected ES|QL query (no explanations).
+Analyze the error and apply the fix rules. Follow the transformations IN ORDER:
+1. Remove ALL _lookup suffixes (never add them)
+2. Fix MATCH syntax (must be in WHERE clause)
+3. Fix FORK (no named branches)
+4. Remove parameter NULL checks
+5. Fix DATE function parameter order
+6. Replace invalid aggregates (COUNT_IF, etc.)
+
+Provide ONLY the corrected ES|QL query (no explanations).
 
 **Attempt {attempt + 1} of 3.**
 
