@@ -1,0 +1,61 @@
+
+================================================================================
+ES|QL SKILL EFFECTIVENESS COMPARISON
+================================================================================
+
+
+Testing Scenario: E-commerce Customer Analytics
+--------------------------------------------------------------------------------
+
+[1/2] Generating baseline queries (no skills)...
+[2/2] Generating queries with skills enabled...
+
+
+Testing Scenario: Healthcare Patient Search
+--------------------------------------------------------------------------------
+
+[1/2] Generating baseline queries (no skills)...
+[2/2] Generating queries with skills enabled...
+
+
+Testing Scenario: SaaS Product Analytics
+--------------------------------------------------------------------------------
+
+[1/2] Generating baseline queries (no skills)...
+[2/2] Generating queries with skills enabled...
+
+
+================================================================================
+COMPARISON REPORT
+================================================================================
+
+E-commerce Customer Analytics:
+  Quality Score:      Baseline: 0.00%  |  With Skills: 0.00%
+  Pattern Coverage:   Baseline: 0.00%  |  With Skills: 0.00%
+  Issues Found:       Baseline: 1  |  With Skills: 1
+  Best Practices:     Baseline: 0  |  With Skills: 0
+  ⚖️  NO SIGNIFICANT DIFFERENCE
+
+Healthcare Patient Search:
+  Quality Score:      Baseline: 0.00%  |  With Skills: 0.00%
+  Pattern Coverage:   Baseline: 0.00%  |  With Skills: 25.00%
+  Issues Found:       Baseline: 0  |  With Skills: 0
+  Best Practices:     Baseline: 0  |  With Skills: 0
+  ✅ SKILLS IMPROVE QUALITY (+0.0% quality, +25.0% patterns)
+
+SaaS Product Analytics:
+  Quality Score:      Baseline: 0.00%  |  With Skills: 0.00%
+  Pattern Coverage:   Baseline: 50.00%  |  With Skills: 50.00%
+  Issues Found:       Baseline: 1  |  With Skills: 1
+  Best Practices:     Baseline: 0  |  With Skills: 0
+  ⚖️  NO SIGNIFICANT DIFFERENCE
+
+================================================================================
+RECOMMENDATION
+================================================================================
+Average Quality Score:
+  Baseline:     0.00%
+  With Skills:  0.00%
+
+⚖️  NEUTRAL: Skills show no significant impact
+   Consider other factors (token usage, complexity)

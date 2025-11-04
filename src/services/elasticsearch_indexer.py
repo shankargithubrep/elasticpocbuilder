@@ -366,7 +366,9 @@ class ElasticsearchIndexer:
         progress_callback: Optional[callable] = None
     ) -> str:
         """Create lookup index with index.mode: lookup"""
-        full_name = f"{index_name}_lookup"
+        # Use index_name directly without suffix
+        # ES|QL queries reference indices by name, not by mode
+        full_name = index_name
 
         # Delete existing index if exists
         try:

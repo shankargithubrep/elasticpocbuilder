@@ -51,7 +51,15 @@ class ModularDemoOrchestrator:
         progress_callback: Optional[callable] = None,
         conversation: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
-        """Generate a new demo module and execute it
+        """Generate a new demo module and execute it (Path 1: Query Planning + Specialized Generation)
+
+        DEPRECATED: This method uses the older lightweight query planning approach
+        and does not include LOOKUP JOIN index mode mapping.
+
+        Use generate_new_demo_with_strategy() instead for:
+        - Proper LOOKUP JOIN support (reference datasets as lookup indices)
+        - Query-first strategy with comprehensive planning
+        - All three query types (scripted, parameterized, RAG)
 
         Args:
             config: Demo configuration
@@ -61,11 +69,33 @@ class ModularDemoOrchestrator:
         Returns:
             Demo results including module path
         """
-        # Step 1: Generate the module
+        logger.warning(
+            "DEPRECATED: generate_new_demo() (Path 1) is deprecated. "
+            "Use generate_new_demo_with_strategy() (Path 2) instead for LOOKUP JOIN support."
+        )
+        # Step 0: Plan Queries (lightweight query planning)
+        if progress_callback:
+            progress_callback(0.05, "🎯 Planning queries and data structure...")
+
+        query_plan = None
+        try:
+            from src.services.query_planner import LightweightQueryPlanner
+
+            planner = LightweightQueryPlanner(self.llm_client)
+            query_plan = planner.plan_queries(config)
+
+            logger.info(f"Query plan created with {len(query_plan.get('query_plans', []))} queries")
+
+        except Exception as e:
+            logger.error(f"Query planning failed: {e}", exc_info=True)
+            # Continue without query plan if planning fails
+            query_plan = None
+
+        # Step 1: Generate the module WITH query plan
         if progress_callback:
             progress_callback(0.1, "🤖 Generating custom demo module...")
 
-        module_path = self.module_generator.generate_demo_module(config)
+        module_path = self.module_generator.generate_demo_module(config, query_plan=query_plan)
 
         # Step 2: Load and execute the module
         if progress_callback:
@@ -78,7 +108,92 @@ class ModularDemoOrchestrator:
         results['module_path'] = module_path
         results['module_name'] = Path(module_path).name
 
-        # Step 3: Save conversation history if provided
+        # Step 3: Index Data in Elasticsearch
+        if progress_callback:
+            progress_callback(0.5, "🔍 Indexing data in Elasticsearch...")
+
+        indexing_results = None
+        try:
+            from src.services.indexing_orchestrator import IndexingOrchestrator
+            from src.services.elasticsearch_indexer import ElasticsearchIndexer
+
+            indexer = ElasticsearchIndexer()
+            indexing_orch = IndexingOrchestrator(indexer)
+
+            # Get semantic fields from data generator
+            data_gen = loader.load_data_generator()
+            semantic_fields = {}
+            if hasattr(data_gen, 'get_semantic_fields'):
+                semantic_fields = data_gen.get_semantic_fields()
+
+            indexing_results = indexing_orch.index_all_datasets(
+                results['datasets'],
+                semantic_fields,
+                {},  # No index_modes from strategy in Path 1
+                progress_callback
+            )
+
+            logger.info(f"Indexed {len(indexing_results)} datasets")
+
+        except Exception as e:
+            logger.error(f"Indexing failed: {e}", exc_info=True)
+
+        # Step 4: Test and Fix Queries
+        if indexing_results and progress_callback:
+            progress_callback(0.7, "🧪 Testing and fixing queries...")
+
+        query_test_results = None
+        try:
+            from src.services.query_test_runner import QueryTestRunner
+
+            # Only test if indexing succeeded
+            successful_indices = {
+                name: result['index_name']
+                for name, result in indexing_results.items()
+                if result.get('status') == 'success'
+            }
+
+            if successful_indices:
+                test_runner = QueryTestRunner(indexer, self.llm_client)
+                query_test_results = test_runner.test_all_queries(
+                    results.get('all_queries', results.get('queries', [])),
+                    successful_indices,
+                    max_attempts=3
+                )
+
+                logger.info(f"Query testing complete: {query_test_results['successfully_fixed']} fixed, {query_test_results['needs_manual_fix']} need manual fix")
+
+                # Save test results to module
+                self._save_query_test_results(module_path, query_test_results)
+            else:
+                logger.warning("No successful indices, skipping query testing")
+
+        except Exception as e:
+            logger.error(f"Query testing failed: {e}", exc_info=True)
+
+        # Step 5: Cleanup Test Indices
+        if indexing_results and progress_callback:
+            progress_callback(0.85, "🧹 Cleaning up test indices...")
+
+        try:
+            if indexing_results:
+                cleanup_count = 0
+                for dataset_name, result in indexing_results.items():
+                    if result.get('status') == 'success':
+                        index_name = result['index_name']
+                        try:
+                            indexer.delete_index(index_name)
+                            cleanup_count += 1
+                            logger.info(f"Deleted test index: {index_name}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete test index {index_name}: {e}")
+
+                logger.info(f"Cleaned up {cleanup_count}/{len(indexing_results)} test indices")
+        except Exception as e:
+            logger.error(f"Index cleanup failed: {e}", exc_info=True)
+            # Don't fail the entire generation if cleanup fails
+
+        # Step 6: Save conversation history if provided
         if conversation:
             if progress_callback:
                 progress_callback(0.95, "💾 Saving conversation history...")
@@ -171,13 +286,36 @@ class ModularDemoOrchestrator:
                 semantic_fields = data_gen.get_semantic_fields()
 
             # Extract index_mode mapping from query strategy
+            # Prefer explicit index_mode field, fallback to type-based mapping
             index_modes = {}
             for dataset in query_strategy.get('datasets', []):
                 dataset_name = dataset.get('name')
-                dataset_index_mode = dataset.get('index_mode')
-                if dataset_name and dataset_index_mode:
-                    index_modes[dataset_name] = dataset_index_mode
-                    logger.info(f"Strategy specifies {dataset_name} -> {dataset_index_mode}")
+
+                # Check for explicit index_mode field (preferred)
+                if 'index_mode' in dataset:
+                    index_mode = dataset.get('index_mode')
+                    logger.info(f"Dataset {dataset_name}: Using explicit index_mode={index_mode}")
+                else:
+                    # Fallback: Convert type to index_mode
+                    dataset_type = dataset.get('type')
+
+                    # Analytics demo types
+                    if dataset_type == 'reference':
+                        index_mode = 'lookup'
+                    elif dataset_type == 'timeseries':
+                        index_mode = 'data_stream'
+                    # Search demo types
+                    elif dataset_type in ['documents', 'records']:
+                        index_mode = 'lookup'  # Search demos typically use lookup
+                    else:
+                        # Default to lookup (safer than data_stream)
+                        index_mode = 'lookup'
+                        logger.warning(f"Dataset {dataset_name}: Unknown type '{dataset_type}', defaulting to index_mode=lookup")
+
+                    logger.info(f"Dataset {dataset_name} (type={dataset_type}) -> index_mode={index_mode}")
+
+                if dataset_name:
+                    index_modes[dataset_name] = index_mode
 
             indexing_results = indexing_orch.index_all_datasets(
                 exec_results['datasets'],
@@ -192,6 +330,48 @@ class ModularDemoOrchestrator:
         except Exception as e:
             logger.error(f"Indexing failed: {e}", exc_info=True)
             results['phases']['indexing'] = {'status': 'failed', 'error': str(e)}
+
+        # Phase 4.5: Profile Indexed Data (NEW)
+        if indexing_results and progress_callback:
+            progress_callback(0.6, "🔍 Profiling indexed data...")
+
+        data_profile = None
+        try:
+            from src.services.data_profiler import profile_indexed_data
+            from src.services.elasticsearch_client import ElasticsearchClient
+
+            # Only profile if indexing succeeded
+            successful_indices = {
+                name: result['index_name']
+                for name, result in indexing_results.items()
+                if result.get('status') == 'success'
+            }
+
+            if successful_indices:
+                es_client = ElasticsearchClient()
+                demo_path_obj = Path(module_path)
+
+                # Profile the indexed datasets
+                data_profile = profile_indexed_data(
+                    es_client,
+                    exec_results['datasets'],
+                    demo_path_obj,
+                    progress_callback=None  # Don't need sub-progress for this
+                )
+
+                results['phases']['profiling'] = {
+                    'status': 'completed',
+                    'datasets_profiled': len(data_profile.get('datasets', {}))
+                }
+                logger.info(f"Data profiling complete: {len(data_profile.get('datasets', {}))} datasets profiled")
+            else:
+                logger.warning("No successful indices, skipping data profiling")
+                results['phases']['profiling'] = {'status': 'skipped', 'reason': 'no_indexed_data'}
+
+        except Exception as e:
+            logger.error(f"Data profiling failed: {e}", exc_info=True)
+            results['phases']['profiling'] = {'status': 'failed', 'error': str(e)}
+            # Don't fail the entire generation if profiling fails
 
         # Phase 5: Test and Fix Queries (NEW)
         if indexing_results and progress_callback:
@@ -209,9 +389,9 @@ class ModularDemoOrchestrator:
             }
 
             if successful_indices:
-                test_runner = QueryTestRunner(indexer, self.llm_client)
+                test_runner = QueryTestRunner(indexer, self.llm_client, data_profile=data_profile)
                 query_test_results = test_runner.test_all_queries(
-                    exec_results['queries'],
+                    exec_results.get('all_queries', exec_results.get('queries', [])),
                     successful_indices,
                     max_attempts=3
                 )
@@ -229,7 +409,31 @@ class ModularDemoOrchestrator:
             logger.error(f"Query testing failed: {e}", exc_info=True)
             results['phases']['query_testing'] = {'status': 'failed', 'error': str(e)}
 
-        # Phase 6: Save conversation history if provided
+        # Phase 6: Cleanup Test Indices
+        if indexing_results and progress_callback:
+            progress_callback(0.85, "🧹 Cleaning up test indices...")
+
+        try:
+            if indexing_results:
+                cleanup_count = 0
+                for dataset_name, result in indexing_results.items():
+                    if result.get('status') == 'success':
+                        index_name = result['index_name']
+                        try:
+                            indexer.delete_index(index_name)
+                            cleanup_count += 1
+                            logger.info(f"Deleted test index: {index_name}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete test index {index_name}: {e}")
+
+                logger.info(f"Cleaned up {cleanup_count}/{len(indexing_results)} test indices")
+                results['phases']['cleanup'] = {'status': 'completed', 'indices_deleted': cleanup_count}
+        except Exception as e:
+            logger.error(f"Index cleanup failed: {e}", exc_info=True)
+            results['phases']['cleanup'] = {'status': 'failed', 'error': str(e)}
+            # Don't fail the entire generation if cleanup fails
+
+        # Phase 7: Save conversation history if provided
         if conversation:
             if progress_callback:
                 progress_callback(0.95, "💾 Saving conversation history...")

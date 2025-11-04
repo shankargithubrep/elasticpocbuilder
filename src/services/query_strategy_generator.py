@@ -106,16 +106,22 @@ For each query, specify the EXACT data structure needed to make it work.
 1. Queries must SOLVE specific pain points (not generic)
 2. Use advanced ES|QL features (LOOKUP JOIN, INLINESTATS, EVAL, etc.)
 3. Specify EXACT field names needed (be specific, not generic)
-4. Choose correct index_mode based on data PURPOSE:
-   - **data_stream**: Append-only event streams (logs, tickets, transactions, claims)
-   - **lookup**: Master/reference data (products, customers, knowledge base, policies)
+4. Choose correct index_mode based on LOOKUP JOIN usage:
+   - **index_mode: "lookup"** - If dataset will be used in ANY LOOKUP JOIN clause OR is reference data
+   - **index_mode: "data_stream"** - If dataset is ONLY used in FROM clauses AND has a timestamp field
 5. Define relationships between datasets (foreign keys)
 6. Mark fields that should use semantic_text for vector search
 
-**Index Mode Decision Guide:**
-- **Use data_stream if**: Events/transactions that are immutable once created
-- **Use lookup if**: Master data that gets queried/enriched (even if it has timestamps!)
-  - Example: knowledge_base has `updated_date` but is LOOKUP (reference data)
+**CRITICAL Index Mode Decision Rule:**
+For each dataset, determine index_mode based on how it will be used:
+1. **Will this dataset appear in LOOKUP JOIN?** → index_mode: "lookup"
+2. **Used ONLY in FROM + has @timestamp?** → index_mode: "data_stream"
+3. **Used ONLY in FROM + NO timestamp?** → index_mode: "lookup"
+
+Examples:
+- products (used in "LOOKUP JOIN products") → index_mode: "lookup"
+- sales_transactions (FROM only, has @timestamp) → index_mode: "data_stream"
+- knowledge_base (FROM only, no timestamp) → index_mode: "lookup"
 
 **Output Format (MUST be valid JSON):**
 ```json
@@ -189,8 +195,8 @@ For each query, specify the EXACT data structure needed to make it work.
 - Include @timestamp for timeseries datasets (not just "timestamp")
 - Reference datasets should be small lookup tables
 - Every query should directly address a pain point
-- Use LOOKUP JOIN syntax: "FROM timeseries | LOOKUP JOIN reference_lookup ON key"
-- For lookup indices, append "_lookup" to the dataset name in queries
+- Use LOOKUP JOIN syntax: "FROM timeseries | LOOKUP JOIN reference ON key"
+- Use the actual dataset name in LOOKUP JOIN (no suffix needed)
 
 Generate the complete strategy as valid JSON:"""
 

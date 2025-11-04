@@ -1,0 +1,138 @@
+"""
+ES|QL Syntax Rules and Best Practices
+======================================
+
+This module contains critical ES|QL syntax rules extracted from failure analysis.
+These rules should be incorporated into query generation prompts to improve success rates.
+"""
+
+ESQL_CRITICAL_RULES = """
+## CRITICAL ES|QL SYNTAX RULES - MUST FOLLOW
+
+### 1. FORK Syntax
+✅ CORRECT: `| FORK (WHERE emp_no == 10001) (WHERE emp_no == 10002)`
+❌ WRONG: `| FORK (...), (...)` - NO COMMAS between branches!
+❌ WRONG: `FORK` alone - Must be piped with `|`
+
+### 2. MATCH Syntax (ALWAYS within WHERE)
+✅ CORRECT: `WHERE MATCH(field, "search term")`
+✅ CORRECT: `WHERE MATCH(field, ?parameter, {"fuzziness": "AUTO"})`
+❌ WRONG: `| MATCH field "term"` - MATCH is NOT a pipe operation
+❌ WRONG: `MATCH(field, term)` without WHERE - MUST be inside WHERE clause
+
+### 3. RERANK Syntax (Pipe operation)
+✅ CORRECT: `| RERANK "query" ON field`
+✅ CORRECT: `| RERANK ?question ON content`
+❌ WRONG: `WHERE RERANK(...)` - RERANK is a pipe operation, not a WHERE clause
+
+### 4. LOOKUP JOIN Syntax
+✅ CORRECT: `| LOOKUP JOIN table ON field`
+❌ WRONG: `| LOOKUP table ON field` - Missing JOIN keyword
+❌ WRONG: `| LOOKUP JOIN table_lookup ON field` - No _lookup suffix needed
+
+### 5. Index Modes
+- **data_stream**: Regular timeseries data (default mode)
+- **lookup**: Small reference tables for enrichment
+- When using LOOKUP JOIN, the target table must be in lookup mode
+
+### 6. Query Parameters (Agent Builder)
+✅ CORRECT: `WHERE field == ?parameter`
+✅ CORRECT: `WHERE MATCH(field, ?search_term)`
+❌ WRONG: `WHERE ?parameter IS NULL` - Cannot check NULL on parameters
+❌ WRONG: `WHERE field == ?parameter OR ?parameter IS NULL` - No optional parameters
+
+### 7. Field Names
+- Use `@timestamp` for time fields, not `timestamp`
+- Use exact field names from schema - no invented fields
+- Text fields for MATCH must be text or semantic_text type
+
+### 8. STATS vs INLINESTATS
+- `STATS`: Aggregates and removes individual rows (like GROUP BY)
+- `INLINESTATS`: Adds aggregate columns while keeping all rows
+- For RAG queries, use INLINESTATS to preserve context
+
+### 9. Common Command Order
+1. FROM index_name
+2. WHERE filters
+3. EVAL calculations
+4. STATS/INLINESTATS aggregations
+5. KEEP/DROP fields
+6. SORT ordering
+7. LIMIT rows
+
+### 10. DATE Functions
+✅ CORRECT: `DATE_TRUNC(1 hour, @timestamp)`
+✅ CORRECT: `DATE_EXTRACT("month", @timestamp)`
+❌ WRONG: `DATE_TRUNC(@timestamp, 1 hour)` - Wrong parameter order
+"""
+
+ESQL_QUERY_EXAMPLES = """
+## Example Queries by Type
+
+### Scripted Query (Fixed values)
+```esql
+FROM support_tickets
+| WHERE @timestamp >= NOW() - 7 days
+  AND priority == "High"
+| STATS ticket_count = COUNT(*),
+        avg_resolution = AVG(resolution_time)
+  BY category
+| SORT ticket_count DESC
+| LIMIT 10
+```
+
+### Parameterized Query (Agent Builder tool)
+```esql
+FROM customers
+| WHERE segment == ?customer_segment
+  AND region == ?selected_region
+| LOOKUP JOIN orders ON customer_id
+| STATS total_revenue = SUM(orders.amount),
+        order_count = COUNT(orders.order_id)
+  BY customer_name
+| SORT total_revenue DESC
+```
+
+### RAG Query (Semantic search)
+```esql
+FROM knowledge_base
+| WHERE @timestamp >= NOW() - 90 days
+  AND MATCH(content, ?user_question, {"fuzziness": "AUTO"})
+| INLINESTATS relevance_score = AVG(score)
+| KEEP article_id, title, content, category
+| RERANK ?user_question ON content
+| LIMIT 5
+```
+
+### FORK Query (Multiple branches)
+```esql
+FROM transactions
+| FORK
+  (WHERE amount > 1000 | STATS high_value = COUNT(*))
+  (WHERE amount <= 1000 | STATS low_value = COUNT(*))
+  (STATS total = COUNT(*))
+```
+"""
+
+def get_esql_rules_for_prompt():
+    """Get ES|QL rules formatted for LLM prompts"""
+    return ESQL_CRITICAL_RULES
+
+def get_esql_examples_for_prompt():
+    """Get ES|QL example queries for LLM prompts"""
+    return ESQL_QUERY_EXAMPLES
+
+def get_common_error_fixes():
+    """Get common ES|QL error patterns and their fixes"""
+    return """
+## Common ES|QL Errors and Fixes
+
+| Error Message | Likely Cause | Fix |
+|--------------|--------------|-----|
+| "Unknown column [agents_lookup]" | Using _lookup suffix | Remove _lookup suffix |
+| "line X:Y: mismatched input ',' expecting '('" | FORK with commas | Remove commas between branches |
+| "Unknown function [MATCH]" | MATCH outside WHERE | Move MATCH inside WHERE clause |
+| "Lookup Join requires a single lookup mode index" | Target not in lookup mode | Ensure target index is lookup mode |
+| "Unknown column [?param]" | Parameter in wrong context | Parameters only in WHERE/MATCH |
+| "cannot use [==] on unsupported" | Type mismatch | Check field types match values |
+"""

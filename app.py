@@ -28,6 +28,9 @@ from src.framework import (
     list_demos
 )
 
+# Import UI components
+from src.ui import QueryResultsDisplay
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -714,10 +717,11 @@ def render_create_demo_view():
                         def update_progress(progress: float, message: str):
                             progress_placeholder.progress(progress, text=message)
 
-                        # Generate demo using modular orchestrator with query-first strategy
+                        # Generate demo using modular orchestrator
                         orchestrator = ModularDemoOrchestrator()
 
-                        # Use new strategy-based workflow
+                        # Use Path 2: Query-first strategy with LOOKUP JOIN support
+                        # Generates all three query types: scripted, parameterized, and RAG
                         results = orchestrator.generate_new_demo_with_strategy(
                             config,
                             update_progress,
@@ -791,6 +795,10 @@ def load_demo_queries(module_name: str):
         'parameterized': [...],
         'rag': [...]
     }
+
+    Handles both patterns:
+    1. Path 1 modules: Separate methods (generate_parameterized_queries, generate_rag_queries)
+    2. Path 2 modules: Single generate_queries() with type field
     """
     manager = DemoModuleManager()
     loader = manager.get_module(module_name)
@@ -798,10 +806,21 @@ def load_demo_queries(module_name: str):
         datasets = load_demo_datasets(module_name)
         query_gen = loader.load_query_generator(datasets)
 
-        # Load all three query types
-        scripted = query_gen.generate_queries()
-        parameterized = query_gen.generate_parameterized_queries()
-        rag = query_gen.generate_rag_queries()
+        # Get all queries from generate_queries()
+        all_queries = query_gen.generate_queries()
+
+        # Check if queries have 'type' or 'query_type' field (Path 2 pattern)
+        # Note: Some modules use 'type', others use 'query_type'
+        if all_queries and isinstance(all_queries[0], dict) and ('type' in all_queries[0] or 'query_type' in all_queries[0]):
+            # Path 2: Filter by type - check both 'type' and 'query_type' fields
+            scripted = [q for q in all_queries if q.get('type') == 'scripted' or q.get('query_type') == 'scripted']
+            parameterized = [q for q in all_queries if q.get('type') == 'parameterized' or q.get('query_type') == 'parameterized']
+            rag = [q for q in all_queries if q.get('type') == 'rag' or q.get('query_type') == 'rag']
+        else:
+            # Path 1: Use separate methods
+            scripted = all_queries
+            parameterized = query_gen.generate_parameterized_queries()
+            rag = query_gen.generate_rag_queries()
 
         return {
             'scripted': scripted,
@@ -884,6 +903,36 @@ def render_browse_demos_view():
                         except AttributeError:
                             semantic_fields_spec = {}
 
+                        # Load index_mode mapping from query_strategy.json
+                        index_mode_map = {}
+                        try:
+                            from pathlib import Path
+                            import json
+                            strategy_path = Path('demos') / st.session_state.current_demo_module / 'query_strategy.json'
+                            if strategy_path.exists():
+                                with open(strategy_path, 'r') as f:
+                                    query_strategy = json.load(f)
+                                    for dataset in query_strategy.get('datasets', []):
+                                        dataset_name = dataset.get('name')
+                                        if dataset_name:
+                                            # Prefer explicit index_mode, fallback to type-based mapping
+                                            if 'index_mode' in dataset:
+                                                index_mode_map[dataset_name] = dataset['index_mode']
+                                            else:
+                                                # Fallback logic
+                                                dataset_type = dataset.get('type')
+                                                if dataset_type == 'reference':
+                                                    index_mode_map[dataset_name] = 'lookup'
+                                                elif dataset_type == 'timeseries':
+                                                    index_mode_map[dataset_name] = 'data_stream'
+                                                elif dataset_type in ['documents', 'records']:
+                                                    index_mode_map[dataset_name] = 'lookup'
+                                                else:
+                                                    index_mode_map[dataset_name] = 'lookup'  # Safe default
+                        except Exception as e:
+                            import logging
+                            logging.warning(f"Could not load index_mode mapping: {e}")
+
                         if datasets:
                             # Index All button at the top
                             if st.button("📤 Index All Datasets", use_container_width=True, type="primary"):
@@ -898,6 +947,9 @@ def render_browse_demos_view():
                                     # Get semantic fields for this dataset
                                     semantic_fields = semantic_fields_spec.get(name, [])
 
+                                    # Get index_mode for this dataset
+                                    index_mode = index_mode_map.get(name, 'lookup')  # Default to lookup
+
                                     progress_bar = st.progress(0)
                                     status_text = st.empty()
 
@@ -910,6 +962,7 @@ def render_browse_demos_view():
                                             df,
                                             name,
                                             semantic_fields=semantic_fields,
+                                            index_mode=index_mode,
                                             progress_callback=progress_callback
                                         )
 
@@ -921,6 +974,32 @@ def render_browse_demos_view():
                                         st.error(f"❌ {name}: {str(e)}")
 
                                 st.success("🎉 Batch indexing complete!")
+
+                                # Profile the indexed data
+                                st.info("🔍 Profiling indexed data...")
+                                try:
+                                    from src.services.data_profiler import profile_indexed_data
+                                    from src.services.elasticsearch_client import ElasticsearchClient
+                                    from pathlib import Path
+
+                                    es_client = ElasticsearchClient()
+                                    demo_path = Path(f"demos/{st.session_state.current_demo_module}")
+
+                                    profile_progress = st.empty()
+
+                                    def profile_callback(msg):
+                                        profile_progress.text(msg)
+
+                                    profile = profile_indexed_data(
+                                        es_client,
+                                        datasets,
+                                        demo_path,
+                                        progress_callback=profile_callback
+                                    )
+
+                                    st.success(f"✅ Data profile created - {len(profile['datasets'])} datasets profiled")
+                                except Exception as e:
+                                    st.warning(f"⚠️ Could not create data profile: {e}")
 
                             st.divider()
 
@@ -938,7 +1017,7 @@ def render_browse_demos_view():
                                         csv,
                                         f"{name}.csv",
                                         "text/csv",
-                                        key=f"download_{name}",
+                                        key=f"download_data_{st.session_state.current_demo_module}_{name}",
                                         use_container_width=True
                                     )
 
@@ -954,6 +1033,9 @@ def render_browse_demos_view():
 
                                         # Get semantic fields for this dataset
                                         semantic_fields = semantic_fields_spec.get(name, [])
+
+                                        # Get index_mode for this dataset
+                                        index_mode = index_mode_map.get(name, 'lookup')  # Default to lookup
 
                                         # Show progress and stop button
                                         progress_bar = st.progress(0)
@@ -982,6 +1064,7 @@ def render_browse_demos_view():
                                                 df,
                                                 name,
                                                 semantic_fields=semantic_fields,
+                                                index_mode=index_mode,
                                                 progress_callback=progress_callback,
                                                 stop_callback=stop_callback
                                             )
@@ -1088,84 +1171,55 @@ def render_browse_demos_view():
                             f"🤖 RAG ({len(queries_dict['rag'])})"
                         ])
 
-                        # Helper function to render queries
+                        # Initialize QueryResultsDisplay for clean rendering
+                        display = QueryResultsDisplay()
+
+                        # Helper function to render queries using the new display module
                         def render_query_list(queries, query_type, can_execute=True):
                             if queries:
                                 for i, query in enumerate(queries, 1):
-                                    query_name = query.get('name', f'Query {i}')
-                                    st.markdown(f"### {i}. {query_name}")
+                                    # Use the new QueryResultsDisplay for clean rendering
+                                    display.render_query_with_results(
+                                        query,
+                                        results=None,  # No results by default - clean queries only
+                                        show_pipeline_view=False  # Don't show educational view by default
+                                    )
 
-                                    # Query type badge
-                                    if query_type == 'scripted':
-                                        st.markdown("**Type:** `Scripted` ✅ *Executable*")
-                                    elif query_type == 'parameterized':
-                                        st.markdown("**Type:** `Parameterized` ⚙️ *Agent Builder Tool*")
-                                    elif query_type == 'rag':
-                                        st.markdown("**Type:** `RAG` 🤖 *Agent Builder Tool*")
-
-                                    # Description
-                                    if query.get('description'):
-                                        st.caption(query['description'])
-
-                                    # Query code with copy button
-                                    query_text = query.get('esql', '')
-                                    st.code(query_text, language='sql')
-
-                                    # Show parameters if they exist (for parameterized/RAG queries)
-                                    if query.get('parameters'):
-                                        with st.expander("📋 Parameters"):
-                                            for param_name, param_info in query['parameters'].items():
-                                                st.markdown(f"**`?{param_name}`** ({param_info.get('type', 'unknown')})")
-                                                st.caption(param_info.get('description', ''))
-                                                if 'default' in param_info:
-                                                    st.caption(f"Default: `{param_info['default']}`")
-
-                                    # Action buttons (only for scripted queries)
+                                    # Add execution capability for scripted queries
                                     if can_execute and query_type == 'scripted':
                                         col1, col2 = st.columns([1, 3])
-
                                         with col1:
-                                            # Test query button
-                                            if st.button("▶️ Test Query", key=f"test_query_{query_type}_{i}", use_container_width=True):
+                                            query_key = f"{query_type}_query_{i}"
+                                            if st.button("▶️ Test Query", key=f"test_{query_key}", use_container_width=True):
                                                 from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                                                query_name = query.get('name', f'Query {i}')
 
                                                 with st.spinner(f"Executing {query_name}..."):
                                                     try:
                                                         indexer = ElasticsearchIndexer()
+                                                        query_text = display._get_query_text(query)
                                                         success, result, error = indexer.execute_esql(query_text)
 
                                                         if success:
-                                                            st.success(f"✅ Query executed successfully!")
-
-                                                            # Display results
-                                                            if result:
-                                                                # Try to convert to DataFrame for better display
-                                                                try:
-                                                                    if 'columns' in result and 'values' in result:
-                                                                        # ES|QL response format
-                                                                        columns = [col['name'] for col in result['columns']]
-                                                                        values = result['values']
-                                                                        result_df = pd.DataFrame(values, columns=columns)
-                                                                        st.dataframe(result_df, use_container_width=True)
-                                                                        st.caption(f"Returned {len(result_df)} rows")
-                                                                    else:
-                                                                        # Fallback to JSON display
-                                                                        st.json(result)
-                                                                except Exception as display_error:
-                                                                    # If conversion fails, show raw JSON
-                                                                    st.json(result)
+                                                            st.success("✅ Query executed successfully!")
+                                                            # Store results in session state for display
+                                                            st.session_state[f"{query_key}_results"] = result
+                                                            st.rerun()
                                                         else:
-                                                            st.error(f"❌ Query failed:\n\n{error}")
-
+                                                            st.error(f"❌ Query failed: {error}")
                                                     except Exception as e:
-                                                        st.error(f"❌ Error executing query: {e}")
-                                                        import traceback
-                                                        with st.expander("Show traceback"):
-                                                            st.code(traceback.format_exc())
+                                                        st.error(f"❌ Error: {e}")
 
-                                        with col2:
-                                            # Copy to clipboard button (visual only, actual copy handled by st.code)
-                                            st.caption(f"💾 Use the copy button in the code block above")
+                                        # Display results if available in session state
+                                        if f"{query_key}_results" in st.session_state:
+                                            with st.expander("📊 Query Results", expanded=True):
+                                                display._render_query_results(st.session_state[f"{query_key}_results"])
+
+                                    # Pain point and dataset info
+                                    if query.get('pain_point'):
+                                        st.caption(f"📌 **Addresses:** {query['pain_point']}")
+                                    if query.get('datasets'):
+                                        st.caption(f"📊 **Uses datasets:** {', '.join(query['datasets'])}")
 
                                     st.divider()
                             else:
@@ -1319,6 +1373,7 @@ def main():
             }
 
             st.caption(size_legends[st.session_state.dataset_size_preference])
+
             st.markdown("---")
 
             if st.button("🔄 Start Fresh", use_container_width=True):

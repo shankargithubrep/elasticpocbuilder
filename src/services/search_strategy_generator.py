@@ -141,9 +141,34 @@ frame these as "best practice" or "advanced optimization" examples.
 4. Include semantic_text fields for vector search
 5. Limit results (5-50 documents)
 6. NO STATS, NO GROUP BY, NO aggregations (that's analytics, not search)
-7. Choose correct index_mode:
-   - **lookup**: Document collections (articles, policies, FAQs - even with timestamps!)
-   - **data_stream**: Only for high-volume event logs (rare in search demos)
+7. Choose correct index_mode based on LOOKUP JOIN usage:
+   - **index_mode: "lookup"** - If dataset will be used in ANY LOOKUP JOIN clause OR is reference data
+   - **index_mode: "data_stream"** - If dataset is ONLY used in FROM clauses AND has a timestamp field
+
+**CRITICAL - semantic_text Field Pattern:**
+For fields that need semantic search (vector embeddings):
+- **CORRECT**: Define ONLY ONE field as "semantic_text" type
+  Example: "content": "semantic_text"
+- **WRONG**: Do NOT create both a text field AND a semantic_text field
+  Example: "content": "text" + "content_semantic": "semantic_text" ← ANTIPATTERN!
+- Elasticsearch automatically handles BOTH text storage AND embedding generation for semantic_text fields
+- The data generator will create ONE column with text data
+- Elasticsearch will auto-generate embeddings using ELSER v2 (.elser-2-elasticsearch)
+- Reference: https://www.elastic.co/search-labs/blog/semantic-search-simplified-semantic-text
+
+**CRITICAL Index Mode Decision Rule:**
+For each dataset, determine index_mode based on how it will be used:
+1. **Will this dataset appear in LOOKUP JOIN?** → index_mode: "lookup"
+2. **Used ONLY in FROM + has @timestamp?** → index_mode: "data_stream"
+3. **Used ONLY in FROM + NO timestamp?** → index_mode: "lookup"
+
+Examples:
+- knowledge_base (FROM only, no @timestamp) → index_mode: "lookup"
+- providers (used in "LOOKUP JOIN providers") → index_mode: "lookup"
+- call_logs (FROM only, has @timestamp) → index_mode: "data_stream"
+
+**NOTE**: Most search demos use lookup mode for ALL datasets (document collections).
+Only use data_stream for high-volume event logs with timestamps.
 
 **Output Format (MUST be valid JSON):**
 ```json
@@ -152,12 +177,12 @@ frame these as "best practice" or "advanced optimization" examples.
     {{
       "name": "knowledge_base_articles",
       "type": "documents",
+      "index_mode": "lookup",
       "row_count": "5000+",
       "required_fields": {{
         "article_id": "keyword",
         "title": "text",
-        "content": "text",
-        "content_semantic": "semantic_text",
+        "content": "semantic_text",
         "category": "keyword",
         "author": "keyword",
         "created_date": "date",
@@ -165,11 +190,12 @@ frame these as "best practice" or "advanced optimization" examples.
         "view_count": "long"
       }},
       "relationships": ["authors"],
-      "semantic_fields": ["content_semantic"]
+      "semantic_fields": ["content"]
     }},
     {{
       "name": "authors",
       "type": "reference",
+      "index_mode": "lookup",
       "row_count": "100+",
       "required_fields": {{
         "author_id": "keyword",

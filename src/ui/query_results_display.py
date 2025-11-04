@@ -23,7 +23,8 @@ class QueryResultsDisplay:
         self,
         query: Dict[str, Any],
         results: Optional[Dict[str, Any]] = None,
-        show_pipeline_view: bool = False
+        show_pipeline_view: bool = False,
+        unique_key: str = ""
     ):
         """Render a query with optional results display
 
@@ -31,6 +32,7 @@ class QueryResultsDisplay:
             query: Query dictionary with 'name', 'esql_query', etc.
             results: Optional results from Elasticsearch execution
             show_pipeline_view: If True, show educational data pipeline view
+            unique_key: Unique key for Streamlit widgets
         """
         # Query name and type
         query_name = query.get('name', 'Untitled Query')
@@ -68,7 +70,7 @@ class QueryResultsDisplay:
         # Query results view (if available)
         if results and tab_results:
             with tab_results:
-                self._render_query_results(results)
+                self._render_query_results(results, unique_key=unique_key)
 
         # Educational pipeline view (if requested and available)
         if show_pipeline_view and tab_pipeline:
@@ -144,7 +146,7 @@ class QueryResultsDisplay:
 
         st.divider()
 
-    def _render_query_results(self, results: Dict[str, Any]):
+    def _render_query_results(self, results: Dict[str, Any], unique_key: str = ""):
         """Render actual query results from Elasticsearch"""
         st.markdown("#### Query Execution Results")
 
@@ -161,15 +163,15 @@ class QueryResultsDisplay:
         # Extract data from ES|QL response
         if 'columns' in results and 'values' in results:
             # ES|QL format with columns and values
-            self._render_esql_results(results)
+            self._render_esql_results(results, unique_key=unique_key)
         elif 'hits' in results:
             # Traditional Elasticsearch format
-            self._render_traditional_results(results)
+            self._render_traditional_results(results, unique_key=unique_key)
         else:
             # Unknown format - display as JSON
             st.json(results)
 
-    def _render_esql_results(self, results: Dict):
+    def _render_esql_results(self, results: Dict, unique_key: str = ""):
         """Render ES|QL format results (columns + values)"""
         columns = [col['name'] for col in results['columns']]
         values = results['values']
@@ -198,16 +200,17 @@ class QueryResultsDisplay:
             hide_index=True
         )
 
-        # Download button
+        # Download button with unique key
         csv = df.to_csv(index=False)
         st.download_button(
             label="📥 Download as CSV",
             data=csv,
             file_name="query_results.csv",
-            mime="text/csv"
+            mime="text/csv",
+            key=f"download_csv_{unique_key}" if unique_key else None
         )
 
-    def _render_traditional_results(self, results: Dict):
+    def _render_traditional_results(self, results: Dict, unique_key: str = ""):
         """Render traditional Elasticsearch hits format"""
         hits = results.get('hits', {}).get('hits', [])
 
@@ -231,6 +234,16 @@ class QueryResultsDisplay:
             df.head(self.max_display_rows),
             use_container_width=True,
             hide_index=True
+        )
+
+        # Download button with unique key
+        csv = df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download as CSV",
+            data=csv,
+            file_name="query_results.csv",
+            mime="text/csv",
+            key=f"download_csv_{unique_key}" if unique_key else None
         )
 
     def _render_pipeline_view(self, query: Dict, results: Optional[Dict]):
@@ -385,7 +398,8 @@ def render_queries_with_execution(
             display.render_query_with_results(
                 query,
                 results=results,
-                show_pipeline_view=show_pipeline_view
+                show_pipeline_view=show_pipeline_view,
+                unique_key=f"{query_type}_{i}"
             )
 
             st.divider()

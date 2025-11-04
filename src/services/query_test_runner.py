@@ -37,16 +37,18 @@ class QueryTestResult:
 class QueryTestRunner:
     """Tests and fixes queries iteratively using LLM"""
 
-    def __init__(self, es_indexer: ElasticsearchIndexer, llm_client):
+    def __init__(self, es_indexer: ElasticsearchIndexer, llm_client, data_profile: Optional[Dict] = None):
         """Initialize with Elasticsearch indexer and LLM client
 
         Args:
             es_indexer: ElasticsearchIndexer instance
             llm_client: Anthropic Claude client
+            data_profile: Optional data profile from profiling phase
         """
         self.indexer = es_indexer
         self.llm_client = llm_client
         self.sample_extractor = SampleValuesExtractor(es_indexer.client)
+        self.data_profile = data_profile
 
     def test_all_queries(
         self,
@@ -319,6 +321,15 @@ class QueryTestRunner:
             # Fallback if import fails
             esql_rules = self._read_esql_skill()
 
+        # Format data profile if available (using compact mode)
+        data_profile_text = ""
+        if self.data_profile:
+            try:
+                from src.services.data_profiler import DataProfiler
+                data_profile_text = "\n\n" + DataProfiler.format_profile_for_llm(self.data_profile, compact=True)
+            except Exception as e:
+                logger.warning(f"Could not format data profile: {e}")
+
         prompt = f"""Fix this ES|QL query that failed with an error.
 
 **Query Name:** {query['name']}
@@ -336,6 +347,7 @@ class QueryTestRunner:
 
 **Available Indices:**
 {json.dumps(indexed_datasets, indent=2)}
+{data_profile_text}
 
 **ES|QL Fix Rules:**
 {esql_rules}
