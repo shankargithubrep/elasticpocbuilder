@@ -369,8 +369,8 @@ ES|QL Search Commands:
                 if key not in dataset:
                     raise ValueError(f"Dataset missing required key: {key}")
 
-            if dataset['type'] not in ['documents', 'records', 'reference']:
-                raise ValueError(f"Search dataset type must be 'documents', 'records', or 'reference', got: {dataset['type']}")
+            if dataset['type'] not in ['documents', 'records', 'reference', 'events']:
+                raise ValueError(f"Search dataset type must be 'documents', 'records', 'reference', or 'events', got: {dataset['type']}")
 
         # Validate query structure
         for query in strategy['queries']:
