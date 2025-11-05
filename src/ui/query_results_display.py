@@ -394,6 +394,55 @@ def render_queries_with_execution(
             if st.session_state.get(exec_key):
                 results = st.session_state.get(results_key)
 
+            # Check if query returned zero results - offer optimization
+            if (query_type == 'scripted' and results and
+                'columns' in results and 'values' in results and
+                len(results['values']) == 0):
+
+                # Show optimize button for zero-results queries
+                optimize_key = f"{query_type}_query_{i}_optimize"
+                if st.button("🔧 Optimize Constraints", key=optimize_key, help="Use LLM to relax constraints and improve results"):
+                    with st.spinner("Analyzing constraints..."):
+                        try:
+                            # Import optimizer
+                            from src.services.query_optimizer import relax_query_constraints, load_data_profile
+                            import anthropic
+                            import os
+
+                            # Get LLM client
+                            llm_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+
+                            # Get data profile (extract module name from somewhere - for now use first demo)
+                            # TODO: Pass module_name as parameter to this function
+                            data_profile = None
+
+                            # Get current query
+                            current_esql = display._get_query_text(query)
+
+                            # Optimize
+                            optimized_esql, explanation = relax_query_constraints(
+                                query=query,
+                                current_esql=current_esql,
+                                data_profile=data_profile,
+                                llm_client=llm_client
+                            )
+
+                            # Show optimized query
+                            st.success(f"✅ {explanation}")
+                            st.code(optimized_esql, language='sql')
+
+                            # Offer to test the optimized query
+                            if st.button("▶️ Test Optimized Query", key=f"{optimize_key}_test"):
+                                try:
+                                    test_results = es_client.execute_esql(optimized_esql)
+                                    st.session_state[results_key] = test_results
+                                    st.success(f"Found {len(test_results.get('values', []))} results!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Test failed: {e}")
+                        except Exception as e:
+                            st.error(f"Optimization failed: {e}")
+
             # Render the query with results
             display.render_query_with_results(
                 query,
