@@ -154,8 +154,8 @@ class ModuleGenerator:
         self._generate_guide_module(config, module_path)
         self._generate_config_file(config, module_path)
 
-        # Generate static files for quick loading
-        self._generate_static_files(module_path)
+        # NOTE: Do NOT generate static files yet - query_generator.py doesn't exist
+        # Static files will be generated in Phase 2 after query_generator.py is created
 
         logger.info(f"Generated module infrastructure and data at: {module_path} (queries will be generated after profiling)")
         return str(module_path)
@@ -188,6 +188,9 @@ class ModuleGenerator:
         )
 
         logger.info(f"Generated query module with data profile at: {module_path}")
+
+        # NOW generate static files - all modules are complete (data, guide, AND queries)
+        self._generate_static_files(module_path_obj)
 
     def _generate_data_module(self, config: Dict[str, Any], module_path: Path):
         """Generate the data generation module"""
@@ -248,11 +251,20 @@ CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
 - Scale mentioned ({config["scale"]}) is for REALISM only, don't generate that many!
 
+CRITICAL - STRING TEMPLATE FORMATTING:
+When using string templates with .format(), ensure placeholder names EXACTLY match the keyword arguments:
+- WRONG: template = "{{treatments}}" with .format(treatment="value")  ← Plural vs singular mismatch!
+- CORRECT: template = "{{treatment}}" with .format(treatment="value")  ← Names match exactly
+- WRONG: template = "{{user_name}}" with .format(username="value")  ← Underscore mismatch!
+- CORRECT: template = "{{username}}" with .format(username="value")  ← Names match exactly
+Check ALL template placeholders match their .format() keyword arguments EXACTLY (case and plurality matter!)
+
 Template:
 ```python
 from src.framework.base import DataGeneratorModule, DemoConfig
 import pandas as pd
 import numpy as np
+import random
 from datetime import datetime, timedelta
 from typing import Dict, List
 
@@ -1092,11 +1104,20 @@ CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
 - Scale mentioned ({config["scale"]}) is for REALISM only, don't generate that many!
 
+CRITICAL - STRING TEMPLATE FORMATTING:
+When using string templates with .format(), ensure placeholder names EXACTLY match the keyword arguments:
+- WRONG: template = "{{treatments}}" with .format(treatment="value")  ← Plural vs singular mismatch!
+- CORRECT: template = "{{treatment}}" with .format(treatment="value")  ← Names match exactly
+- WRONG: template = "{{user_name}}" with .format(username="value")  ← Underscore mismatch!
+- CORRECT: template = "{{username}}" with .format(username="value")  ← Names match exactly
+Check ALL template placeholders match their .format() keyword arguments EXACTLY (case and plurality matter!)
+
 Template:
 ```python
 from src.framework.base import DataGeneratorModule, DemoConfig
 import pandas as pd
 import numpy as np
+import random
 from datetime import datetime, timedelta
 from typing import Dict, List
 
@@ -1105,7 +1126,14 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
 
     @staticmethod
     def safe_choice(choices, size=None, weights=None, replace=True):
-        \"\"\"Safer alternative to np.random.choice with automatic probability normalization.\"\"\"
+        \"\"\"Safer alternative to np.random.choice with automatic probability normalization.
+
+        WARNING: Do NOT use this for lists of lists with varying lengths!
+        For example, if you have networks = [['HMO', 'PPO'], ['PPO', 'EPO'], ['HMO']],
+        use Python's random.choice() instead:
+            import random
+            'networks': [','.join(random.choice(networks)) for _ in range(n)]
+        \"\"\"
         if weights is not None:
             weights = np.array(weights, dtype=float)
             probabilities = weights / weights.sum()
