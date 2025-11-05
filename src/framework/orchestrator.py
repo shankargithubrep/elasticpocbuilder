@@ -294,6 +294,11 @@ class ModularDemoOrchestrator:
             if hasattr(data_gen, 'get_semantic_fields'):
                 semantic_fields = data_gen.get_semantic_fields()
 
+            # PHASE 1: Detect datasets used in LOOKUP JOIN (must be lookup mode)
+            lookup_join_datasets = self._detect_lookup_join_datasets(query_strategy)
+            if lookup_join_datasets:
+                logger.info(f"Detected {len(lookup_join_datasets)} datasets used in LOOKUP JOIN: {lookup_join_datasets}")
+
             # Extract index_mode mapping from query strategy
             # Prefer explicit index_mode field, fallback to type-based mapping
             index_modes = {}
@@ -322,6 +327,17 @@ class ModularDemoOrchestrator:
                         logger.warning(f"Dataset {dataset_name}: Unknown type '{dataset_type}', defaulting to index_mode=lookup")
 
                     logger.info(f"Dataset {dataset_name} (type={dataset_type}) -> index_mode={index_mode}")
+
+                # PHASE 1: Override if dataset is used in LOOKUP JOIN
+                if dataset_name in lookup_join_datasets:
+                    if index_mode != 'lookup':
+                        logger.warning(
+                            f"Dataset {dataset_name} is used in LOOKUP JOIN but has index_mode={index_mode}. "
+                            f"Forcing to index_mode=lookup to prevent indexing failure."
+                        )
+                        index_mode = 'lookup'
+                    else:
+                        logger.info(f"Dataset {dataset_name}: Confirmed as lookup (used in LOOKUP JOIN)")
 
                 if dataset_name:
                     index_modes[dataset_name] = index_mode
@@ -527,6 +543,37 @@ class ModularDemoOrchestrator:
         except Exception as e:
             logger.error(f"Failed to save query test results: {e}", exc_info=True)
             # Don't fail the entire generation if save fails
+
+    def _detect_lookup_join_datasets(self, query_strategy: Dict[str, Any]) -> set:
+        """Detect datasets used in LOOKUP JOIN operations
+
+        Args:
+            query_strategy: Query strategy dictionary containing queries
+
+        Returns:
+            Set of dataset names used in LOOKUP JOIN operations
+        """
+        import re
+
+        lookup_datasets = set()
+
+        # Parse all queries in the strategy
+        for query in query_strategy.get('queries', []):
+            esql_query = query.get('esql') or query.get('esql_query') or query.get('query') or ''
+            esql_upper = esql_query.upper()
+
+            # Check if this query contains LOOKUP JOIN
+            if 'LOOKUP JOIN' in esql_upper or 'LOOKUP  JOIN' in esql_upper:
+                # Extract dataset name after LOOKUP JOIN
+                # Pattern: ... LOOKUP JOIN dataset_name ON ...
+                # Handle single or double spaces between LOOKUP and JOIN
+                matches = re.findall(r'LOOKUP\s+JOIN\s+(\w+)', esql_upper)
+                for match in matches:
+                    dataset_name = match.lower()
+                    lookup_datasets.add(dataset_name)
+                    logger.debug(f"Found LOOKUP JOIN on dataset: {dataset_name}")
+
+        return lookup_datasets
 
     def save_conversation(
         self,
