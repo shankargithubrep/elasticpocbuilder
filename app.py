@@ -362,24 +362,59 @@ You MUST return valid JSON in this EXACT format. No other text before or after t
     "metrics": [],
     "demo_type": null
   }},
+  "compound_request_detected": false,
+  "suggested_analytics_prompt": null,
+  "suggested_search_prompt": null,
   "user_response": ""
 }}
 
 **Guidelines:**
 1. Extract ALL new information from the user's message into extracted_context
 2. For pain_points and use_cases, extract specific items from lists or paragraphs
-3. **Classify demo_type** (CRITICAL):
+3. **Detect Compound Requests** (MOST IMPORTANT - READ CAREFULLY):
+
+   **Detection Criteria:** Set compound_request_detected to true if BOTH conditions are met:
+
+   A) The user's message contains use cases matching "search" keywords:
+      - Words: search, find, retrieve, lookup, knowledge base, documents, RAG, semantic search, discovery, locate
+      - Examples: "find provider info", "lookup policies", "search knowledge base", "retrieve patient records"
+
+   B) AND the message also contains use cases matching "analytics" keywords:
+      - Words: analyze, trend, pattern, metric, aggregate, dashboard, report, insight, forecast, statistics
+      - Examples: "analyze denial trends", "track metrics", "identify patterns", "forecast demand"
+
+   **Explicit Examples:**
+   - ✅ COMPOUND: "Provider lookup (search) + denial trend analysis (analytics)"
+   - ✅ COMPOUND: "Knowledge base search (search) + call volume metrics (analytics)"
+   - ✅ COMPOUND: "Document retrieval (search) + performance dashboards (analytics)"
+   - ❌ NOT compound: "Provider lookup + policy search" (both search)
+   - ❌ NOT compound: "Trend analysis + metric tracking" (both analytics)
+
+   **If compound detected**:
+   - Set compound_request_detected to true
+   - Set suggested_analytics_prompt to a SHORT summary (1-2 sentences) of analytics use cases only
+   - Set suggested_search_prompt to a SHORT summary (1-2 sentences) of search use cases only
+   - Keep these summaries BRIEF - just enough to show the split, NOT full prompts
+
+4. **Classify demo_type** (CRITICAL):
    - Set to "search" if use case involves: finding/retrieving documents, RAG, knowledge bases, patient records, policy lookup, semantic search, relevance
    - Set to "analytics" if use case involves: analyzing trends, metrics, aggregations, dashboards, BI, time-series, forecasting
-   - Keywords for "search": search, find, retrieve, lookup, knowledge base, documents, relevant, RAG
-   - Keywords for "analytics": analyze, trend, metric, dashboard, report, insights, aggregate
-4. For user_response:
-   - If ≥80% complete: Say ready and ask them to type 'generate' (just the word "generate")
-   - If 50-79%: Acknowledge what was captured, then ask for missing fields AS BULLETS
-   - If <50%: Welcome and ask for key info AS BULLETS
-   - Be specific about what was found
-   - When asking for missing info, format as bullet points (one per field)
-   - ALWAYS end with: "💡 Don't have all the details? Just type **'skip'** and I'll use reasonable defaults."
+   - If compound_request_detected is true, pick the type that appears FIRST or most prominently in the user's message
+5. For user_response:
+   - **SPECIAL CASE - Compound Request:** If compound_request_detected is true, INSTEAD of normal response:
+      - Explain that you detected BOTH search and analytics use cases
+      - Briefly mention the analytics use cases
+      - Briefly mention the search use cases
+      - Ask which type of demo they want to build (analytics or search)
+      - Remind them they can build the other type in a second run
+      - Keep this response concise (2-3 sentences max)
+   - **NORMAL CASE - Single Demo Type:**
+      - If ≥80% complete: Say ready and ask them to type 'generate' (just the word "generate")
+      - If 50-79%: Acknowledge what was captured, then ask for missing fields AS BULLETS
+      - If <50%: Welcome and ask for key info AS BULLETS
+      - Be specific about what was found
+      - When asking for missing info, format as bullet points (one per field)
+      - ALWAYS end with: "💡 Don't have all the details? Just type **'skip'** and I'll use reasonable defaults."
 
 **Example user_response format when info is missing:**
 "Great! I've captured [what you found]. To complete the demo, I need:
@@ -402,7 +437,7 @@ RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
 
         response = client.messages.create(
             model="claude-sonnet-4-5-20250929",
-            max_tokens=2000,
+            max_tokens=16000,  # Increased for compound requests - need room for two full high-fidelity prompts
             temperature=0.3,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -592,50 +627,19 @@ def display_context_summary():
     # Progress bar at top
     st.progress(progress, text=f"{int(progress * 100)}% complete")
 
-    # Checklist of fields as color-coded table
-    table_html = """
-    <style>
-    .context-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 10px 0;
-    }
-    .context-table td {
-        padding: 8px;
-        border: 1px solid #ddd;
-    }
-    .context-complete {
-        background-color: #d4edda;
-        color: #155724;
-    }
-    .context-incomplete {
-        background-color: #f8d7da;
-        color: #721c24;
-    }
-    </style>
-    <table class="context-table">
-    """
+    # Display fields as simple list with emoji indicators
+    st.markdown("#### Extracted Context")
 
     for field_key, field_status in status.items():
         name = field_status['display_name']
         value = field_status['display_value']
 
         if field_status['is_complete']:
-            row_class = "context-complete"
-            display_value = value
+            # Complete: show green checkmark
+            st.markdown(f"✅ **{name}:** {value}")
         else:
-            row_class = "context-incomplete"
-            display_value = "(not set)"
-
-        table_html += f"""
-        <tr class="{row_class}">
-            <td><strong>{name}</strong></td>
-            <td>{display_value}</td>
-        </tr>
-        """
-
-    table_html += "</table>"
-    st.markdown(table_html, unsafe_allow_html=True)
+            # Incomplete: show red X
+            st.markdown(f"❌ **{name}:** *(not set)*")
 
     # Status message
     st.markdown("---")
@@ -1287,7 +1291,7 @@ def render_browse_demos_view():
                                         # Display results if available in session state
                                         if f"{query_key}_results" in st.session_state:
                                             with st.expander("📊 Query Results", expanded=True):
-                                                display._render_query_results(st.session_state[f"{query_key}_results"])
+                                                display._render_query_results(st.session_state[f"{query_key}_results"], unique_key=query_key)
 
                                     # Pain point and dataset info
                                     if query.get('pain_point'):
@@ -1512,14 +1516,6 @@ def main():
                                             st.error(f"❌ {deploy_msg}")
                     except Exception as e:
                         st.error(f"❌ Error: {e}")
-
-            st.markdown("---")
-            st.markdown("### ✨ Special Features")
-
-            if st.button("💡 Generate A-ha Moment", use_container_width=True, disabled=True):
-                pass
-
-            st.caption("🚧 **Coming Soon:** Generate powerful 'A-ha moments' that wow customers!")
 
         else:  # Browse mode
             st.markdown("### 📚 Demo Modules")
