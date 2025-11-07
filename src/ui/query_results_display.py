@@ -98,19 +98,32 @@ class QueryResultsDisplay:
             ''
         )
 
-    def _render_parameters(self, parameters):
-        """Render query parameters in an expandable section"""
-        with st.expander("📋 Parameters"):
-            # Handle both list and dict formats
-            if isinstance(parameters, list):
-                for param_info in parameters:
-                    self._render_single_parameter(
-                        param_info.get('name', 'unknown'),
-                        param_info
-                    )
-            elif isinstance(parameters, dict):
-                for param_name, param_info in parameters.items():
-                    self._render_single_parameter(param_name, param_info)
+    def _render_parameters(self, parameters, allow_input=False, unique_key=""):
+        """Render query parameters in an expandable section
+
+        Args:
+            parameters: Parameter definitions (list or dict)
+            allow_input: If True, render input widgets for parameter values
+            unique_key: Unique key for input widgets
+        """
+        if allow_input:
+            # Render parameter inputs for testing
+            return self._render_parameter_inputs(parameters, unique_key)
+        else:
+            # Render parameter definitions (read-only)
+            with st.expander("📋 Parameters"):
+                # Handle both list and dict formats
+                if isinstance(parameters, list):
+                    for param_info in parameters:
+                        self._render_single_parameter(
+                            param_info.get('name', 'unknown'),
+                            param_info
+                        )
+                elif isinstance(parameters, dict):
+                    for param_name, param_info in parameters.items():
+                        self._render_single_parameter(param_name, param_info)
+
+            return None
 
     def _render_single_parameter(self, param_name: str, param_info):
         """Render a single parameter
@@ -145,6 +158,121 @@ class QueryResultsDisplay:
                 st.write("**Required**")
 
         st.divider()
+
+    def _render_parameter_inputs(self, parameters, unique_key=""):
+        """Render input widgets for parameter values
+
+        Returns:
+            dict: Parameter name to value mapping
+        """
+        st.markdown("#### 🔧 Test Parameters")
+        st.caption("Enter values for each parameter to test the query")
+
+        param_values = {}
+
+        # Handle both list and dict formats
+        param_list = parameters if isinstance(parameters, list) else [
+            {"name": k, **v} if isinstance(v, dict) else {"name": k, "type": "string", "default": v}
+            for k, v in parameters.items()
+        ]
+
+        for param_info in param_list:
+            param_name = param_info.get('name', 'unknown')
+            param_type = param_info.get('type', 'string')
+            param_desc = param_info.get('description', '')
+            param_default = param_info.get('default', '')
+            param_required = param_info.get('required', False)
+
+            # Create input widget based on type
+            label = f"**{param_name}**" + (" *" if param_required else "")
+            help_text = param_desc if param_desc else f"Enter value for {param_name}"
+
+            if param_type in ['integer', 'long']:
+                default_val = int(param_default) if param_default and str(param_default).isdigit() else 0
+                value = st.number_input(
+                    label,
+                    value=default_val,
+                    step=1,
+                    key=f"param_{unique_key}_{param_name}",
+                    help=help_text
+                )
+                param_values[param_name] = int(value)
+
+            elif param_type in ['double', 'float']:
+                default_val = float(param_default) if param_default else 0.0
+                value = st.number_input(
+                    label,
+                    value=default_val,
+                    step=0.1,
+                    key=f"param_{unique_key}_{param_name}",
+                    help=help_text
+                )
+                param_values[param_name] = float(value)
+
+            elif param_type == 'boolean':
+                default_val = bool(param_default) if param_default else False
+                value = st.checkbox(
+                    label,
+                    value=default_val,
+                    key=f"param_{unique_key}_{param_name}",
+                    help=help_text
+                )
+                param_values[param_name] = value
+
+            elif param_type == 'date':
+                from datetime import datetime, timedelta
+                # Default to 90 days ago if no default
+                default_date = datetime.now() - timedelta(days=90)
+                value = st.date_input(
+                    label,
+                    value=default_date,
+                    key=f"param_{unique_key}_{param_name}",
+                    help=help_text
+                )
+                param_values[param_name] = value.strftime('%Y-%m-%d')
+
+            else:  # string, keyword, or unknown
+                default_val = str(param_default) if param_default else ""
+                value = st.text_input(
+                    label,
+                    value=default_val,
+                    key=f"param_{unique_key}_{param_name}",
+                    help=help_text,
+                    placeholder=f"e.g., {param_desc.split('(e.g., ')[-1].rstrip(')')}..." if '(e.g.,' in param_desc else f"Enter {param_name}"
+                )
+                param_values[param_name] = value
+
+        return param_values
+
+    def substitute_parameters(self, query_text: str, param_values: Dict[str, Any]) -> str:
+        """Substitute parameter values into a parameterized query
+
+        Args:
+            query_text: ES|QL query with ?parameter placeholders
+            param_values: Dict of parameter name to value
+
+        Returns:
+            Query with substituted values
+        """
+        result = query_text
+
+        for param_name, param_value in param_values.items():
+            placeholder = f"?{param_name}"
+
+            # Format value based on type
+            if isinstance(param_value, str):
+                # String values need quotes
+                formatted_value = f'"{param_value}"'
+            elif isinstance(param_value, bool):
+                # Boolean values are lowercase
+                formatted_value = str(param_value).lower()
+            else:
+                # Numbers don't need quotes
+                formatted_value = str(param_value)
+
+            result = result.replace(placeholder, formatted_value)
+
+        return result
 
     def _render_query_results(self, results: Dict[str, Any], unique_key: str = ""):
         """Render actual query results from Elasticsearch"""
@@ -394,13 +522,45 @@ def render_queries_with_execution(
             if st.session_state.get(exec_key):
                 results = st.session_state.get(results_key)
 
+            # Keys for storing optimization state (define early so we can check them)
+            optimize_key = f"{query_type}_query_{i}_optimize"
+            optimized_query_key = f"{query_type}_query_{i}_optimized_query"
+            optimized_explanation_key = f"{query_type}_query_{i}_optimized_explanation"
+
+            # Show optimized query if available (persists across reruns, shown for ANY result state)
+            if optimized_query_key in st.session_state:
+                st.info("💡 Optimized Query Suggestion")
+                st.success(f"✅ {st.session_state[optimized_explanation_key]}")
+                st.code(st.session_state[optimized_query_key], language='sql')
+
+                # Offer to test the optimized query
+                col1, col2 = st.columns([1, 4])
+                with col1:
+                    if st.button("▶️ Test Query", key=f"{optimize_key}_test"):
+                        try:
+                            test_results = es_client.execute_esql(st.session_state[optimized_query_key])
+                            st.session_state[results_key] = test_results
+                            st.session_state[exec_key] = True
+                            # Clear optimization state after successful test
+                            del st.session_state[optimized_query_key]
+                            del st.session_state[optimized_explanation_key]
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Test failed: {e}")
+                with col2:
+                    if st.button("❌ Clear Suggestion", key=f"{optimize_key}_clear"):
+                        # Clear optimization state
+                        del st.session_state[optimized_query_key]
+                        del st.session_state[optimized_explanation_key]
+                        st.rerun()
+
             # Check if query returned zero results - offer optimization
             if (query_type == 'scripted' and results and
                 'columns' in results and 'values' in results and
-                len(results['values']) == 0):
+                len(results['values']) == 0 and
+                optimized_query_key not in st.session_state):  # Only show button if no suggestion exists
 
                 # Show optimize button for zero-results queries
-                optimize_key = f"{query_type}_query_{i}_optimize"
                 if st.button("🔧 Optimize Constraints", key=optimize_key, help="Use LLM to relax constraints and improve results"):
                     with st.spinner("Analyzing constraints..."):
                         try:
@@ -427,19 +587,10 @@ def render_queries_with_execution(
                                 llm_client=llm_client
                             )
 
-                            # Show optimized query
-                            st.success(f"✅ {explanation}")
-                            st.code(optimized_esql, language='sql')
-
-                            # Offer to test the optimized query
-                            if st.button("▶️ Test Optimized Query", key=f"{optimize_key}_test"):
-                                try:
-                                    test_results = es_client.execute_esql(optimized_esql)
-                                    st.session_state[results_key] = test_results
-                                    st.success(f"Found {len(test_results.get('values', []))} results!")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Test failed: {e}")
+                            # Store in session state so it persists across reruns
+                            st.session_state[optimized_query_key] = optimized_esql
+                            st.session_state[optimized_explanation_key] = explanation
+                            st.rerun()
                         except Exception as e:
                             st.error(f"Optimization failed: {e}")
 

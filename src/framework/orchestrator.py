@@ -19,18 +19,19 @@ logger = logging.getLogger(__name__)
 class ModularDemoOrchestrator:
     """Orchestrates demo generation using modular architecture"""
 
-    def __init__(self, llm_client=None):
+    def __init__(self, llm_client=None, inference_endpoints: Optional[Dict[str, str]] = None):
         """Initialize orchestrator
 
         Args:
             llm_client: Optional LLM client for module generation
+            inference_endpoints: Optional dict with 'rerank' and 'completion' endpoint IDs
         """
         # Create default client if not provided
         if llm_client is None:
             llm_client = self._create_default_client()
 
         self.llm_client = llm_client
-        self.module_generator = ModuleGenerator(llm_client)
+        self.module_generator = ModuleGenerator(llm_client, inference_endpoints)
         self.module_manager = DemoModuleManager()
 
     def _create_default_client(self):
@@ -363,7 +364,7 @@ class ModularDemoOrchestrator:
         data_profile = None
         try:
             from src.services.data_profiler import profile_indexed_data
-            from src.services.elasticsearch_client import ElasticsearchClient
+            from src.services.elasticsearch_indexer import ElasticsearchIndexer
 
             # Only profile if indexing succeeded
             successful_indices = {
@@ -373,7 +374,7 @@ class ModularDemoOrchestrator:
             }
 
             if successful_indices:
-                es_client = ElasticsearchClient()
+                es_client = ElasticsearchIndexer()
                 demo_path_obj = Path(module_path)
 
                 # Profile the indexed datasets
@@ -381,6 +382,7 @@ class ModularDemoOrchestrator:
                     es_client,
                     datasets,  # ← Changed from exec_results['datasets']
                     demo_path_obj,
+                    index_name_map=successful_indices,  # Pass the actual index names
                     progress_callback=None  # Don't need sub-progress for this
                 )
 
@@ -442,6 +444,13 @@ class ModularDemoOrchestrator:
             # Don't fail the entire generation if query generation fails
             all_queries = []
             scripted_queries = []
+            parameterized_queries = []
+            rag_queries = []
+            # Initialize results keys even when query generation fails
+            results['queries'] = []
+            results['scripted_queries'] = []
+            results['parameterized_queries'] = []
+            results['rag_queries'] = []
 
         # Phase 6: Test and Fix Queries
         if indexing_results and progress_callback:

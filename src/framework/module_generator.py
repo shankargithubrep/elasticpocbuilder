@@ -16,10 +16,24 @@ logger = logging.getLogger(__name__)
 class ModuleGenerator:
     """Generates demo modules using LLM"""
 
-    def __init__(self, llm_client=None):
-        """Initialize with LLM client"""
+    def __init__(self, llm_client=None, inference_endpoints: Optional[Dict[str, str]] = None):
+        """Initialize with LLM client and inference endpoint configuration
+
+        Args:
+            llm_client: LLM client for code generation
+            inference_endpoints: Dict with 'rerank' and 'completion' endpoint IDs
+                Default: {'rerank': '.rerank-v1-elasticsearch', 'completion': 'completion-vulcan'}
+        """
         self.llm_client = llm_client
         self.base_path = Path("demos")  # Where demo modules are stored
+
+        # Set inference endpoint defaults
+        if inference_endpoints is None:
+            inference_endpoints = {
+                "rerank": ".rerank-v1-elasticsearch",
+                "completion": "completion-vulcan"
+            }
+        self.inference_endpoints = inference_endpoints
 
     def generate_demo_module(self, config: Dict[str, Any], query_plan: Optional[Dict[str, Any]] = None) -> str:
         """Generate a complete demo module for a customer
@@ -174,18 +188,34 @@ class ModuleGenerator:
             query_strategy: Query strategy (for context)
             data_profile: Profiled data from Elasticsearch (field names, values, combinations)
         """
+        logger.info("="*60)
+        logger.info("PHASE 5: Starting query module generation with profile")
+        logger.info("="*60)
+
         module_path_obj = Path(module_path)
 
         if not module_path_obj.exists():
+            logger.error(f"Module path does not exist: {module_path}")
             raise ValueError(f"Module path does not exist: {module_path}")
 
-        # Generate query module WITH data profile
-        self._generate_query_module_with_strategy(
-            config,
-            module_path_obj,
-            query_strategy,
-            data_profile=data_profile
-        )
+        logger.info(f"Module path: {module_path}")
+        logger.info(f"Data profile present: {data_profile is not None}")
+        if data_profile:
+            logger.info(f"Data profile datasets: {list(data_profile.get('datasets', {}).keys())}")
+
+        try:
+            # Generate query module WITH data profile
+            logger.info("Calling _generate_query_module_with_strategy...")
+            self._generate_query_module_with_strategy(
+                config,
+                module_path_obj,
+                query_strategy,
+                data_profile=data_profile
+            )
+            logger.info("✓ Query module generation completed successfully")
+        except Exception as e:
+            logger.error(f"✗ Query module generation failed: {e}", exc_info=True)
+            raise
 
         logger.info(f"Generated query module with data profile at: {module_path}")
 
@@ -530,6 +560,10 @@ Access data via self.datasets. Use ?parameter syntax for Agent Builder tools. Us
         # Get query plans for this type
         rag_plans = [q for q in query_plan.get('query_plans', []) if q.get('query_type') == 'rag']
 
+        # Get endpoint IDs for substitution in prompt
+        rerank_endpoint = self.inference_endpoints['rerank']
+        completion_endpoint = self.inference_endpoints['completion']
+
         base_prompt = f"""Generate the `generate_rag_queries()` method for a QueryGeneratorModule.
 
 **Customer Context:**
@@ -566,15 +600,62 @@ queries.append({{
 }})
 ```
 
-**CRITICAL ES|QL Syntax Rules:**
-1. **LOOKUP JOIN**: Use `LOOKUP JOIN table ON field` (JOIN keyword is required)
+**CRITICAL ES|QL Syntax Rules for RAG Queries:**
+1. **MATCH (always in WHERE clause)**:
+   ✅ CORRECT: `WHERE MATCH(field, ?parameter)`
+   ✅ CORRECT: `WHERE MATCH(field, ?param, {{"fuzziness": "AUTO"}})`
+   ❌ WRONG: `| MATCH field ?parameter` (MATCH is NOT a pipe operation)
+
+2. **RERANK (pipe operation with ON and WITH)**:
+   ✅ CORRECT: `| RERANK ?query ON field WITH {{ "inference_id": "{rerank_endpoint}" }}`
+   ✅ CORRECT: `| RERANK ?query ON field1, field2 WITH {{ "inference_id": "{rerank_endpoint}" }}`
+   ❌ WRONG: `| RERANK field ?query` (missing ON keyword)
+   ❌ WRONG: `| RERANK ?query ON field MODEL "model"` (use WITH, not MODEL)
+
+3. **COMPLETION (pipe operation with WITH - optional for RAG)**:
+   ✅ CORRECT: `| COMPLETION answer = prompt WITH {{ "inference_id": "{completion_endpoint}" }}`
+   ✅ CORRECT: Build prompts with EVAL: `| EVAL prompt = CONCAT("Q: ", ?query, " A: ", content)`
+   ❌ WRONG: `| COMPLETION "text" MODEL "gpt-4"` (use WITH, not MODEL)
+   ❌ WRONG: Using template syntax like `{{{{#results}}}}` (not supported)
+   ⚠️ WARNING: Every row generates 1 LLM API call - use LIMIT before COMPLETION!
+
+4. **METADATA _score**: Add after FROM to access relevance scores
+   Example: `FROM index METADATA _score`
+
+5. **LOOKUP JOIN**: Use `LOOKUP JOIN table ON field` (JOIN keyword is required)
    Example: `| LOOKUP JOIN agents ON agent_id`
-   WRONG: `| LOOKUP agents ON agent_id` (missing JOIN keyword)
-2. **RAG Pipeline**: Use MATCH → RERANK → semantic text fields
-3. **Field names**: Use EXACT field names from schema above
+
+6. **Standard RAG Pipeline Pattern**:
+   ```
+   FROM index METADATA _score
+   | WHERE MATCH(semantic_field, ?user_question)
+   | SORT _score DESC
+   | LIMIT 100
+   | RERANK ?user_question ON field WITH {{ "inference_id": "{rerank_endpoint}" }}
+   | LIMIT 10
+   | KEEP fields...
+   ```
+
+7. **Optional COMPLETION** (add cost warning if used):
+   ```
+   | LIMIT 5  # CRITICAL: Limit before COMPLETION to reduce API calls
+   | EVAL prompt = CONCAT("Question: ", ?user_question, " Content: ", content)
+   | COMPLETION answer = prompt WITH {{ "inference_id": "{completion_endpoint}" }}
+   ```
+
+**Inference Endpoints (ALWAYS use these exact IDs)**:
+- RERANK: `{rerank_endpoint}`
+- COMPLETION: `{completion_endpoint}`
+- SPARSE EMBEDDING: `.elser-2-elastic` (for semantic_text fields)
+
+8. **Semantic Text Fields**: Fields used in MATCH must be text or semantic_text type
+
+**Important**: For most RAG use cases, MATCH → RERANK → LIMIT is sufficient.
+Only add COMPLETION if the use case explicitly requires LLM-generated summaries/answers.
+If using COMPLETION, ALWAYS include cost warning in description.
 
 Generate ONLY the generate_rag_queries() method with the EXACT signature above (no datasets parameter!).
-Access data via self.datasets. Use MATCH -> RERANK -> COMPLETION pipeline. Use EXACT field names from schema. ALWAYS use "type": "rag" for ALL queries."""
+Access data via self.datasets. Use correct MATCH/RERANK syntax. Use EXACT field names from schema. ALWAYS use "type": "rag" for ALL queries."""
 
         return self._call_llm(base_prompt + "\n\n" + esql_docs[:1000])
 
@@ -739,6 +820,10 @@ Generate ONLY the method implementation. Do NOT include class definition or impo
         Target: ~6K tokens
         Returns: Just the method code, not the full class
         """
+        # Get endpoint IDs for substitution in prompt
+        rerank_endpoint = self.inference_endpoints['rerank']
+        completion_endpoint = self.inference_endpoints['completion']
+
         prompt = f"""Generate the `generate_rag_queries()` method for a QueryGeneratorModule.
 
 **Customer Context:**
@@ -756,14 +841,14 @@ Pain Points: {", ".join(config["pain_points"])}
 
 **IMPORTANT - Use Relevance Tuning:**
 ALWAYS use MATCH with named parameters for relevance tuning:
-- `boost`: Increase/decrease field importance (e.g., {{"boost": 2.0}} for titles, {{"boost": 0.5}} for descriptions)
-- `fuzziness`: Allow typos/variations (e.g., {{"fuzziness": "AUTO"}} or {{"fuzziness": "1"}})
+- `boost`: Increase/decrease field importance (e.g., {"boost": 2.0} for titles, {"boost": 0.5} for descriptions)
+- `fuzziness`: Allow typos/variations (e.g., {"fuzziness": "AUTO"} or {"fuzziness": "1"})
 
 Example:
 ```esql
-WHERE MATCH(title, ?query, {{"boost": 2.0, "fuzziness": "AUTO"}})
-   OR MATCH(description, ?query, {{"boost": 1.0, "fuzziness": "1"}})
-   OR MATCH(content, ?query, {{"boost": 0.5}})
+WHERE MATCH(title, ?query, {"boost": 2.0, "fuzziness": "AUTO"})
+   OR MATCH(description, ?query, {"boost": 1.0, "fuzziness": "1"})
+   OR MATCH(content, ?query, {"boost": 0.5})
 ```
 
 **ES|QL Reference (RAG Commands):**
@@ -789,15 +874,15 @@ def generate_rag_queries(self) -> List[Dict[str, Any]]:
         "description": "Ask questions about [data type]",
         "esql": \"\"\"
             FROM index_name METADATA _score
-            | WHERE MATCH(text_field1, ?user_question, {{"boost": 2.0, "fuzziness": "AUTO"}})
-                OR MATCH(text_field2, ?user_question, {{"boost": 1.5, "fuzziness": "1"}})
-                OR MATCH(text_field3, ?user_question, {{"boost": 1.0}})
+            | WHERE MATCH(text_field1, ?user_question, {"boost": 2.0, "fuzziness": "AUTO"})
+                OR MATCH(text_field2, ?user_question, {"boost": 1.5, "fuzziness": "1"})
+                OR MATCH(text_field3, ?user_question, {"boost": 1.0})
             | WHERE @timestamp >= NOW() - 120 days
             | SORT _score DESC
             | LIMIT 100
             | RERANK ?user_question
                 ON text_field1, text_field2, text_field3
-                WITH {{"inference_id": "rerank_endpoint"}}
+                WITH {{"inference_id": "{rerank_endpoint}"}}
             | LIMIT 5
             | EVAL context = CONCAT(
                 "Record: ", id_field, " | ",
@@ -812,7 +897,7 @@ def generate_rag_queries(self) -> List[Dict[str, Any]]:
                 "\\\\n\\\\nProvide a detailed answer:"
               )
             | COMPLETION answer = prompt
-                WITH {{"inference_id": "completion_endpoint"}}
+                WITH {{"inference_id": "{completion_endpoint}"}}
             | KEEP answer, all_context
         \"\"\",
         "parameters": {{
@@ -1219,8 +1304,15 @@ Generate the complete implementation with ALL required fields:"""
             query_strategy: Complete query strategy with planned queries
             data_profile: Optional profiled data from Elasticsearch (field names, values, combinations)
         """
+        logger.info("→ Entering _generate_query_module_with_strategy")
+        logger.info(f"  Config keys: {list(config.keys())}")
+        logger.info(f"  Query strategy has {len(query_strategy.get('queries', []))} queries")
+        logger.info(f"  Data profile available: {data_profile is not None}")
+
         # Format data profile for prompt if available
         data_profile_section = ""
+        join_guidance = ""
+
         if data_profile and 'datasets' in data_profile:
             from src.services.data_profiler import DataProfiler
             data_profile_section = f"""
@@ -1231,11 +1323,59 @@ USE THESE EXACT FIELD NAMES AND VALUE EXAMPLES IN YOUR QUERIES.
 
 {DataProfiler.format_profile_for_llm(data_profile, compact=True)}
 
-CRITICAL - ACCURACY REQUIREMENTS:
-1. Use ONLY field names that appear in the data profile above
-2. Use realistic values from the examples shown (don't invent values)
-3. Check field name spelling carefully (common errors: timestamp vs @timestamp, userId vs user_id)
-4. Verify field types match query operations (text fields for MATCH, numeric for math operations)
+CRITICAL - FILTER VALUE REQUIREMENTS:
+1. ⚡ **USE SUGGESTED FILTERS FIRST**: The data profile shows "Suggested Filters (Guaranteed Results)" for each dataset
+   - These filters are pre-validated and guaranteed to return results
+   - Copy filter clauses EXACTLY as shown (e.g., `WHERE status == 'active'`)
+   - You can combine suggested filters with AND/OR operators
+
+2. ❌ **DO NOT INVENT filter values** - use ONLY values shown in data profile
+   - ✅ GOOD: `WHERE status == 'active'` (value from profile)
+   - ❌ BAD: `WHERE status == 'pending'` (invented value not in profile)
+
+3. **Field name accuracy**:
+   - Use ONLY field names that appear in the data profile above
+   - Check spelling carefully (common errors: timestamp vs @timestamp, userId vs user_id)
+   - Verify field types match operations (text for MATCH, numeric for math)
+
+⚠️  WARNING: Queries with invented filter values will return 0 results and fail testing!
+"""
+
+            # Add JOIN-specific guidance if relationships detected
+            if data_profile.get('relationships'):
+                relationships = data_profile['relationships']
+                join_guidance = f"""
+
+**CRITICAL - LOOKUP JOIN GUIDANCE:**
+The data profiler detected {len(relationships)} relationship(s) between datasets. These are pre-validated
+and ready for use in LOOKUP JOIN queries.
+
+**How to use detected relationships:**
+1. The data profile above shows exact JOIN syntax for each relationship
+2. Use the provided syntax examples - they use correct field names and operators
+3. For array fields (comma-separated values), use MV_EXPAND before JOIN
+4. Both indices must be indexed in 'lookup' mode (already configured)
+
+**LOOKUP JOIN Syntax Rules:**
+✅ CORRECT: `FROM source | LOOKUP JOIN lookup_table ON field`
+✅ CORRECT: `FROM source | LOOKUP JOIN lookup_table ON source_field == lookup_field`
+✅ CORRECT (array): `FROM source | MV_EXPAND array_field | LOOKUP JOIN lookup ON array_field == lookup_field`
+
+❌ WRONG: `FROM source | LOOKUP JOIN lookup_table ON field = field` (use == not =)
+❌ WRONG: `FROM source | LOOKUP JOIN lookup_table_lookup ON field` (no _lookup suffix)
+❌ WRONG: `FROM source | LOOKUP lookup_table ON field` (missing JOIN keyword)
+
+**When to use LOOKUP JOIN:**
+- Use DETECTED relationships from data profile (they have matching values)
+- JOIN adds enrichment fields from lookup table to results
+- Good for demos: shows advanced ES|QL capabilities
+- Don't overuse: not every query needs a JOIN
+
+**Validation:**
+- All detected relationships have been validated for:
+  * Field name matching (ID fields vs reference fields)
+  * Value overlap (≥10% of values match between datasets)
+  * Correct cardinality (1:1, 1:many, or many:1)
 """
         else:
             data_profile_section = """
@@ -1244,133 +1384,175 @@ CRITICAL - ACCURACY REQUIREMENTS:
 Data profile was not available during query generation. Field names must be inferred from strategy.
 This may result in field name mismatches or typos. Use extreme care with field naming.
 """
+            join_guidance = ""
 
-        prompt = f"""Generate a Python module that implements QueryGeneratorModule for this customer:
+        # Build prompt using string concatenation to avoid f-string issues with curly braces
+        # in data_profile_section and join_guidance (which contain ES|QL/JSON syntax)
 
-Company: {config["company_name"]}
-Department: {config["department"]}
-Pain Points: {", ".join(config["pain_points"])}
-Use Cases: {", ".join(config["use_cases"])}
+        # Get ES|QL rules (might also contain curly braces)
+        esql_rules = self._get_esql_strict_rules()
 
-**Pre-Planned Query Strategy:**
-{json.dumps(query_strategy, indent=2)}
-{data_profile_section}
+        # Get endpoint IDs for substitution in prompts
+        rerank_endpoint = self.inference_endpoints['rerank']
+        completion_endpoint = self.inference_endpoints['completion']
 
-CRITICAL - IMPLEMENT THE QUERIES FROM THE STRATEGY ABOVE.
+        # Build template with company name
+        company_class_name = config['company_name'].replace(" ", "")
 
-The module should:
-1. Implement QueryGeneratorModule base class
-2. Generate the EXACT queries from the strategy with proper ES|QL syntax
-3. Use field names that MATCH the generated data
-4. Include query descriptions that explain the business value
-5. Return queries in the order that builds a compelling narrative
-
-**ES|QL STRICT SYNTAX RULES - MUST FOLLOW:**
-{self._get_esql_strict_rules()}
-
-CRITICAL - ESCAPING ES|QL QUERIES IN PYTHON:
-- ES|QL queries with JSON parameters use curly braces: MATCH(field, "term", {{{{"boost": 0.75}}}})
-- ALWAYS use double curly braces {{{{{{{{ }}}}}}}} to escape JSON in queries when using f-strings
-- OR use regular strings with .format() instead of f-strings for queries
-- Example CORRECT: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{{{"boost": 1.5}}}})\"\"\"
-- Example WRONG: query = f\"\"\"FROM index | WHERE MATCH(field, "term", {{"boost": 1.5}})\"\"\"
-
-Template - MUST IMPLEMENT ALL THREE METHODS:
-```python
-from src.framework.base import QueryGeneratorModule, DemoConfig
-from typing import Dict, List, Any
-import pandas as pd
-
-class {config["company_name"].replace(" ", "")}QueryGenerator(QueryGeneratorModule):
-    \"\"\"Query generator for {config["company_name"]} - {config["department"]}\"\"\"
-
-    # DO NOT define __init__ - inherited from base class provides:
-    # self.config, self.datasets
-
-    def generate_queries(self) -> List[Dict[str, Any]]:
-        \"\"\"Generate ALL ES|QL queries from pre-planned strategy
-
-        CRITICAL: Categorize each query with query_type field:
-        - "scripted": Basic queries that don't take user parameters
-        - "parameterized": Queries that can be customized with user input
-        - "rag": RAG queries using MATCH -> RERANK -> COMPLETION pipeline
-        \"\"\"
-        queries = []
-
-        # Implement SCRIPTED queries (simple, no parameters)
-        # Each query should have: name, description, query, query_type="scripted"
-
-        # Implement PARAMETERIZED queries (user can customize)
-        # Each query should have: name, description, query, query_type="parameterized", parameters
-
-        # Implement RAG queries for semantic_text fields
-        # Each query should have: name, description, query, query_type="rag"
-        # RAG queries MUST use: MATCH -> RERANK (optional) -> COMPLETION pipeline
-
-        return queries
-
-    def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
-        \"\"\"Generate parameterized queries that accept user input
-
-        These are Agent Builder Tool queries that let users customize parameters.
-        Include parameter definitions for each query.
-        \"\"\"
-        queries = []
-
-        # Implement parameterized queries from strategy
-        # Each should define parameters users can customize
-
-        return queries
-
-    def generate_rag_queries(self) -> List[Dict[str, Any]]:
-        \"\"\"Generate RAG queries using COMPLETION command
-
-        CRITICAL - RAG Pipeline Requirements:
-        1. MUST use MATCH to find semantically similar documents
-        2. OPTIONALLY use RERANK to improve relevance
-        3. MUST use COMPLETION to generate LLM-powered answers
-        4. Target semantic_text fields from the strategy
-
-        Example RAG query structure:
-        FROM index METADATA _id
-        | WHERE MATCH(semantic_field, "{{user_question}}")
-        | RERANK(semantic_field, "{{user_question}}")
-        | LIMIT 5
-        | COMPLETION "You are an expert assistant. Use these documents to answer: {{user_question}}"
-        \"\"\"
-        queries = []
-
-        # Extract semantic_text fields from strategy datasets
-        # For each semantic_text field, generate a RAG query
-
-        return queries
-
-    def get_query_progression(self) -> List[str]:
-        \"\"\"Define the order to present queries for maximum impact\"\"\"
-        return [
-            # Query names in presentation order from strategy
+        prompt_parts = [
+            "Generate a Python module that implements QueryGeneratorModule for this customer:",
+            "",
+            f"Company: {config['company_name']}",
+            f"Department: {config['department']}",
+            f"Pain Points: {', '.join(config['pain_points'])}",
+            f"Use Cases: {', '.join(config['use_cases'])}",
+            "",
+            "**Pre-Planned Query Strategy:**",
+            json.dumps(query_strategy, indent=2),
+            data_profile_section,  # Contains ES|QL/JSON with curly braces
+            join_guidance,         # Contains ES|QL/JSON with curly braces
+            "",
+            "CRITICAL - IMPLEMENT THE QUERIES FROM THE STRATEGY ABOVE.",
+            "",
+            "The module should:",
+            "1. Implement QueryGeneratorModule base class",
+            "2. Generate the EXACT queries from the strategy with proper ES|QL syntax",
+            "3. Use field names that MATCH the generated data",
+            "4. Include query descriptions that explain the business value",
+            "5. Return queries in the order that builds a compelling narrative",
+            "",
+            "**ES|QL STRICT SYNTAX RULES - MUST FOLLOW:**",
+            esql_rules,  # Might contain curly braces too
+            "",
+            "CRITICAL - ESCAPING ES|QL QUERIES IN PYTHON:",
+            "- ES|QL queries with JSON parameters use SINGLE curly braces: MATCH(field, \"term\", {\"boost\": 0.75})",
+            "- When using triple-quoted strings (recommended): Use single braces directly",
+            "  Example: query = \"\"\"FROM index | WHERE MATCH(field, \"term\", {\"boost\": 1.5})\"\"\"",
+            "- When using f-strings: Must double the braces to escape them",
+            "  Example: query = f\"\"\"FROM index | WHERE MATCH(field, \"term\", {{\"boost\": 1.5}})\"\"\"",
+            "- IMPORTANT: The final ES|QL syntax must always have SINGLE braces {} in the query string",
+            "",
+            "Template - MUST IMPLEMENT ALL THREE METHODS:",
+            "```python",
+            "from src.framework.base import QueryGeneratorModule, DemoConfig",
+            "from typing import Dict, List, Any",
+            "import pandas as pd",
+            "",
+            f"class {company_class_name}QueryGenerator(QueryGeneratorModule):",
+            f"    \"\"\"Query generator for {config['company_name']} - {config['department']}\"\"\"",
+            "",
+            "    # DO NOT define __init__ - inherited from base class provides:",
+            "    # self.config, self.datasets",
+            "",
+            "    def generate_queries(self) -> List[Dict[str, Any]]:",
+            "        \"\"\"Generate ALL ES|QL queries from pre-planned strategy",
+            "",
+            "        CRITICAL: Categorize each query with query_type field:",
+            "        - \"scripted\": Basic queries that don't take user parameters",
+            "        - \"parameterized\": Queries that can be customized with user input",
+            "        - \"rag\": RAG queries using MATCH -> RERANK -> COMPLETION pipeline",
+            "        \"\"\"",
+            "        queries = []",
+            "",
+            "        # Implement SCRIPTED queries (simple, no parameters)",
+            "        # Each query should have: name, description, query, query_type=\"scripted\"",
+            "",
+            "        # Implement PARAMETERIZED queries (user can customize)",
+            "        # Each query should have: name, description, query, query_type=\"parameterized\", parameters",
+            "",
+            "        # Implement RAG queries for semantic_text fields",
+            "        # Each query should have: name, description, query, query_type=\"rag\"",
+            "        # RAG queries MUST use: MATCH -> RERANK (optional) -> COMPLETION pipeline",
+            "",
+            "        return queries",
+            "",
+            "    def generate_parameterized_queries(self) -> List[Dict[str, Any]]:",
+            "        \"\"\"Generate parameterized queries that accept user input",
+            "",
+            "        These are Agent Builder Tool queries that let users customize parameters.",
+            "        Include parameter definitions for each query.",
+            "        \"\"\"",
+            "        queries = []",
+            "",
+            "        # Implement parameterized queries from strategy",
+            "        # Each should define parameters users can customize",
+            "",
+            "        return queries",
+            "",
+            "    def generate_rag_queries(self) -> List[Dict[str, Any]]:",
+            "        \"\"\"Generate RAG queries using COMPLETION command",
+            "",
+            "        CRITICAL - RAG Pipeline Requirements:",
+            "        1. MUST use MATCH to find semantically similar documents",
+            "        2. OPTIONALLY use RERANK to improve relevance",
+            "        3. MUST use COMPLETION to generate LLM-powered answers",
+            "        4. Target semantic_text fields from the strategy",
+            "",
+            "        Example RAG query structure:",
+            "        FROM index METADATA _id",
+            "        | WHERE MATCH(semantic_field, ?user_question)",
+            "        | RERANK ?user_question ON semantic_field",
+            "        | LIMIT 5",
+            "        | EVAL prompt = CONCAT(\"Answer this question: \", ?user_question)",
+            f"        | COMPLETION answer = prompt WITH {{{{\\\"inference_id\\\": \\\"{completion_endpoint}\\\"}}}}",
+            "        \"\"\"",
+            "        queries = []",
+            "",
+            "        # Extract semantic_text fields from strategy datasets",
+            "        # For each semantic_text field, generate a RAG query",
+            "",
+            "        return queries",
+            "",
+            "    def get_query_progression(self) -> List[str]:",
+            "        \"\"\"Define the order to present queries for maximum impact\"\"\"",
+            "        return [",
+            "            # Query names in presentation order from strategy",
+            "        ]",
+            "```",
+            "",
+            "CRITICAL REQUIREMENTS:",
+            "1. ALL THREE methods must be implemented (generate_queries, generate_parameterized_queries, generate_rag_queries)",
+            "2. RAG queries MUST use the COMPLETION command with semantic_text fields from the strategy",
+            "3. Each query must have proper query_type metadata (\"scripted\", \"parameterized\", or \"rag\")",
+            "4. Extract semantic_text fields from the strategy datasets to guide RAG generation",
+            "",
+            "Generate the complete implementation with ALL queries from the strategy:"
         ]
-```
 
-CRITICAL REQUIREMENTS:
-1. ALL THREE methods must be implemented (generate_queries, generate_parameterized_queries, generate_rag_queries)
-2. RAG queries MUST use the COMPLETION command with semantic_text fields from the strategy
-3. Each query must have proper query_type metadata ("scripted", "parameterized", or "rag")
-4. Extract semantic_text fields from the strategy datasets to guide RAG generation
+        prompt = "\n".join(prompt_parts)
+        logger.info("→ Calling LLM to generate query code...")
+        logger.info(f"  Prompt length: {len(prompt)} characters")
 
-Generate the complete implementation with ALL queries from the strategy:"""
-
-        if self.llm_client:
-            code = self._call_llm(prompt)
-        else:
-            code = self._generate_mock_query_module(config)
+        try:
+            if self.llm_client:
+                code = self._call_llm(prompt)
+                logger.info(f"✓ LLM returned {len(code)} characters of code")
+            else:
+                logger.warning("No LLM client, using mock generator")
+                code = self._generate_mock_query_module(config)
+        except Exception as e:
+            logger.error(f"✗ LLM call failed: {e}", exc_info=True)
+            raise
 
         # Validate syntax before saving
-        self._validate_python_syntax(code, 'query_generator.py')
+        logger.info("→ Validating Python syntax...")
+        try:
+            self._validate_python_syntax(code, 'query_generator.py')
+            logger.info("✓ Syntax validation passed")
+        except Exception as e:
+            logger.error(f"✗ Syntax validation failed: {e}", exc_info=True)
+            raise
 
         # Save the module
-        module_file = module_path / 'query_generator.py'
-        module_file.write_text(code)
+        logger.info(f"→ Writing query_generator.py to {module_path}")
+        try:
+            module_file = module_path / 'query_generator.py'
+            module_file.write_text(code)
+            logger.info(f"✓ Successfully wrote query_generator.py ({len(code)} bytes)")
+        except Exception as e:
+            logger.error(f"✗ Failed to write file: {e}", exc_info=True)
+            raise
+
         logger.info("Generated query_generator.py with strategy")
 
     def _generate_config_file(self, config: Dict[str, Any], module_path: Path):
@@ -1462,17 +1644,20 @@ Parameters are ALWAYS required when used.
 
     def _get_minimal_esql_reference(self) -> str:
         """Minimal ES|QL reference if docs unavailable"""
-        return """
+        rerank_endpoint = self.inference_endpoints['rerank']
+        completion_endpoint = self.inference_endpoints['completion']
+
+        return f"""
 ### ES|QL Commands for RAG Queries
 
 **MATCH (Semantic Search):**
 ```
-WHERE MATCH(field, "query", {"boost": 0.75})
+WHERE MATCH(field, "query", {{"boost": 0.75}})
 ```
 
 **RERANK (ML Relevance):**
 ```
-| RERANK query_text ON field1, field2 WITH {"inference_id": "rerank_endpoint"}
+| RERANK query_text ON field1, field2 WITH {{"inference_id": "{rerank_endpoint}"}}
 ```
 
 **INLINE STATS (Preserve Fields):**
@@ -1482,7 +1667,7 @@ WHERE MATCH(field, "query", {"boost": 0.75})
 
 **COMPLETION (LLM Generation):**
 ```
-| COMPLETION answer = prompt WITH {"inference_id": "completion_endpoint"}
+| COMPLETION answer = prompt WITH {{"inference_id": "{completion_endpoint}"}}
 ```
 
 **METADATA (Score):**

@@ -127,6 +127,14 @@ class QueryTestRunner:
             current_esql = self._convert_to_scripted_query(current_esql, indexed_datasets)
             logger.info(f"Converted query: {current_esql[:200]}...")
 
+        # Check for JOIN queries and validate early
+        if self._is_join_query(current_esql):
+            logger.info(f"Query '{query['name']}' contains LOOKUP JOIN - performing validation")
+            join_validation = self._validate_join_query(current_esql, indexed_datasets)
+            if not join_validation['valid']:
+                logger.warning(f"JOIN validation failed: {join_validation['error']}")
+                result.original_error = f"JOIN validation failed: {join_validation['error']}"
+
         for attempt in range(max_attempts):
             result.fix_attempts = attempt + 1
 
@@ -330,6 +338,28 @@ class QueryTestRunner:
             except Exception as e:
                 logger.warning(f"Could not format data profile: {e}")
 
+        # Add JOIN-specific guidance if this is a JOIN query
+        join_guidance = ""
+        current_esql = query.get('esql') or query.get('query') or query.get('esql_query', '')
+        if self._is_join_query(current_esql):
+            join_guidance = """
+
+**JOIN-SPECIFIC GUIDANCE:**
+This query contains a LOOKUP JOIN. Common issues:
+1. ✅ Syntax must be: `LOOKUP JOIN <index> ON <field>` or `LOOKUP JOIN <index> ON <field1> == <field2>`
+2. ✅ Use `==` for comparison, NOT `=`
+3. ✅ Include MV_EXPAND before JOIN if the source field contains comma-separated values
+4. ✅ Both indices must be indexed in 'lookup' mode
+5. ✅ Use the detected relationships from the data profile (see above) - they show which fields have matching values
+
+Example for array field:
+```
+FROM pages
+| MV_EXPAND product_refs
+| LOOKUP JOIN products ON product_refs == product_id
+```
+"""
+
         prompt = f"""Fix this ES|QL query that failed with an error.
 
 **Query Name:** {query['name']}
@@ -347,7 +377,7 @@ class QueryTestRunner:
 
 **Available Indices:**
 {json.dumps(indexed_datasets, indent=2)}
-{data_profile_text}
+{data_profile_text}{join_guidance}
 
 **ES|QL Fix Rules:**
 {esql_rules}
@@ -413,6 +443,82 @@ Corrected query:"""
             logger.warning(f"Could not read ES|QL skill: {e}")
             return self._get_minimal_esql_reference()
 
+    def _is_join_query(self, esql: str) -> bool:
+        """Check if query contains a LOOKUP JOIN
+
+        Args:
+            esql: ES|QL query string
+
+        Returns:
+            True if query contains LOOKUP JOIN
+        """
+        return bool(re.search(r'LOOKUP\s+JOIN', esql, re.IGNORECASE))
+
+    def _validate_join_query(self, esql: str, indexed_datasets: Dict) -> Dict[str, Any]:
+        """Validate LOOKUP JOIN query syntax and structure
+
+        Args:
+            esql: ES|QL query string
+            indexed_datasets: Dict of dataset name -> index name
+
+        Returns:
+            Dict with 'valid' (bool) and 'error' (str) if invalid
+        """
+        # Pattern to match LOOKUP JOIN syntax
+        # Matches: LOOKUP JOIN <index> ON <field1> [== <field2>]
+        join_pattern = r'LOOKUP\s+JOIN\s+(\w+)\s+ON\s+(\w+)(?:\s*==\s*(\w+))?'
+
+        match = re.search(join_pattern, esql, re.IGNORECASE)
+
+        if not match:
+            return {
+                'valid': False,
+                'error': 'Invalid LOOKUP JOIN syntax. Expected: LOOKUP JOIN <index> ON <field> or LOOKUP JOIN <index> ON <field1> == <field2>'
+            }
+
+        lookup_index = match.group(1)
+        left_field = match.group(2)
+        right_field = match.group(3) if match.group(3) else left_field
+
+        # Check if both JOIN keyword is present (common error: just "LOOKUP" without "JOIN")
+        if not re.search(r'LOOKUP\s+JOIN', esql, re.IGNORECASE):
+            return {
+                'valid': False,
+                'error': 'Missing JOIN keyword. Use "LOOKUP JOIN", not just "LOOKUP"'
+            }
+
+        # Check if using single = instead of ==
+        if re.search(r'ON\s+\w+\s*=\s*\w+(?!=)', esql):
+            return {
+                'valid': False,
+                'error': 'Use "==" for field comparison in LOOKUP JOIN, not "="'
+            }
+
+        # Check if lookup index exists in indexed datasets
+        if lookup_index not in indexed_datasets:
+            return {
+                'valid': False,
+                'error': f'Lookup index "{lookup_index}" not found in indexed datasets. Available: {list(indexed_datasets.keys())}'
+            }
+
+        # Provide helpful info from data profile if available
+        if self.data_profile and 'relationships' in self.data_profile:
+            relationships = self.data_profile['relationships']
+            # Find if this JOIN matches a detected relationship
+            for rel in relationships:
+                if rel['lookup_dataset'] == lookup_index:
+                    # This is a detected relationship - good!
+                    logger.info(f"JOIN matches detected relationship: {rel['source_dataset']}.{rel['source_field']} -> {rel['lookup_dataset']}.{rel['lookup_field']}")
+
+                    # Check if they're using the correct field names
+                    if left_field != rel['source_field'] or right_field != rel['lookup_field']:
+                        return {
+                            'valid': False,
+                            'error': f'Field mismatch. Detected relationship suggests: {rel["source_dataset"]}.{rel["source_field"]} == {rel["lookup_dataset"]}.{rel["lookup_field"]}, but query uses {left_field} == {right_field}'
+                        }
+
+        return {'valid': True}
+
     def _get_minimal_esql_reference(self) -> str:
         """Get minimal ES|QL reference"""
         return """
@@ -421,7 +527,8 @@ ES|QL Key Commands:
 - WHERE: Filter rows
 - EVAL: Create calculated fields
 - STATS: Aggregate with GROUP BY
-- LOOKUP JOIN: Enrich with lookup data (requires _lookup suffix)
+- LOOKUP JOIN: Enrich with lookup data (syntax: LOOKUP JOIN <index> ON <field> or ON <field1> == <field2>)
+- MV_EXPAND: Expand multi-value fields before JOIN
 - INLINESTATS: Calculate aggregates keeping all rows
 - DATE_TRUNC: Bucket timestamps
 - DATE_EXTRACT: Extract date parts (syntax: DATE_EXTRACT("part", field))

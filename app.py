@@ -810,7 +810,12 @@ def render_create_demo_view():
 
 
                         # Generate demo using modular orchestrator
-                        orchestrator = ModularDemoOrchestrator()
+                        # Pass inference endpoints from sidebar configuration
+                        inference_endpoints = st.session_state.get("inference_endpoints", {
+                            "rerank": ".rerank-v1-elasticsearch",
+                            "completion": "completion-vulcan"
+                        })
+                        orchestrator = ModularDemoOrchestrator(inference_endpoints=inference_endpoints)
 
                         # Use Path 2: Query-first strategy with LOOKUP JOIN support
                         # Generates all three query types: scripted, parameterized, and RAG
@@ -946,6 +951,125 @@ def load_demo_guide(module_name: str):
         guide_gen = loader.load_demo_guide(datasets, queries_dict['all'])
         return guide_gen.generate_guide()
     return ""
+
+@st.cache_data(ttl=3600)
+def load_demo_data_profile(module_name: str):
+    """Load data profile from demo module
+
+    Returns:
+        dict: Data profile with field statistics and sample values
+    """
+    try:
+        profile_path = Path("demos") / module_name / "data_profile.json"
+        if profile_path.exists():
+            with open(profile_path, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        logger.warning(f"Could not load data profile for {module_name}: {e}")
+    return None
+
+def get_sample_values_for_parameters(data_profile: dict, parameters: List[Dict]) -> Dict[str, List[str]]:
+    """Extract sample values from data profile for query parameters
+
+    Args:
+        data_profile: Data profile dictionary with field statistics
+        parameters: List of parameter definitions from query
+
+    Returns:
+        dict: Parameter name to list of sample values
+    """
+    if not data_profile or 'datasets' not in data_profile:
+        return {}
+
+    sample_values = {}
+
+    for param in parameters:
+        param_name = param.get('name', '')
+        param_type = param.get('type', 'string')
+
+        # Search across all datasets for matching fields
+        matches = []
+        for dataset_name, dataset_info in data_profile['datasets'].items():
+            fields = dataset_info.get('fields', {})
+
+            # Look for exact match first
+            if param_name in fields:
+                field_data = fields[param_name]
+                unique_vals = field_data.get('unique_values', [])
+                if unique_vals:
+                    matches.extend(unique_vals[:10])  # Take first 10
+            else:
+                # Look for partial match (e.g., "session_id" in "user_session_id")
+                for field_name, field_data in fields.items():
+                    if param_name in field_name or field_name in param_name:
+                        unique_vals = field_data.get('unique_values', [])
+                        if unique_vals:
+                            matches.extend(unique_vals[:10])
+
+        # Deduplicate and limit to first 5-7 unique values
+        if matches:
+            unique_matches = list(dict.fromkeys(matches))[:7]
+            sample_values[param_name] = unique_matches
+
+    return sample_values
+
+def generate_sample_question(query: Dict, param: Dict, data_profile: dict) -> str:
+    """Use LLM to generate a contextual sample question for semantic search parameters
+
+    Args:
+        query: Query definition with name, description, query text
+        param: Parameter definition with name, description, example
+        data_profile: Data profile with available fields and values
+
+    Returns:
+        str: Generated sample question
+    """
+    import anthropic
+    import os
+
+    try:
+        llm_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+
+        # Build context about available data
+        data_context = ""
+        if data_profile and 'datasets' in data_profile:
+            data_context = "Available datasets and fields:\n"
+            for dataset_name, dataset_info in data_profile['datasets'].items():
+                fields = dataset_info.get('fields', {})
+                field_names = list(fields.keys())[:10]  # First 10 fields
+                data_context += f"- {dataset_name}: {', '.join(field_names)}\n"
+
+        prompt = f"""Generate a realistic sample question for testing this ES|QL semantic search query.
+
+Query Name: {query.get('name', 'Unknown')}
+Query Description: {query.get('description', 'No description')}
+
+Parameter: {param.get('name', 'unknown')}
+Parameter Description: {param.get('description', 'Natural language question')}
+Parameter Example: {param.get('example', 'N/A')}
+
+{data_context}
+
+Generate a single, specific natural language question that:
+1. Matches the query's purpose
+2. Would return relevant results from the available data
+3. Is something a real user might ask
+
+Return ONLY the question text, no explanation or formatting."""
+
+        response = llm_client.messages.create(
+            model="claude-3-5-haiku-20241022",  # Fast, cheap model for suggestions
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        suggested_question = response.content[0].text.strip()
+        return suggested_question
+
+    except Exception as e:
+        logger.error(f"Failed to generate sample question: {e}")
+        # Fallback to example if LLM fails
+        return param.get('example', 'What is the most common issue?')
 
 def render_browse_demos_view():
     """Render the demo browsing interface - demo details only (list is in sidebar)"""
@@ -1263,35 +1387,190 @@ def render_browse_demos_view():
                                         show_pipeline_view=False  # Don't show educational view by default
                                     )
 
-                                    # Add execution capability for scripted queries
-                                    if can_execute and query_type == 'scripted':
-                                        col1, col2 = st.columns([1, 3])
-                                        with col1:
-                                            query_key = f"{query_type}_query_{i}"
-                                            if st.button("▶️ Test Query", key=f"test_{query_key}", use_container_width=True):
-                                                from src.services.elasticsearch_indexer import ElasticsearchIndexer
-                                                query_name = query.get('name', f'Query {i}')
+                                    # Add execution capability for scripted, parameterized, and RAG queries
+                                    if can_execute and query_type in ['scripted', 'parameterized', 'rag']:
+                                        query_key = f"{query_type}_query_{i}"
 
-                                                with st.spinner(f"Executing {query_name}..."):
-                                                    try:
-                                                        indexer = ElasticsearchIndexer()
-                                                        query_text = display._get_query_text(query)
-                                                        success, result, error = indexer.execute_esql(query_text)
+                                        # For parameterized and RAG queries, show parameter inputs
+                                        if query_type in ['parameterized', 'rag'] and query.get('parameters'):
+                                            with st.expander("⚙️ Test with Parameters", expanded=False):
+                                                # Load data profile for sample values
+                                                data_profile = load_demo_data_profile(st.session_state.current_demo_module)
 
-                                                        if success:
-                                                            st.success("✅ Query executed successfully!")
-                                                            # Store results in session state for display
-                                                            st.session_state[f"{query_key}_results"] = result
-                                                            st.rerun()
-                                                        else:
-                                                            st.error(f"❌ Query failed: {error}")
-                                                    except Exception as e:
-                                                        st.error(f"❌ Error: {e}")
+                                                # Show sample values from data profile if available
+                                                if data_profile:
+                                                    sample_values_dict = get_sample_values_for_parameters(
+                                                        data_profile,
+                                                        query['parameters']
+                                                    )
+
+                                                    # Show sample values if found
+                                                    if sample_values_dict:
+                                                        with st.expander("💡 Sample Values from Data Profile", expanded=False):
+                                                            st.caption("Copy these sample values to test the query with real data")
+                                                            for param_name, values in sample_values_dict.items():
+                                                                if values:
+                                                                    st.markdown(f"**{param_name}:**")
+                                                                    # Display as copyable code blocks
+                                                                    for val in values:
+                                                                        st.code(val, language=None)
+                                                            st.divider()
+
+                                                    # For parameters without sample values, offer "Suggest Question"
+                                                    params_without_values = [
+                                                        p for p in query['parameters']
+                                                        if p.get('name') not in sample_values_dict
+                                                    ]
+
+                                                    if params_without_values:
+                                                        with st.expander("💭 Generate Sample Questions (LLM)", expanded=False):
+                                                            st.caption("Use AI to generate contextual sample questions based on query purpose and available data")
+                                                            for param in params_without_values:
+                                                                param_name = param.get('name', 'unknown')
+                                                                col1, col2 = st.columns([3, 1])
+                                                                with col1:
+                                                                    st.markdown(f"**{param_name}:** {param.get('description', 'No description')}")
+                                                                with col2:
+                                                                    suggest_key = f"suggest_{query_key}_{param_name}"
+                                                                    if st.button("✨ Suggest", key=suggest_key, use_container_width=True):
+                                                                        with st.spinner("Generating suggestion..."):
+                                                                            suggested = generate_sample_question(query, param, data_profile)
+                                                                            st.session_state[f"{suggest_key}_value"] = suggested
+                                                                            st.rerun()
+
+                                                                # Show generated suggestion
+                                                                if f"{suggest_key}_value" in st.session_state:
+                                                                    st.code(st.session_state[f"{suggest_key}_value"], language=None)
+                                                            st.divider()
+
+                                                param_values = display._render_parameter_inputs(
+                                                    query['parameters'],
+                                                    unique_key=query_key
+                                                )
+
+                                                # Test button
+                                                if st.button("▶️ Test with These Parameters", key=f"test_{query_key}", use_container_width=True):
+                                                    from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                                                    query_name = query.get('name', f'Query {i}')
+
+                                                    with st.spinner(f"Executing {query_name}..."):
+                                                        try:
+                                                            # Substitute parameters into query
+                                                            query_text = display._get_query_text(query)
+                                                            substituted_query = display.substitute_parameters(query_text, param_values)
+
+                                                            # Execute
+                                                            indexer = ElasticsearchIndexer()
+                                                            success, result, error = indexer.execute_esql(substituted_query)
+
+                                                            if success:
+                                                                st.success("✅ Query executed successfully!")
+                                                                # Store results and substituted query
+                                                                st.session_state[f"{query_key}_results"] = result
+                                                                st.session_state[f"{query_key}_substituted"] = substituted_query
+                                                                st.rerun()
+                                                            else:
+                                                                st.error(f"❌ Query failed: {error}")
+                                                        except Exception as e:
+                                                            st.error(f"❌ Error: {e}")
+
+                                        # For scripted queries, simple test button
+                                        elif query_type == 'scripted':
+                                            col1, col2 = st.columns([1, 3])
+                                            with col1:
+                                                if st.button("▶️ Test Query", key=f"test_{query_key}", use_container_width=True):
+                                                    from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                                                    query_name = query.get('name', f'Query {i}')
+
+                                                    with st.spinner(f"Executing {query_name}..."):
+                                                        try:
+                                                            indexer = ElasticsearchIndexer()
+                                                            query_text = display._get_query_text(query)
+                                                            success, result, error = indexer.execute_esql(query_text)
+
+                                                            if success:
+                                                                st.success("✅ Query executed successfully!")
+                                                                # Store results in session state for display
+                                                                st.session_state[f"{query_key}_results"] = result
+                                                                st.rerun()
+                                                            else:
+                                                                st.error(f"❌ Query failed: {error}")
+                                                        except Exception as e:
+                                                            st.error(f"❌ Error: {e}")
+
+                                        # Display substituted query if available (for parameterized)
+                                        if f"{query_key}_substituted" in st.session_state:
+                                            with st.expander("📝 Executed Query (with parameters)", expanded=False):
+                                                st.code(st.session_state[f"{query_key}_substituted"], language='sql')
 
                                         # Display results if available in session state
                                         if f"{query_key}_results" in st.session_state:
                                             with st.expander("📊 Query Results", expanded=True):
                                                 display._render_query_results(st.session_state[f"{query_key}_results"], unique_key=query_key)
+
+                                            # Check if query returned zero results - offer optimization
+                                            results = st.session_state[f"{query_key}_results"]
+                                            if (query_type == 'scripted' and results and
+                                                'columns' in results and 'values' in results and
+                                                len(results['values']) == 0):
+
+                                                # Show optimize button for zero-results queries
+                                                optimize_key = f"{query_key}_optimize"
+                                                if st.button("🔧 Optimize Constraints", key=optimize_key, help="Use LLM to relax constraints and improve results"):
+                                                    with st.spinner("Analyzing constraints..."):
+                                                        try:
+                                                            # Import optimizer
+                                                            from src.services.query_optimizer import relax_query_constraints
+                                                            import anthropic
+                                                            import os
+                                                            import json
+                                                            from pathlib import Path
+
+                                                            # Get LLM client
+                                                            llm_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+
+                                                            # Load data profile from demo directory if available
+                                                            data_profile = None
+                                                            demo_module_name = st.session_state.current_demo_module
+                                                            profile_path = Path("demos") / demo_module_name / "data_profile.json"
+                                                            if profile_path.exists():
+                                                                try:
+                                                                    with open(profile_path, 'r') as f:
+                                                                        data_profile = json.load(f)
+                                                                except Exception as e:
+                                                                    st.warning(f"Could not load data profile: {e}")
+
+                                                            # Get current query
+                                                            current_esql = display._get_query_text(query)
+
+                                                            # Optimize
+                                                            optimized_esql, explanation = relax_query_constraints(
+                                                                query=query,
+                                                                current_esql=current_esql,
+                                                                data_profile=data_profile,
+                                                                llm_client=llm_client
+                                                            )
+
+                                                            # Show optimized query
+                                                            st.success(f"✅ {explanation}")
+                                                            st.code(optimized_esql, language='sql')
+
+                                                            # Offer to test the optimized query
+                                                            if st.button("▶️ Test Optimized Query", key=f"{optimize_key}_test"):
+                                                                from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                                                                try:
+                                                                    indexer = ElasticsearchIndexer()
+                                                                    success, test_results, error = indexer.execute_esql(optimized_esql)
+                                                                    if success:
+                                                                        st.session_state[f"{query_key}_results"] = test_results
+                                                                        st.success(f"Found {len(test_results.get('values', []))} results!")
+                                                                        st.rerun()
+                                                                    else:
+                                                                        st.error(f"Test failed: {error}")
+                                                                except Exception as e:
+                                                                    st.error(f"Test failed: {e}")
+                                                        except Exception as e:
+                                                            st.error(f"Optimization failed: {e}")
 
                                     # Pain point and dataset info
                                     if query.get('pain_point'):
@@ -1311,13 +1590,13 @@ def render_browse_demos_view():
 
                         with query_tabs[1]:
                             st.markdown("### Parameterized Queries")
-                            st.caption("Agent Builder ES|QL tool definitions with `?parameter` syntax. These are for Agent Builder integration (v2 feature).")
-                            render_query_list(queries_dict['parameterized'], 'parameterized', can_execute=False)
+                            st.caption("Agent Builder ES|QL tool definitions with `?parameter` syntax. You can test these by providing parameter values!")
+                            render_query_list(queries_dict['parameterized'], 'parameterized', can_execute=True)
 
                         with query_tabs[2]:
                             st.markdown("### RAG Queries")
                             st.caption("Semantic search queries using MATCH → RERANK → COMPLETION pipeline for open-ended Q&A.")
-                            render_query_list(queries_dict['rag'], 'rag', can_execute=False)
+                            render_query_list(queries_dict['rag'], 'rag', can_execute=True)
 
                     except Exception as e:
                         st.error(f"Error loading queries: {e}")
@@ -1516,6 +1795,39 @@ def main():
                                             st.error(f"❌ {deploy_msg}")
                     except Exception as e:
                         st.error(f"❌ Error: {e}")
+
+            # Inference Endpoints Configuration
+            st.markdown("---")
+            st.markdown("### ⚙️ Inference Endpoints")
+
+            # Initialize inference endpoints in session state if not exists
+            if "inference_endpoints" not in st.session_state:
+                st.session_state.inference_endpoints = {
+                    "rerank": ".rerank-v1-elasticsearch",
+                    "completion": "completion-vulcan"
+                }
+
+            # RERANK endpoint input
+            rerank_endpoint = st.text_input(
+                "RERANK Endpoint",
+                value=st.session_state.inference_endpoints["rerank"],
+                help="Inference endpoint ID for RERANK command (default: .rerank-v1-elasticsearch)",
+                key="rerank_endpoint_input"
+            )
+            st.session_state.inference_endpoints["rerank"] = rerank_endpoint
+
+            # COMPLETION endpoint input
+            completion_endpoint = st.text_input(
+                "COMPLETION Endpoint",
+                value=st.session_state.inference_endpoints["completion"],
+                help="Inference endpoint ID for COMPLETION command (default: completion-vulcan)",
+                key="completion_endpoint_input"
+            )
+            st.session_state.inference_endpoints["completion"] = completion_endpoint
+
+            # Show current values
+            st.caption(f"🔄 RERANK: `{st.session_state.inference_endpoints['rerank']}`")
+            st.caption(f"🤖 COMPLETION: `{st.session_state.inference_endpoints['completion']}`")
 
         else:  # Browse mode
             st.markdown("### 📚 Demo Modules")

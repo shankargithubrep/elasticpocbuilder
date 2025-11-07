@@ -20,9 +20,12 @@ ESQL_CRITICAL_RULES = """
 ❌ WRONG: `| MATCH field "term"` - MATCH is NOT a pipe operation
 ❌ WRONG: `MATCH(field, term)` without WHERE - MUST be inside WHERE clause
 
-### 3. RERANK Syntax (Pipe operation)
-✅ CORRECT: `| RERANK "query" ON field`
-✅ CORRECT: `| RERANK ?question ON content`
+### 3. RERANK Syntax (Pipe operation with inference endpoint)
+✅ CORRECT: `| RERANK "query" ON field WITH { "inference_id" : "rerank_endpoint" }`
+✅ CORRECT: `| RERANK ?question ON title, content WITH { "inference_id" : "my_reranker" }`
+✅ CORRECT: `| RERANK score = "search term" ON content WITH { "inference_id" : "endpoint" }`
+❌ WRONG: `| RERANK field "query"` - Missing ON keyword
+❌ WRONG: `| RERANK "query" ON field MODEL "model"` - Use WITH, not MODEL
 ❌ WRONG: `WHERE RERANK(...)` - RERANK is a pipe operation, not a WHERE clause
 
 ### 4. LOOKUP JOIN Syntax
@@ -64,6 +67,26 @@ ESQL_CRITICAL_RULES = """
 ✅ CORRECT: `DATE_TRUNC(1 hour, @timestamp)`
 ✅ CORRECT: `DATE_EXTRACT("month", @timestamp)`
 ❌ WRONG: `DATE_TRUNC(@timestamp, 1 hour)` - Wrong parameter order
+
+### 11. COMPLETION Syntax (LLM text generation)
+✅ CORRECT (9.2.0+): `| COMPLETION prompt WITH { "inference_id" : "completion_endpoint" }`
+✅ CORRECT (9.2.0+): `| COMPLETION answer = prompt WITH { "inference_id" : "gpt4_endpoint" }`
+✅ CORRECT (9.1.x): `| COMPLETION prompt WITH completion_endpoint`
+❌ WRONG: `| COMPLETION "prompt" MODEL "gpt-4"` - Use WITH, not MODEL
+❌ WRONG: `| COMPLETION prompt` - Must specify inference endpoint
+❌ WRONG: Template syntax like `{{#results}}` - Not supported in ES|QL
+⚠️ WARNING: Every row generates 1 LLM API call - always use LIMIT!
+
+**Building Prompts from Row Data:**
+- Use EVAL + CONCAT() to build prompts from field values
+- Example: `| EVAL prompt = CONCAT("Summarize: ", title, " - ", content)`
+- Cannot use template/loop syntax - ES|QL processes row by row
+
+**Best Practices:**
+1. Filter with WHERE before COMPLETION to reduce API calls
+2. Always use LIMIT (start small, like 5-10 rows)
+3. Build prompts with EVAL before COMPLETION
+4. Use MATCH → RERANK → LIMIT → COMPLETION pipeline for relevance
 """
 
 ESQL_QUERY_EXAMPLES = """
@@ -93,15 +116,31 @@ FROM customers
 | SORT total_revenue DESC
 ```
 
-### RAG Query (Semantic search)
+### RAG Query (Semantic search with MATCH → RERANK → COMPLETION)
 ```esql
 FROM knowledge_base
-| WHERE @timestamp >= NOW() - 90 days
-  AND MATCH(content, ?user_question, {"fuzziness": "AUTO"})
-| INLINESTATS relevance_score = AVG(score)
-| KEEP article_id, title, content, category
-| RERANK ?user_question ON content
+| WHERE MATCH(content, ?user_question, {"fuzziness": "AUTO"})
+| SORT _score DESC
+| LIMIT 100
+| RERANK ?user_question ON title, content WITH { "inference_id" : "rerank_endpoint" }
 | LIMIT 5
+| EVAL prompt = CONCAT(
+    "Answer this question based on the article: ",
+    ?user_question, "\n\n",
+    "Article Title: ", title, "\n",
+    "Content: ", content
+  )
+| COMPLETION answer = prompt WITH { "inference_id" : "completion_endpoint" }
+| KEEP title, content, answer, _score
+```
+
+### RAG Query (Simple MATCH only, no COMPLETION)
+```esql
+FROM knowledge_base
+| WHERE MATCH(content, ?user_question)
+| SORT _score DESC
+| LIMIT 10
+| KEEP article_id, title, content, category, _score
 ```
 
 ### FORK Query (Multiple branches)
@@ -132,7 +171,12 @@ def get_common_error_fixes():
 | "Unknown column [agents_lookup]" | Using _lookup suffix | Remove _lookup suffix |
 | "line X:Y: mismatched input ',' expecting '('" | FORK with commas | Remove commas between branches |
 | "Unknown function [MATCH]" | MATCH outside WHERE | Move MATCH inside WHERE clause |
+| "mismatched input 'MATCH' expecting" | MATCH used as pipe command | Use WHERE MATCH(field, "query") |
 | "Lookup Join requires a single lookup mode index" | Target not in lookup mode | Ensure target index is lookup mode |
 | "Unknown column [?param]" | Parameter in wrong context | Parameters only in WHERE/MATCH |
 | "cannot use [==] on unsupported" | Type mismatch | Check field types match values |
+| "Unknown command [MODEL]" | Using MODEL keyword | Use WITH { "inference_id" : "..." } |
+| "token recognition error at: '{{'" | Template syntax in query | Use EVAL + CONCAT() to build prompts |
+| "RERANK requires inference_id" | Missing WITH clause | Add WITH { "inference_id" : "..." } |
+| "COMPLETION requires inference_id" | Missing WITH clause | Add WITH { "inference_id" : "..." } |
 """
