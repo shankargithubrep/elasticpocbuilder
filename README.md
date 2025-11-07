@@ -2,7 +2,7 @@
 
 ## 🚀 Code That Writes Code That Creates Demos
 
-A revolutionary platform for Elastic Solutions Architects that uses AI to generate custom Python code for each customer, which then generates tailored demo assets. Think of it as a **factory that builds factories** - each customer gets their own demo generation system.
+A demo-aid for Elastic Solutions Architects that uses AI to generate custom Python code for each customer, which then generates tailored demo assets. 
 
 ---
 
@@ -21,14 +21,9 @@ A revolutionary platform for Elastic Solutions Architects that uses AI to genera
 
 ## What Makes This Different
 
-### Traditional Approach (Templates)
-```
-Generic Template → Fill in blanks → Same-looking demo for everyone
-```
-
 ### Demo Builder Approach (Code Generation)
 ```
-Customer Context → LLM writes custom Python code → Code generates unique assets
+Customer Context → LLM writes custom Python code → Code generates unique assets (
 ```
 
 **This is a meta-generative system**: The app doesn't create demos directly. Instead, it uses an LLM to write customer-specific Python modules that, when executed, generate all the demo materials.
@@ -379,7 +374,7 @@ The system enforces strict rules in generated code:
 - Indexer maps: `timestamp` → `@timestamp`
 
 **Data Size**:
-- Demos: 500-2000 rows max
+- Demos: 500-50k rows max
 - Fast loading (<30 seconds)
 - Realistic but not overwhelming
 
