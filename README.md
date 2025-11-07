@@ -57,6 +57,44 @@ The platform aims for working demos in a single generation cycle through:
 
 ---
 
+## Demo Types: Search vs Analytics
+
+Demo Builder supports two distinct demo types, each with specialized query strategies and data generation:
+
+### 🔍 Search/RAG Demos
+**When to use**: Document retrieval, knowledge base search, semantic search, policy lookup
+
+**Key Features**:
+- Semantic search with `MATCH`, `RERANK`, `COMPLETION` commands
+- RAG query pipelines for question-answering
+- `semantic_text` fields for vector-based search
+- Document-focused index strategy (`lookup` mode)
+
+**Example Use Cases**: Provider directory search, policy document retrieval, support ticket lookup, content discovery
+
+### 📊 Analytics Demos
+**When to use**: Metrics analysis, trends, aggregations, dashboards, reporting
+
+**Key Features**:
+- Time-series aggregations with `STATS` and `INLINESTATS`
+- Cross-dataset joins with `LOOKUP JOIN`
+- Statistical calculations and trend analysis
+- Data stream strategy for time-series data
+
+**Example Use Cases**: Engagement metrics, denial trend analysis, sales performance, customer journey analytics
+
+### How Classification Works
+
+Demo type is **automatically detected** during the conversational demo creation flow:
+- System analyzes your use case description
+- Identifies keywords (search: "find", "lookup", "retrieve" | analytics: "analyze", "trend", "metric")
+- Routes to appropriate strategy generator
+- You can also manually specify `demo_type` in configuration
+
+See `docs/RAG_SEARCH_ARCHITECTURE.md` for technical details on the dual-track architecture.
+
+---
+
 ## Quick Start
 
 ### Prerequisites

@@ -50,6 +50,53 @@ black src/ tests/ app.py
 isort src/ tests/ app.py
 ```
 
+## Demo Types: Search vs Analytics
+
+The system supports two demo types, each with specialized query strategies:
+
+### 🔍 Search/RAG Demos (`demo_type: "search"`)
+**Use For**: Document retrieval, knowledge base search, semantic search, RAG applications
+
+**Features**:
+- ES|QL Commands: `MATCH`, `MATCH_PHRASE`, `QSTR`, `RERANK`, `COMPLETION`
+- `semantic_text` fields for vector-based search
+- MATCH → RERANK → COMPLETION pipeline for RAG queries
+- Fuzzy search, phrase matching, hybrid search
+
+**Index Strategy**: Primarily `lookup` mode for document collections
+
+**Query Types**: Focus on RETRIEVING specific documents (not aggregating)
+
+**Examples**: Provider lookup, policy search, content discovery, support ticket search
+
+### 📊 Analytics Demos (`demo_type: "analytics"`)
+**Use For**: Metrics analysis, trends, aggregations, dashboards, time-series analytics
+
+**Features**:
+- ES|QL Commands: `STATS`, `INLINESTATS`, `LOOKUP JOIN`, `EVAL`, `DATE_TRUNC`
+- Time-series aggregations with `@timestamp`
+- Cross-dataset joins for enrichment
+- Statistical calculations and trend analysis
+
+**Index Strategy**:
+- `data_stream` for time-series data
+- `lookup` for reference data in JOINs
+
+**Query Types**: Focus on AGGREGATING and analyzing patterns
+
+**Examples**: Engagement metrics, denial trends, sales analysis, performance dashboards
+
+### Classification
+Demo type is **auto-detected** during conversation based on use case keywords:
+- **Search keywords**: find, retrieve, lookup, documents, knowledge base, RAG, semantic search
+- **Analytics keywords**: analyze, trend, metric, aggregate, dashboard, report, time-series
+
+The orchestrator routes to different strategy generators based on `demo_type`:
+- `SearchQueryStrategyGenerator` for search demos
+- `QueryStrategyGenerator` for analytics demos
+
+See **docs/RAG_SEARCH_ARCHITECTURE.md** for technical deep-dive.
+
 ## Key File Locations
 
 ### Main Application

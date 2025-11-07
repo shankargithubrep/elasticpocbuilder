@@ -1557,7 +1557,12 @@ This may result in field name mismatches or typos. Use extreme care with field n
 
     def _generate_config_file(self, config: Dict[str, Any], module_path: Path):
         """Generate module configuration file"""
+        # Extract demo_type to top level for visibility
+        demo_type = config.get('demo_type', 'analytics')
+
         config_data = {
+            "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+            "demo_type": demo_type,
             "module_version": "1.0.0",
             "generated_at": datetime.now().isoformat(),
             "customer_context": config,
