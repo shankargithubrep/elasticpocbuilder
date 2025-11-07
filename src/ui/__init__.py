@@ -17,6 +17,7 @@ from .context_display import display_context_summary
 from .message_processor import process_smart_message
 from .views import render_create_demo_view, render_browse_demos_view
 from .sidebar import render_sidebar
+from .module_visualizer import ModuleVisualizer
 
 __all__ = [
     'ConversationHandler',
@@ -33,5 +34,6 @@ __all__ = [
     'process_smart_message',
     'render_create_demo_view',
     'render_browse_demos_view',
-    'render_sidebar'
+    'render_sidebar',
+    'ModuleVisualizer'
 ]

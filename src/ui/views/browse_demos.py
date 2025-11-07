@@ -52,8 +52,31 @@ def render_browse_demos_view():
                         st.error(f"Error loading assets: {e}")
 
             with tabs[0]:
-                st.markdown("### Demo Configuration")
-                st.json(loader.config)
+                # Use the new ModuleVisualizer for enhanced Config display
+                try:
+                    from ..module_visualizer import ModuleVisualizer
+                    import anthropic
+                    import os
+
+                    # Get LLM client if available
+                    llm_client = None
+                    api_key = os.getenv("ANTHROPIC_API_KEY")
+                    if api_key:
+                        llm_client = anthropic.Anthropic(api_key=api_key)
+
+                    # Create and render visualizer
+                    visualizer = ModuleVisualizer(loader.module_path, llm_client)
+                    visualizer.render_module_overview()
+
+                except ImportError:
+                    # Fallback to simple JSON display if visualizer not available
+                    st.markdown("### Demo Configuration")
+                    st.json(loader.config)
+                except Exception as e:
+                    logger.warning(f"Could not render module visualization: {e}")
+                    # Fallback to simple JSON display
+                    st.markdown("### Demo Configuration")
+                    st.json(loader.config)
 
                 st.divider()
                 st.markdown("### Regenerate Assets")
@@ -178,7 +201,7 @@ def render_browse_demos_view():
                                 st.markdown(f"### {name}")
 
                                 # Action buttons
-                                col1, col2, col3 = st.columns(3)
+                                col1, col2, col3, col4 = st.columns(4)
 
                                 with col1:
                                     # Download CSV
@@ -198,6 +221,11 @@ def render_browse_demos_view():
                                         st.session_state[f"show_data_{name}"] = not st.session_state.get(f"show_data_{name}", False)
 
                                 with col3:
+                                    # Data Profile Summary button
+                                    if st.button("📊 Profile", key=f"profile_{name}", use_container_width=True):
+                                        st.session_state[f"show_profile_{name}"] = not st.session_state.get(f"show_profile_{name}", False)
+
+                                with col4:
                                     # Index in Elasticsearch button
                                     if st.button("📤 Index", key=f"index_{name}", use_container_width=True):
                                         from src.services.elasticsearch_indexer import ElasticsearchIndexer
@@ -312,6 +340,67 @@ def render_browse_demos_view():
                                 # Show semantic fields info if specified
                                 if name in semantic_fields_spec and semantic_fields_spec[name]:
                                     st.info(f"🧠 **Semantic fields:** {', '.join(semantic_fields_spec[name])}")
+
+                                # Show data profile summary if profile button was clicked
+                                if st.session_state.get(f"show_profile_{name}", False):
+                                    data_profile = load_demo_data_profile(st.session_state.current_demo_module)
+                                    if data_profile and name in data_profile.get('datasets', {}):
+                                        dataset_profile = data_profile['datasets'][name]
+
+                                        st.markdown("#### 📊 Data Profile Summary")
+
+                                        # Overview metrics
+                                        col_a, col_b, col_c = st.columns(3)
+                                        with col_a:
+                                            st.metric("Total Records", f"{dataset_profile.get('total_records', 0):,}")
+                                        with col_b:
+                                            st.metric("Total Fields", len(dataset_profile.get('fields', {})))
+                                        with col_c:
+                                            # Count numeric vs text fields
+                                            fields = dataset_profile.get('fields', {})
+                                            numeric_count = sum(1 for f in fields.values() if f.get('type') in ['int64', 'float64', 'number'])
+                                            st.metric("Numeric Fields", numeric_count)
+
+                                        st.markdown("**Field Details:**")
+
+                                        # Display field information in a clean format
+                                        for field_name, field_info in dataset_profile.get('fields', {}).items():
+                                            field_type = field_info.get('type', 'unknown')
+
+                                            with st.expander(f"🔹 {field_name} ({field_type})"):
+                                                # Show unique value count or range
+                                                if 'unique_values' in field_info:
+                                                    unique_vals = field_info['unique_values']
+                                                    if field_info.get('truncated', False):
+                                                        st.caption(f"📝 Sample values (showing {len(unique_vals)} of many):")
+                                                    else:
+                                                        st.caption(f"📝 All unique values ({len(unique_vals)}):")
+
+                                                    # Show first 10 values in columns
+                                                    display_vals = unique_vals[:10]
+                                                    if len(display_vals) <= 5:
+                                                        for val in display_vals:
+                                                            st.code(str(val), language=None)
+                                                    else:
+                                                        col_left, col_right = st.columns(2)
+                                                        mid = len(display_vals) // 2
+                                                        with col_left:
+                                                            for val in display_vals[:mid]:
+                                                                st.code(str(val), language=None)
+                                                        with col_right:
+                                                            for val in display_vals[mid:]:
+                                                                st.code(str(val), language=None)
+
+                                                    if len(unique_vals) > 10:
+                                                        st.caption(f"... and {len(unique_vals) - 10} more values")
+
+                                                elif 'range' in field_info:
+                                                    range_info = field_info['range']
+                                                    st.caption(f"📊 Range: {range_info.get('min', 'N/A')} to {range_info.get('max', 'N/A')}")
+                                                    if 'mean' in range_info:
+                                                        st.caption(f"📈 Mean: {range_info['mean']:.2f}")
+                                    else:
+                                        st.warning(f"No data profile found for dataset '{name}'")
 
                                 # Show data if view button was clicked
                                 if st.session_state.get(f"show_data_{name}", False):

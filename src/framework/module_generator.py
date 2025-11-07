@@ -447,6 +447,9 @@ Generate the complete implementation:"""
         # Get query plans for this type
         scripted_plans = [q for q in query_plan.get('query_plans', []) if q.get('query_type') == 'scripted']
 
+        # Get centralized ES|QL rules
+        esql_rules = self._get_esql_strict_rules()
+
         # Call existing method with enhanced prompt including schema
         base_prompt = f"""Generate the `generate_queries()` method for a QueryGeneratorModule.
 
@@ -484,16 +487,7 @@ queries.append({{
 }})
 ```
 
-**CRITICAL ES|QL Syntax Rules:**
-1. **LOOKUP JOIN**: Use `LOOKUP JOIN table ON field` (JOIN keyword is required)
-   Example: `| LOOKUP JOIN agents ON agent_id`
-   WRONG: `| LOOKUP agents ON agent_id` (missing JOIN keyword)
-2. **MATCH (must be in WHERE)**: `WHERE MATCH(field, "search term")`
-   WRONG: `| MATCH field "term"` (MATCH is not a pipe operation)
-3. **FORK (no commas)**: `| FORK (WHERE a == 1) (WHERE b == 2)`
-   WRONG: `| FORK (...), (...)` (NO COMMAS between branches)
-4. **Field names**: Use EXACT field names from schema above
-5. **Timeseries data**: Use @timestamp for time-based datasets
+{esql_rules}
 
 Generate ONLY the generate_queries() method with the EXACT signature above (no datasets parameter!).
 Access data via self.datasets. Use EXACT field names from the schema. ALWAYS use "type": "scripted" for ALL queries."""
@@ -505,6 +499,9 @@ Access data via self.datasets. Use EXACT field names from the schema. ALWAYS use
         """Generate parameterized queries using schema from query plan"""
         # Get query plans for this type
         param_plans = [q for q in query_plan.get('query_plans', []) if q.get('query_type') == 'parameterized']
+
+        # Get centralized ES|QL rules
+        esql_rules = self._get_esql_strict_rules()
 
         base_prompt = f"""Generate the `generate_parameterized_queries()` method for a QueryGeneratorModule.
 
@@ -543,12 +540,7 @@ queries.append({{
 }})
 ```
 
-**CRITICAL ES|QL Syntax Rules:**
-1. **LOOKUP JOIN**: Use `LOOKUP JOIN table ON field` (JOIN keyword is required)
-   Example: `| LOOKUP JOIN agents ON agent_id`
-   WRONG: `| LOOKUP agents ON agent_id` (missing JOIN keyword)
-2. **Parameters**: Use ?field syntax for parameterized values
-3. **Field names**: Use EXACT field names from schema above
+{esql_rules}
 
 Generate ONLY the generate_parameterized_queries() method with the EXACT signature above (no datasets parameter!).
 Access data via self.datasets. Use ?parameter syntax for Agent Builder tools. Use EXACT field names from schema. ALWAYS use "type": "parameterized" for ALL queries."""
@@ -563,6 +555,9 @@ Access data via self.datasets. Use ?parameter syntax for Agent Builder tools. Us
         # Get endpoint IDs for substitution in prompt
         rerank_endpoint = self.inference_endpoints['rerank']
         completion_endpoint = self.inference_endpoints['completion']
+
+        # Get centralized ES|QL rules
+        esql_rules = self._get_esql_strict_rules()
 
         base_prompt = f"""Generate the `generate_rag_queries()` method for a QueryGeneratorModule.
 
@@ -599,6 +594,8 @@ queries.append({{
     # ... other fields ...
 }})
 ```
+
+{esql_rules}
 
 **CRITICAL ES|QL Syntax Rules for RAG Queries:**
 1. **MATCH (always in WHERE clause)**:
