@@ -3,10 +3,11 @@ Query Results Display Module
 Handles visualization of actual ES|QL query results from Elasticsearch
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 import streamlit as st
 import pandas as pd
 import logging
+from code_editor import code_editor
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,9 @@ class QueryResultsDisplay:
         query: Dict[str, Any],
         results: Optional[Dict[str, Any]] = None,
         show_pipeline_view: bool = False,
-        unique_key: str = ""
-    ):
+        unique_key: str = "",
+        allow_editing: bool = False
+    ) -> Optional[str]:
         """Render a query with optional results display
 
         Args:
@@ -33,6 +35,10 @@ class QueryResultsDisplay:
             results: Optional results from Elasticsearch execution
             show_pipeline_view: If True, show educational data pipeline view
             unique_key: Unique key for Streamlit widgets
+            allow_editing: If True, render query as editable code editor with SQL syntax highlighting
+
+        Returns:
+            If allow_editing=True, returns the edited query text. Otherwise returns None.
         """
         # Query name and type
         query_name = query.get('name', 'Untitled Query')
@@ -59,9 +65,28 @@ class QueryResultsDisplay:
             tab_pipeline = None
 
         # Clean ES|QL query view
+        edited_query = None
         with tab_clean:
             query_text = self._get_query_text(query)
-            st.code(query_text, language='sql')
+
+            if allow_editing:
+                # Use code editor for editable queries with SQL syntax highlighting
+                editor_response = code_editor(
+                    code=query_text,
+                    lang="sql",
+                    height=[10, 30],  # Min/max height
+                    allow_reset=True,
+                    key=f"code_editor_{unique_key}"
+                )
+
+                # Extract edited text from response
+                if editor_response and 'text' in editor_response:
+                    edited_query = editor_response['text']
+                else:
+                    edited_query = query_text
+            else:
+                # Use read-only code display
+                st.code(query_text, language='sql')
 
             # Show parameters if they exist
             if query.get('parameters'):
@@ -76,6 +101,9 @@ class QueryResultsDisplay:
         if show_pipeline_view and tab_pipeline:
             with tab_pipeline:
                 self._render_pipeline_view(query, results)
+
+        # Return edited query if editing is enabled
+        return edited_query if allow_editing else None
 
     def _render_query_type_badge(self, query_type: str):
         """Render a badge showing the query type"""

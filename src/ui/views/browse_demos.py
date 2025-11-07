@@ -29,14 +29,38 @@ def render_browse_demos_view():
         loader = manager.get_module(st.session_state.current_demo_module)
 
         if loader:
+            # Create tabs FIRST to prevent resets
             tabs = st.tabs(["📋 Config", "🗂️ Data", "🔍 Queries", "📝 Guide", "💬 Conversation"])
 
-            with tabs[0]:
-                st.markdown("### Generate Demo Assets")
-                st.info("⚠️ **Generation may take 5-20 minutes** — Page will appear frozen. Data: 80-90% | Queries: 5-10% | Guide: 5-10%")
+            # Auto-load assets when demo is selected (after tabs are created)
+            # Use a session state key specific to this demo to track if we've loaded
+            assets_key = f"assets_loaded_{st.session_state.current_demo_module}"
 
-                if st.button("🚀 Generate Assets", use_container_width=True):
-                    with st.spinner("Generating demo assets..."):
+            if not st.session_state.get(assets_key, False):
+                with st.spinner("Loading demo assets..."):
+                    try:
+                        # Load all assets
+                        datasets = load_demo_datasets(st.session_state.current_demo_module)
+                        queries = load_demo_queries(st.session_state.current_demo_module)
+                        guide = load_demo_guide(st.session_state.current_demo_module)
+
+                        # Mark assets as loaded for this specific demo
+                        st.session_state[assets_key] = True
+                        st.session_state.assets_generated = True  # Keep for backwards compatibility
+                    except Exception as e:
+                        logger.error(f"Error auto-loading assets: {e}")
+                        st.error(f"Error loading assets: {e}")
+
+            with tabs[0]:
+                st.markdown("### Demo Configuration")
+                st.json(loader.config)
+
+                st.divider()
+                st.markdown("### Regenerate Assets")
+                st.caption("Force regeneration of datasets, queries, and guide")
+
+                if st.button("🔄 Regenerate Assets", use_container_width=True):
+                    with st.spinner("Regenerating demo assets..."):
                         try:
                             # Force regeneration by clearing cache and loading
                             load_demo_datasets.clear()
@@ -48,19 +72,16 @@ def render_browse_demos_view():
                             queries = load_demo_queries(st.session_state.current_demo_module)
                             guide = load_demo_guide(st.session_state.current_demo_module)
 
-                            # Mark assets as generated
+                            # Mark assets as regenerated
+                            st.session_state[assets_key] = True
                             st.session_state.assets_generated = True
 
-                            st.success(f"✅ Generated {len(datasets)} datasets, {len(queries)} queries, and demo guide!")
+                            st.success(f"✅ Regenerated {len(datasets)} datasets, {len(queries)} queries, and demo guide!")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Error generating assets: {e}")
+                            st.error(f"Error regenerating assets: {e}")
                             import traceback
                             st.code(traceback.format_exc())
-
-                st.divider()
-                st.markdown("### Demo Configuration")
-                st.json(loader.config)
 
             with tabs[1]:
                 # Only load if assets have been generated
@@ -321,22 +342,144 @@ def render_browse_demos_view():
                             f"🤖 RAG ({len(queries_dict['rag'])})"
                         ])
 
+
                         # Initialize QueryResultsDisplay for clean rendering
                         display = QueryResultsDisplay()
+
+                        # Initialize edit mode state
+                        if "query_edit_mode" not in st.session_state:
+                            st.session_state.query_edit_mode = {}
 
                         # Helper function to render queries using the new display module
                         def render_query_list(queries, query_type, can_execute=True):
                             if queries:
                                 for i, query in enumerate(queries, 1):
-                                    # Use the new QueryResultsDisplay for clean rendering
+                                    query_key = f"{query_type}_query_{i}"
+                                    original_query = display._get_query_text(query)
+
+                                    # Add anchor for scroll position
+                                    st.markdown(f'<div id="{query_key}"></div>', unsafe_allow_html=True)
+
+                                    # Always show query metadata/title first
                                     display.render_query_with_results(
                                         query,
-                                        results=None,  # No results by default - clean queries only
-                                        show_pipeline_view=False  # Don't show educational view by default
+                                        results=None,
+                                        show_pipeline_view=False,
+                                        unique_key=query_key,
+                                        allow_editing=False
                                     )
 
+                                    # Check if query has temp edits
+                                    temp_editor_key = f"temp_editor_{query_key}"
+                                    current_query = st.session_state.get(temp_editor_key, original_query)
+
+                                    # Check edit mode state - read from widget key in session_state
+                                    edit_toggle_key = f"edit_toggle_{query_key}"
+
+                                    # CRITICAL: Check if we just tested this query - preserve edit mode
+                                    just_tested_key = f"{query_key}_just_tested"
+                                    if just_tested_key in st.session_state:
+                                        # We just executed a test, ensure checkbox stays checked
+                                        st.session_state[edit_toggle_key] = True
+                                        del st.session_state[just_tested_key]
+
+                                    is_editing = st.session_state.get(edit_toggle_key, False)
+
+                                    # Debug: show edit state
+                                    st.caption(f"🔍 DEBUG: is_editing={is_editing}, toggle_key={edit_toggle_key}")
+
+                                    if is_editing:
+                                        # Show editor mode with text_area
+                                        st.markdown("---")
+                                        st.markdown("**✏️ Edit Mode**")
+
+                                        # Add JavaScript to scroll to this query
+                                        st.markdown(f"""
+                                        <script>
+                                        setTimeout(function() {{
+                                            var element = document.getElementById('{query_key}');
+                                            if (element) {{
+                                                element.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+                                            }}
+                                        }}, 100);
+                                        </script>
+                                        """, unsafe_allow_html=True)
+
+                                        # Add custom CSS for larger monospace font in text_area
+                                        st.markdown("""
+                                        <style>
+                                        textarea {
+                                            font-family: 'Courier New', Courier, monospace !important;
+                                            font-size: 16px !important;
+                                            line-height: 1.5 !important;
+                                        }
+                                        </style>
+                                        """, unsafe_allow_html=True)
+
+                                        # Use text_area for editing
+                                        edited_query = st.text_area(
+                                            "Edit your ES|QL query:",
+                                            value=current_query,
+                                            height=300,
+                                            key=f"editor_{query_key}",
+                                            label_visibility="collapsed"
+                                        )
+
+                                        # Show status
+                                        if edited_query != original_query:
+                                            st.info(f"✏️ Query modified ({len(edited_query)} characters)")
+                                        else:
+                                            st.caption(f"Original query ({len(edited_query)} characters)")
+
+                                        # Store the edited query content to preserve it across reruns
+                                        if edited_query != current_query:
+                                            st.session_state[temp_editor_key] = edited_query
+
+                                        # Button for edit mode
+                                        if st.button("▶️ Test This Query", key=f"test_edit_{query_key}", use_container_width=True):
+                                            # Use the edited_query directly from text_area
+                                            if edited_query and edited_query.strip():
+                                                from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                                                try:
+                                                    # Store the query being tested
+                                                    st.session_state[temp_editor_key] = edited_query
+
+                                                    # CRITICAL: Set flag to preserve edit mode on next render
+                                                    st.session_state[just_tested_key] = True
+
+                                                    indexer = ElasticsearchIndexer()
+                                                    success, result, error = indexer.execute_esql(edited_query)
+
+                                                    if success:
+                                                        st.session_state[f"{query_key}_results"] = result
+                                                        st.session_state[f"{query_key}_test_success"] = True
+                                                        # Don't call st.rerun() to avoid checkbox reset
+                                                    else:
+                                                        st.session_state[f"{query_key}_test_error"] = error
+                                                except Exception as e:
+                                                    st.session_state[f"{query_key}_test_error"] = str(e)
+                                            else:
+                                                st.session_state[f"{query_key}_test_error"] = "No query content in editor"
+
+                                        # Display success/error messages (keep them in session state)
+                                        if f"{query_key}_test_success" in st.session_state:
+                                            results = st.session_state.get(f"{query_key}_results", {})
+                                            st.success(f"✅ Query executed! {len(results.get('values', []))} rows returned")
+                                            # Don't delete - let it persist
+
+                                        if f"{query_key}_test_error" in st.session_state:
+                                            st.error(f"❌ {st.session_state[f'{query_key}_test_error']}")
+                                            # Don't delete - let it persist
+
+                                        # Display results if available (in edit mode)
+                                        if f"{query_key}_results" in st.session_state:
+                                            st.divider()
+                                            st.markdown("### 📊 Query Results")
+                                            display._render_query_results(st.session_state[f"{query_key}_results"], unique_key=f"edit_{query_key}")
+
                                     # Add execution capability for scripted, parameterized, and RAG queries
-                                    if can_execute and query_type in ['scripted', 'parameterized', 'rag']:
+                                    # Only show these buttons when NOT in edit mode
+                                    if not is_editing and can_execute and query_type in ['scripted', 'parameterized', 'rag']:
                                         query_key = f"{query_type}_query_{i}"
 
                                         # For parameterized and RAG queries, show parameter inputs
@@ -384,7 +527,7 @@ def render_browse_demos_view():
                                                                         with st.spinner("Generating suggestion..."):
                                                                             suggested = generate_sample_question(query, param, data_profile)
                                                                             st.session_state[f"{suggest_key}_value"] = suggested
-                                                                            st.rerun()
+                                                                            # Note: Not calling st.rerun() to avoid tab reset
 
                                                                 # Show generated suggestion
                                                                 if f"{suggest_key}_value" in st.session_state:
@@ -396,35 +539,52 @@ def render_browse_demos_view():
                                                     unique_key=query_key
                                                 )
 
-                                                # Test button
-                                                if st.button("▶️ Test with These Parameters", key=f"test_{query_key}", use_container_width=True):
-                                                    from src.services.elasticsearch_indexer import ElasticsearchIndexer
-                                                    query_name = query.get('name', f'Query {i}')
+                                                # Test and Edit buttons
+                                                col1, col2 = st.columns([1, 1])
+                                                with col1:
+                                                    if st.button("▶️ Test with These Parameters", key=f"test_{query_key}", use_container_width=True):
+                                                        from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                                                        query_name = query.get('name', f'Query {i}')
 
-                                                    with st.spinner(f"Executing {query_name}..."):
-                                                        try:
-                                                            # Substitute parameters into query
-                                                            query_text = display._get_query_text(query)
-                                                            substituted_query = display.substitute_parameters(query_text, param_values)
+                                                        with st.spinner(f"Executing {query_name}..."):
+                                                            try:
+                                                                # Check if we're in edit mode and have temp editor content
+                                                                temp_editor_key = f"temp_editor_{query_key}"
+                                                                if temp_editor_key in st.session_state:
+                                                                    # Use current editor content
+                                                                    query_text = st.session_state[temp_editor_key]
+                                                                else:
+                                                                    # Use original query
+                                                                    query_text = display._get_query_text(query)
 
-                                                            # Execute
-                                                            indexer = ElasticsearchIndexer()
-                                                            success, result, error = indexer.execute_esql(substituted_query)
+                                                                # Substitute parameters into query
+                                                                substituted_query = display.substitute_parameters(query_text, param_values)
 
-                                                            if success:
-                                                                st.success("✅ Query executed successfully!")
-                                                                # Store results and substituted query
-                                                                st.session_state[f"{query_key}_results"] = result
-                                                                st.session_state[f"{query_key}_substituted"] = substituted_query
-                                                                st.rerun()
-                                                            else:
-                                                                st.error(f"❌ Query failed: {error}")
-                                                        except Exception as e:
-                                                            st.error(f"❌ Error: {e}")
+                                                                # Execute
+                                                                indexer = ElasticsearchIndexer()
+                                                                success, result, error = indexer.execute_esql(substituted_query)
+
+                                                                if success:
+                                                                    st.success("✅ Query executed successfully!")
+                                                                    # Store results and substituted query
+                                                                    st.session_state[f"{query_key}_results"] = result
+                                                                    st.session_state[f"{query_key}_substituted"] = substituted_query
+                                                                    # Note: Not calling st.rerun() to avoid tab reset
+                                                                else:
+                                                                    st.error(f"❌ Query failed: {error}")
+                                                            except Exception as e:
+                                                                st.error(f"❌ Error: {e}")
+
+                                                with col2:
+                                                    # Edit mode checkbox - let Streamlit manage state via key
+                                                    st.checkbox(
+                                                        "✏️ Edit Query",
+                                                        key=f"edit_toggle_{query_key}"
+                                                    )
 
                                         # For scripted queries, simple test button
                                         elif query_type == 'scripted':
-                                            col1, col2 = st.columns([1, 3])
+                                            col1, col2, col3 = st.columns([1, 1, 2])
                                             with col1:
                                                 if st.button("▶️ Test Query", key=f"test_{query_key}", use_container_width=True):
                                                     from src.services.elasticsearch_indexer import ElasticsearchIndexer
@@ -433,18 +593,41 @@ def render_browse_demos_view():
                                                     with st.spinner(f"Executing {query_name}..."):
                                                         try:
                                                             indexer = ElasticsearchIndexer()
-                                                            query_text = display._get_query_text(query)
+
+                                                            # Check if we're in edit mode and have temp editor content
+                                                            temp_editor_key = f"temp_editor_{query_key}"
+                                                            if temp_editor_key in st.session_state and st.session_state[temp_editor_key]:
+                                                                # Use current editor content
+                                                                query_text = st.session_state[temp_editor_key]
+                                                                st.info(f"Using edited query ({len(query_text)} chars)")
+                                                            else:
+                                                                # Use original query
+                                                                query_text = display._get_query_text(query)
+                                                                st.info(f"Using original query ({len(query_text)} chars)")
+
+                                                            if not query_text or not query_text.strip():
+                                                                st.error("❌ Query is empty!")
+                                                                st.stop()
+
                                                             success, result, error = indexer.execute_esql(query_text)
 
                                                             if success:
                                                                 st.success("✅ Query executed successfully!")
                                                                 # Store results in session state for display
                                                                 st.session_state[f"{query_key}_results"] = result
-                                                                st.rerun()
+                                                                # Note: Not calling st.rerun() to avoid tab reset
+                                                                # Results will display below automatically
                                                             else:
                                                                 st.error(f"❌ Query failed: {error}")
                                                         except Exception as e:
                                                             st.error(f"❌ Error: {e}")
+
+                                            with col2:
+                                                # Edit mode checkbox - let Streamlit manage state via key
+                                                st.checkbox(
+                                                    "✏️ Edit Query",
+                                                    key=f"edit_toggle_{query_key}"
+                                                )
 
                                         # Display substituted query if available (for parameterized)
                                         if f"{query_key}_substituted" in st.session_state:
