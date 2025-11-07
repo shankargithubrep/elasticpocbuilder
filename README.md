@@ -1,122 +1,59 @@
-# Demo Builder: Meta-Generative Demo Platform
+# Demo Builder: LLM-Powered Demo Generation Platform
 
-## 🚀 Code That Writes Code That Creates Demos
-
-A demo-aid for Elastic Solutions Architects that uses AI to generate custom Python code for each customer, which then generates tailored demo assets. 
+An AI-powered platform for Elastic Solutions Architects that generates custom Python code modules to create customer-specific demo assets. Each demo is built through a sophisticated planning process that aligns ES|QL queries with business intent, then designs data generation to support those queries.
 
 ---
 
-## 📋 Table of Contents
+## Overview
 
-- [What Makes This Different](#what-makes-this-different)
-- [How It Works](#how-it-works)
-- [Quick Start](#quick-start)
-- [Architecture](#architecture)
-- [Generated Modules](#generated-modules)
-- [Testing & Validation](#testing--validation)
-- [Documentation](#documentation)
-- [Project Structure](#project-structure)
+Demo Builder uses LLM code generation to create custom Python modules for each customer. These modules generate synthetic data, ES|QL queries, and demo narratives tailored to specific business contexts. The platform emphasizes query-first planning, where business intent drives query design, which then informs data generation strategy.
+
+### Key Approach
+
+```
+Customer Context → Query Planning → Data Generation Design → Asset Creation
+```
+
+Rather than filling templates, the system generates working Python code that implements customer-specific business logic. Each generated module is a standalone package that can be version-controlled, shared, and refined.
 
 ---
 
-## What Makes This Different
+## Core Capabilities
 
-### Demo Builder Approach (Code Generation)
-```
-Customer Context → LLM writes custom Python code → Code generates unique assets (
-```
+### Intent-Driven Query Planning
 
-**This is a meta-generative system**: The app doesn't create demos directly. Instead, it uses an LLM to write customer-specific Python modules that, when executed, generate all the demo materials.
+The system analyzes customer pain points and business questions to plan ES|QL queries before generating any data:
 
----
+1. **Intent Analysis**: Extracts business questions from customer context
+2. **Query Strategy**: Plans query types (scripted, parameterized, RAG) based on use cases
+3. **Data Requirements**: Designs datasets that support planned queries
+4. **Implementation**: Generates Python modules that create aligned data and queries
 
-## How It Works
+This ensures queries answer real business questions with data structured to support those answers.
 
-### The Three-Level Architecture
+### One-Shot Build Process
 
-#### Level 1: The Main App (User Interface)
-**Location**: `app.py` + `src/framework/`
+The platform aims for working demos in a single generation cycle through:
 
-Takes your natural language description and extracts structured context:
-- Company name, department, industry
-- Pain points and use cases
-- Scale and metrics
-- Business challenges
+- **Pre-validation**: Syntax checking with automatic error correction
+- **Query Testing**: Optional Elasticsearch execution with result validation
+- **Constraint Optimization**: LLM-assisted query refinement for zero-result queries
+- **Interactive Editing**: Browser-based query modification and testing
 
-**Example Input**:
-```
-"Bass Pro Shops, Product Management team, struggling with slow
-reporting on fishing category performance across regions"
-```
+### Query Development Tools
 
----
+**Browse View Features**:
+- Edit queries directly in the browser with syntax highlighting
+- Test modified queries against indexed data
+- View results inline without saving changes
+- Parameter testing with sample values from data profiles
+- LLM-powered constraint relaxation for failed queries
 
-#### Level 2: Code Generation (The Factory Builder)
-**Location**: `src/framework/module_generator.py`
-
-The app uses Claude to **write three Python modules** specific to your customer:
-
-**1. data_generator.py** - Python code that creates realistic sample data
-```python
-# Not static data, but the RECIPE to generate it
-class BassProShopsDataGenerator(DataGeneratorModule):
-    def generate_datasets(self):
-        # Business logic specific to outdoor retail
-        products = pd.DataFrame({
-            'category': ['fishing_rods', 'reels', 'tackle', ...],
-            'price': np.random.uniform(15, 500, 1500),
-            'timestamp': pd.date_range(end=datetime.now(), periods=2000, freq='h')
-        })
-        # Returns realistic data with proper relationships
-```
-
-**2. query_generator.py** - Python code that creates ES|QL queries
-```python
-# Not the queries themselves, but code that produces them
-class BassProShopsQueryGenerator(QueryGeneratorModule):
-    def generate_queries(self):
-        return [{
-            'name': 'Regional Fishing Gear Performance',
-            'esql': 'FROM product_sales | WHERE @timestamp > NOW() - 90 days...',
-            'expected_insight': 'Top-selling fishing categories by region'
-        }]
-```
-
-**3. demo_guide.py** - Python code that creates the demo narrative
-```python
-# Industry-specific talk tracks and objection handling
-class BassProShopsDemoGuide(DemoGuideModule):
-    def get_talk_track(self):
-        return {
-            'opening': 'I know outdoor retail has unique seasonality challenges...',
-            'objections': {...}
-        }
-```
-
-**Key Insight**: The LLM writes working Python code that implements these requirements, not just fills in templates.
-
----
-
-#### Level 3: Asset Generation (The Small Factory)
-**Location**: `demos/bass_pro_shops_product_management_20251029_214937/`
-
-When you execute the generated modules, they produce:
-
-1. **Datasets** (CSV files + Elasticsearch indices)
-   - 1,500 fishing products with realistic prices
-   - 2,000 sales transactions over 90 days
-   - Proper relationships between tables
-   - Timestamps that work with ES|QL queries
-
-2. **ES|QL Queries** (JSON configuration)
-   - 6-8 queries of progressive complexity
-   - Answers to their specific business questions
-   - Pre-tested against real Elasticsearch
-
-3. **Demo Guide** (Markdown document)
-   - Opening hook referencing their pain points
-   - Industry-specific objection responses
-   - Step-by-step demo flow
+**Testing Support**:
+- Execute queries against real Elasticsearch clusters
+- Automatic retry with LLM-based error fixing (up to 3 attempts)
+- Sample value extraction from data profiles
+- Parameterized query testing interface
 
 ---
 
@@ -131,213 +68,165 @@ When you execute the generated modules, they produce:
 ### Installation
 
 ```bash
-# Clone and setup
+# Clone repository
 git clone https://github.com/elastic/demo-builder.git
 cd demo-builder
 
-# Create virtual environment
+# Setup environment
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Configure environment
+# Configure credentials
 cp .env.example .env
-# Edit .env with your credentials:
-#   - ELASTIC_ENDPOINT or ELASTICSEARCH_CLOUD_ID
-#   - ELASTIC_API_KEY or ELASTICSEARCH_API_KEY
-#   - ANTHROPIC_API_KEY
+# Edit .env with your API keys
 ```
 
-### Start the App
+### Start Application
 
 ```bash
 source venv/bin/activate
 streamlit run app.py
 ```
 
-The app opens at `http://localhost:8501`
+Access at `http://localhost:8501`
 
 ---
 
-### Creating Your First Demo
+## Generation Process
 
-**1. Provide Customer Context (Create Demo Mode)**
+### 1. Context Extraction
 
-Paste a customer description or click "Use Test Prompt":
+Provide customer information in natural language:
+
 ```
 Bass Pro Shops needs to analyze fishing gear sales performance
-across their regional stores. Product management team struggles
-with slow SQL reporting on 50K daily transactions.
+across regional stores. Product management team struggles with
+slow SQL reporting on 50K daily transactions.
 ```
 
-Watch the sidebar extract:
+System extracts:
 - Company: Bass Pro Shops
 - Department: Product Management
 - Pain Points: Slow reporting
-- Scale: 50K daily transactions
+- Scale: 50K transactions/day
+- Industry: Retail
 
-**2. Generate the Demo Module**
+### 2. Query Strategy Planning
 
-When context reaches ≥50%, type: **"Generate demo"**
+LLM analyzes business questions and plans query approach:
 
-The system:
-- Sends detailed prompts to Claude
-- Gets back working Python code
-- Validates syntax (auto-fixes errors)
-- Saves to `demos/bass_pro_shops_product_management_20251029_214937/`
-
-**3. Assets Are Generated**
-
-The generated Python modules create:
-- `product_catalog.csv` (1,500 products)
-- `product_sales.csv` (2,000 transactions)
-- `queries.json` (6 ES|QL queries)
-- `demo_guide.md` (customized narrative)
-
-**4. Index and Test (Optional)**
-
-Click "Index in Elasticsearch" to:
-- Upload data to your cluster
-- Execute queries against real data
-- Auto-fix any failing queries (up to 3 attempts)
-- Get `query_testing_results.json` report
-
-**5. Browse and Share**
-
-Switch to "Browse Demos" mode to:
-- View all generated modules
-- Inspect datasets and queries
-- Delete or customize modules
-- Share with teammates (Git-tracked)
-
----
-
-## Architecture
-
-### System Flow
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ LEVEL 1: User Interface (app.py)                            │
-│ ─────────────────────────────────────────────────────────── │
-│ Input: "Bass Pro Shops product team needs sales analytics"  │
-│ Extract: company, department, pain points, scale            │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│ LEVEL 2: Code Generation (module_generator.py)              │
-│ ─────────────────────────────────────────────────────────── │
-│ LLM Prompt: "Generate Python for Bass Pro Shops..."         │
-│ LLM Response: Complete Python modules (3 files)             │
-│ Validation: Syntax checking + auto-fix                      │
-│ Output: demos/bass_pro_*/[data|query|guide]_generator.py    │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│ LEVEL 3: Asset Generation (generated modules)               │
-│ ─────────────────────────────────────────────────────────── │
-│ Execute: data_generator.generate_datasets()                 │
-│ Creates: product_catalog.csv, product_sales.csv             │
-│ Execute: query_generator.generate_queries()                 │
-│ Creates: queries.json (6-8 ES|QL queries)                   │
-│ Execute: demo_guide.generate_guide()                        │
-│ Creates: demo_guide.md (narrative + talk track)             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Core Components
-
-| Component | Role | Technology |
-|-----------|------|------------|
-| `app.py` | User interface and orchestration | Streamlit |
-| `module_generator.py` | LLM-powered code generation | Claude (Anthropic) |
-| `module_loader.py` | Dynamic Python module execution | importlib |
-| `elasticsearch_indexer.py` | Data upload and validation | Elasticsearch Python client |
-| `data_generator.py` | Generated: Creates sample data | Pandas, NumPy |
-| `query_generator.py` | Generated: Creates ES\|QL queries | Custom business logic |
-| `demo_guide.py` | Generated: Creates demo script | Markdown generation |
-
----
-
-## Generated Modules
-
-Each customer gets a standalone Python package:
-
-```
-demos/bass_pro_shops_product_management_20251029_214937/
-├── config.json              # Customer context metadata
-├── data_generator.py        # Custom data generation code
-├── query_generator.py       # Custom ES|QL queries
-├── demo_guide.py            # Demo narrative and talk track
-├── data/                    # Generated static files
-│   ├── product_catalog.csv
-│   └── product_sales.csv
-├── queries.json             # Compiled queries
-└── query_testing_results.json  # Validation report
-```
-
-### Key Features of Generated Modules
-
-**1. Customization**
-- Edit Python files to tweak behavior
-- Add industry-specific patterns
-- Refine queries for specific use cases
-
-**2. Reusability**
-- Share entire module folders with team
-- Build a library of industry templates
-- Version control in Git
-
-**3. Reproducibility**
-- Regenerate assets anytime
-- Consistent results across machines
-- No manual data preparation
-
----
-
-## Testing & Validation
-
-### Module Validation (Level 2)
-
-After code generation:
-```python
-# Automatic syntax checking
-py_compile.compile('data_generator.py')  # ✅ or auto-fix
-
-# Up to 3 fix attempts per module
-if syntax_error:
-    send_to_llm("Fix this Python error: ...")
-```
-
-Results saved to `config.json`:
+**Query Strategy Document** (`query_strategy.json`):
 ```json
 {
-  "module_validation": {
-    "data_generator_valid": true,
-    "query_generator_valid": true,
-    "syntax_fixes_applied": 2
-  }
+  "business_intent": [
+    "Identify top-selling products by region",
+    "Track seasonal patterns in fishing categories"
+  ],
+  "query_types": {
+    "scripted": ["regional_performance", "seasonal_trends"],
+    "parameterized": ["product_lookup", "category_filter"],
+    "rag": ["ask_about_sales"]
+  },
+  "datasets": [
+    {
+      "name": "product_catalog",
+      "type": "reference",
+      "purpose": "Support product lookups and JOINs",
+      "fields": ["product_id", "category", "price"]
+    },
+    {
+      "name": "sales_transactions",
+      "type": "timeseries",
+      "purpose": "Analyze temporal sales patterns",
+      "fields": ["@timestamp", "product_id", "region", "revenue"]
+    }
+  ]
 }
 ```
 
-### Query Testing (Level 3)
+### 3. Data Generation Design
 
-Optional real Elasticsearch testing:
+LLM generates Python code that creates data supporting the planned queries:
+
+**Generated Module** (`data_generator.py`):
+```python
+class BassProShopsDataGenerator(DataGeneratorModule):
+    def generate_datasets(self):
+        # Reference data for JOINs
+        products = pd.DataFrame({
+            'product_id': range(1, 1501),
+            'category': self._assign_categories(),  # fishing_rods, reels, tackle
+            'price': np.random.uniform(15, 500, 1500)
+        })
+
+        # Time-series data for analytics
+        sales = pd.DataFrame({
+            'timestamp': pd.date_range(end=datetime.now(), periods=2000, freq='h'),
+            'product_id': np.random.choice(products['product_id'], 2000),
+            'region': np.random.choice(['Northeast', 'South', 'Midwest'], 2000),
+            'revenue': self._calculate_revenue(...)
+        })
+
+        return {'products': products, 'sales': sales}
+```
+
+### 4. Query Implementation
+
+LLM generates queries aligned with business intent and data structure:
+
+**Generated Module** (`query_generator.py`):
+```python
+class BassProShopsQueryGenerator(QueryGeneratorModule):
+    def generate_queries(self):
+        return [
+            {
+                'name': 'Regional Sales Performance',
+                'type': 'scripted',
+                'esql': '''
+                    FROM sales_transactions
+                    | WHERE @timestamp > NOW() - 90 days
+                    | STATS revenue = SUM(revenue) BY region
+                    | SORT revenue DESC
+                ''',
+                'purpose': 'Identify highest-revenue regions'
+            },
+            {
+                'name': 'Product Lookup',
+                'type': 'parameterized',
+                'esql': '''
+                    FROM product_catalog
+                    | WHERE product_id == ?product_id
+                ''',
+                'parameters': [{
+                    'name': 'product_id',
+                    'type': 'integer',
+                    'description': 'Product identifier'
+                }]
+            }
+        ]
+```
+
+---
+
+## Query Testing & Refinement
+
+### Automated Testing
+
+After generation, optionally test queries against real Elasticsearch:
+
 ```python
 # 1. Index generated data
-indexer.index_dataset(df, 'product_sales')
+indexer.index_dataset(products_df, 'product_catalog')
+indexer.index_dataset(sales_df, 'sales_transactions')
 
 # 2. Execute each query
 for query in queries:
     result = es_client.query(query['esql'])
 
-# 3. Auto-fix failures
+# 3. Auto-fix failures with LLM assistance
 if error:
-    fixed_query = llm.fix_query(query, error)
+    fixed_query = llm.fix_query(query, error, data_profile)
     retry(fixed_query)  # Up to 3 attempts
 ```
 
@@ -345,181 +234,161 @@ Results saved to `query_testing_results.json`:
 ```json
 {
   "total_queries": 6,
-  "successfully_fixed": 5,
-  "needs_manual_fix": 1,
+  "passed": 4,
+  "fixed": 1,
+  "failed": 1,
   "queries": [
     {
       "name": "Regional Performance",
-      "was_fixed": true,
-      "fix_attempts": 2,
+      "status": "fixed",
+      "attempts": 2,
       "original_error": "Unknown field: timestamp",
-      "final_query": "... @timestamp ..."
+      "fix_applied": "Changed to @timestamp"
     }
   ]
 }
 ```
 
-### Critical Constraints
+### Interactive Query Editing
 
-The system enforces strict rules in generated code:
+**Browse View Capabilities**:
 
-**Time Boundaries**:
-- Data spans 0-120 days from today
-- Never generate old dates (2023) or future dates
-- Use `pd.date_range(end=datetime.now(), periods=N)`
+- **Edit Mode**: Click "Edit Query" checkbox to modify any query
+- **Test Execution**: Run modified queries without saving to disk
+- **Result Display**: View query results inline below editor
+- **Parameter Testing**: Test parameterized queries with sample values
+- **Constraint Optimization**: LLM suggests relaxed constraints for zero-result queries
 
-**Field Naming**:
-- Elasticsearch field: `@timestamp`
-- DataFrame column: `timestamp`
-- Indexer maps: `timestamp` → `@timestamp`
+**Example Workflow**:
+1. Navigate to Browse Demos → Queries tab
+2. Check "Edit Query" on any query
+3. Modify ES|QL in text editor
+4. Click "Test This Query"
+5. View results below editor
+6. Iterate until satisfied
 
-**Data Size**:
-- Demos: 500-50k rows max
-- Fast loading (<30 seconds)
-- Realistic but not overwhelming
+### Zero-Results Optimization
 
-**Relationships**:
-- Lookup tables: `index.mode: lookup`
-- JOIN-compatible field types
-- Proper foreign key references
+When queries return no results, the system can automatically suggest fixes:
 
----
-
-## Documentation
-
-### Core Guides
-- [Modular Architecture](docs/MODULAR_ARCHITECTURE.md) - System design
-- [Quick Start Guide](docs/QUICK_START_GUIDE.md) - Detailed walkthrough
-- [Developer Guide](docs/DEVELOPER_GUIDE.md) - Extending the platform
-- [API Reference](docs/API_REFERENCE.md) - Service documentation
-
-### Technical Docs
-- [Elasticsearch Indexing](docs/ELASTICSEARCH_INDEXING_IMPLEMENTATION.md) - Indexer details
-- [ES|QL Skills](docs/ESQL_SKILL_ACCURACY_STRATEGY.md) - Query generation
-- [Field Metadata](docs/FIELD_METADATA_IMPLEMENTATION_PLAN.md) - Mapping strategy
-
----
-
-## Project Structure
-
-```
-demo-builder/
-├── app.py                          # Unified Streamlit interface
-├── src/
-│   ├── framework/                  # Meta-generative framework
-│   │   ├── base.py                 # Abstract base classes
-│   │   ├── module_generator.py     # LLM code generation
-│   │   ├── module_loader.py        # Dynamic execution
-│   │   └── orchestrator.py         # Coordination
-│   ├── services/                   # Supporting services
-│   │   ├── llm_service.py          # LLM integration
-│   │   ├── elasticsearch_indexer.py # Data upload
-│   │   ├── enhanced_data_generator.py # Utilities
-│   │   └── esql_generator.py       # Query helpers
-│   └── ui_helpers.py               # Streamlit components
-├── demos/                          # Generated modules
-│   └── {company}_{dept}_{timestamp}/
-│       ├── config.json
-│       ├── data_generator.py       # GENERATED by LLM
-│       ├── query_generator.py      # GENERATED by LLM
-│       ├── demo_guide.py           # GENERATED by LLM
-│       ├── data/*.csv              # Generated assets
-│       └── queries.json            # Compiled queries
-├── .claude/                        # Claude Code integration
-│   ├── skills/                     # ES|QL expertise
-│   │   ├── agent-builder.md
-│   │   ├── esql-validator.md
-│   │   └── esql-advanced-commands.md
-│   └── agents/                     # Specialized agents
-├── tests/                          # Test suites
-│   ├── test_llm_integration.py     # 14/14 passing ✅
-│   ├── test_data_generation.py     # 14/14 passing ✅
-│   └── test_integration.py         # 12/14 passing ⚠️
-├── docs/                           # Documentation
-└── requirements.txt                # Dependencies
-```
-
----
-
-## Why This Architecture?
-
-### Benefits
-
-**1. Infinite Customization**
-- Every demo written from scratch for that customer
-- No "template feel" - feels bespoke
-
-**2. Version Control**
-- Generated Python modules are Git-tracked
-- Share modules across team
-- Review changes like code
-
-**3. Refinable**
-- Developers can edit generated Python
-- Add business logic after generation
-- Build on top of LLM output
-
-**4. Transparent**
-- Code explains the business logic
-- No "black box" generation
-- Debuggable and testable
-
-**5. Scalable**
-- Module library grows over time
-- Industry patterns emerge
-- Team learns from each other's demos
-
----
-
-## Example Flow
-
-### Input (30 seconds)
-```
-Bass Pro Shops product management team analyzing fishing gear
-sales across 200 stores. Need to identify regional trends and
-seasonal patterns in tackle vs. rod sales.
-```
-
-### Level 2 Output (5 minutes)
 ```python
-# demos/bass_pro_shops_product_management_20251029_214937/data_generator.py
-def generate_datasets(self):
-    # 1,500 fishing products with categories
-    products = pd.DataFrame({
-        'product_id': [...],
-        'category': ['fishing_rods', 'reels', 'tackle', 'bait', ...],
-        'price': np.random.uniform(15, 500, 1500),
-        'seasonality': [...] # Peak summer for certain items
-    })
-
-    # 2,000 sales over last 90 days with regional patterns
-    sales = pd.DataFrame({
-        'timestamp': pd.date_range(end=datetime.now(), periods=2000, freq='h'),
-        'product_id': np.random.choice(products['product_id'], 2000),
-        'store_region': np.random.choice(['Northeast', 'South', ...], 2000),
-        'revenue': [...]
-    })
-    return {'products': products, 'sales': sales}
+# Detect zero results
+if len(results['values']) == 0:
+    # Analyze constraints with data profile
+    optimized_query, explanation = relax_query_constraints(
+        query=original_query,
+        data_profile=data_profile,
+        llm_client=llm
+    )
+    # Suggests: "Relaxed date range from 7 days to 30 days"
 ```
 
-### Level 3 Output (instant)
-- `product_catalog.csv` - 1,500 fishing products
-- `product_sales.csv` - 2,000 regional sales
-- `queries.json` - 6 queries analyzing trends
-- `demo_guide.md` - Outdoor retail narrative
+---
+
+## Architecture
+
+### Module Structure
+
+Each generated demo is a standalone Python package:
+
+```
+demos/bass_pro_shops_product_mgmt_20251107/
+├── config.json              # Customer context + metadata
+├── query_strategy.json      # Query planning document
+├── data_profile.json        # Field statistics + sample values
+├── data_generator.py        # Generated: Data creation logic
+├── query_generator.py       # Generated: ES|QL query definitions
+├── demo_guide.py            # Generated: Demo narrative
+├── data/                    # Static assets
+│   ├── product_catalog.csv
+│   └── sales_transactions.csv
+├── queries.json             # Compiled query definitions
+└── query_testing_results.json  # Test execution report
+```
+
+### Key Components
+
+| Component | Purpose | Technology |
+|-----------|---------|------------|
+| `app.py` | User interface and orchestration | Streamlit |
+| `module_generator.py` | LLM-powered code generation | Claude (Anthropic) |
+| `module_loader.py` | Dynamic Python module execution | importlib |
+| `elasticsearch_indexer.py` | Data upload + query execution | Elasticsearch Python client |
+| `query_optimizer.py` | Constraint relaxation for failed queries | Claude (Anthropic) |
+
+### Generation Flow
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 1. Context Extraction                                    │
+│ Natural language → Structured customer data              │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ 2. Query Strategy Planning                               │
+│ Business intent → Query types + data requirements        │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ 3. Code Generation                                       │
+│ LLM writes Python modules implementing strategy          │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ 4. Asset Creation                                        │
+│ Execute modules → CSV + JSON + Markdown                  │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ 5. Testing & Refinement                                  │
+│ Index data → Test queries → Fix errors → Iterate         │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Design Constraints
+
+The system enforces rules to ensure generated code produces working demos:
+
+### Time Handling
+- Data spans 0-120 days from current date
+- Use `pd.date_range(end=datetime.now(), periods=N)`
+- DataFrame column: `timestamp` (maps to `@timestamp` in Elasticsearch)
+
+### Data Size
+- Demos: 500-2000 rows maximum
+- Fast loading and indexing (<30 seconds)
+- Realistic but manageable scale
+
+### Query Compatibility
+- Reference datasets: `index.mode: lookup` for JOINs
+- Time-series datasets: `index.mode: data_stream` for temporal queries
+- Proper field types for JOIN compatibility
+
+### ES|QL Best Practices
+- Use `@timestamp` field name in queries
+- Include time filters (`WHERE @timestamp > NOW() - N days`)
+- Avoid overly restrictive constraints in initial queries
 
 ---
 
 ## Testing
 
+### Test Suites
+
 ```bash
 # Run all tests
 python -m pytest tests/ -v
 
-# Run specific suites
-python -m pytest tests/test_llm_integration.py      # LLM service (14/14 ✅)
-python -m pytest tests/test_data_generation.py      # Data generation (14/14 ✅)
-python -m pytest tests/test_integration.py          # Integration (12/14 ⚠️ 85.7%)
+# Specific suites
+python -m pytest tests/test_llm_integration.py -v      # LLM services
+python -m pytest tests/test_data_generation.py -v      # Data generation
+python -m pytest tests/test_integration.py -v          # End-to-end
 ```
 
 ### Test Coverage
@@ -529,4 +398,73 @@ python -m pytest tests/test_integration.py          # Integration (12/14 ⚠️ 
 
 ---
 
-**Built By Jesse Miller <jesse.miller@elastic.co>**
+## Documentation
+
+- [Modular Architecture](docs/MODULAR_ARCHITECTURE.md) - System design details
+- [Quick Start Guide](docs/QUICK_START_GUIDE.md) - Detailed walkthrough
+- [Developer Guide](docs/DEVELOPER_GUIDE.md) - Extending the platform
+- [API Reference](docs/API_REFERENCE.md) - Service documentation
+- [ES|QL Strategy](docs/ESQL_SKILL_ACCURACY_STRATEGY.md) - Query generation approach
+
+---
+
+## Project Structure
+
+```
+demo-builder/
+├── app.py                          # Main Streamlit application
+├── src/
+│   ├── framework/                  # Core generation framework
+│   │   ├── base.py                 # Abstract base classes
+│   │   ├── module_generator.py     # LLM code generation
+│   │   ├── module_loader.py        # Dynamic module loading
+│   │   └── orchestrator.py         # Generation orchestration
+│   ├── services/                   # Supporting services
+│   │   ├── llm_service.py          # LLM integration
+│   │   ├── elasticsearch_indexer.py # ES operations
+│   │   ├── query_optimizer.py      # Query refinement
+│   │   └── esql_generator.py       # Query utilities
+│   └── ui/                         # Streamlit components
+│       ├── views/
+│       │   ├── create_demo.py      # Demo creation interface
+│       │   └── browse_demos.py     # Demo library + testing
+│       ├── context_extractor.py    # NL → structured data
+│       └── query_results_display.py # Query execution UI
+├── demos/                          # Generated demo modules
+├── tests/                          # Test suites
+├── docs/                           # Documentation
+└── .claude/                        # Claude Code integration
+    ├── skills/                     # ES|QL expertise
+    └── agents/                     # Specialized agents
+```
+
+---
+
+## Key Features
+
+### Query-First Design
+- Business intent drives query planning
+- Data generation designed to support planned queries
+- Ensures queries answer real business questions
+
+### Interactive Development
+- Edit queries in browser without saving
+- Test against real Elasticsearch data
+- View results inline
+- Parameter testing with sample values
+
+### Automated Refinement
+- Syntax validation with auto-correction
+- Query execution testing
+- LLM-assisted constraint optimization
+- Zero-results troubleshooting
+
+### Version Control
+- Generated modules are Git-tracked
+- Share modules across teams
+- Build organizational query libraries
+- Review changes like code
+
+---
+
+**Built by Jesse Miller <jesse.miller@elastic.co>**
