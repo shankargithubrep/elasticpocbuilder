@@ -65,6 +65,9 @@ demos/*
 # Completed demos (local only)
 completed-demos/
 
+# Example demos (local only)
+examples/
+
 # Test files and validation reports
 test_*.py
 validation_report_*.json
