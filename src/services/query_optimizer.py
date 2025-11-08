@@ -1,37 +1,42 @@
 """
 Query Optimizer Service
-Optimizes ES|QL queries that return zero results by intelligently relaxing constraints
+Fixes ES|QL queries with errors or zero results by applying syntax rules and relaxing constraints
 """
 
 import logging
+import re
 from typing import Dict, Tuple, Optional
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 
-def relax_query_constraints(
+def fix_query(
     query: Dict,
     current_esql: str,
     data_profile: Optional[Dict],
-    llm_client
+    llm_client,
+    error_message: Optional[str] = None,
+    indexed_datasets: Optional[Dict] = None
 ) -> Tuple[str, str]:
-    """Relax query constraints when zero results are returned
+    """Fix ES|QL query issues including syntax errors, anti-patterns, and zero results
 
-    Uses LLM with data profile context to intelligently relax:
-    - Time windows: 180d → 90d → 60d → 30d
-    - Numeric thresholds: >= 100 → >= 50 → >= 10
-    - Multi-condition AND: Remove least critical filters
+    Uses LLM with ES|QL strict rules, data profile context, and error information to fix:
+    - Syntax errors (LOOKUP JOIN anti-patterns, etc.)
+    - Anti-patterns (redundant JOIN conditions like `ON field == field`)
+    - Zero results (overly restrictive constraints)
 
     Args:
         query: Query dictionary with name, description
-        current_esql: Current ES|QL query that returned 0 results
+        current_esql: Current ES|QL query that failed or returned 0 results
         data_profile: Data profile with date ranges and statistics
         llm_client: Anthropic client for LLM calls
+        error_message: Optional error message from query execution
+        indexed_datasets: Optional dict of dataset name -> index name mappings
 
     Returns:
-        Tuple of (optimized_esql, explanation)
-        If optimization fails, returns (current_esql, error_message)
+        Tuple of (fixed_esql, explanation)
+        If fixing fails, returns (current_esql, error_message)
     """
 
     # Format data profile for LLM
@@ -44,22 +49,72 @@ def relax_query_constraints(
             logger.warning(f"Could not format data profile: {e}")
             data_profile_text = "Data profile not available"
 
-    # Build LLM prompt
-    prompt = f"""This ES|QL query executed successfully but returned ZERO results.
-Your task is to relax the constraints to make it return results while maintaining its purpose.
+    # Load ES|QL strict rules
+    try:
+        from src.prompts.esql_strict_rules import get_rules_for_query_fixing
+        esql_rules = get_rules_for_query_fixing()
+    except Exception as e:
+        logger.warning(f"Could not load ES|QL rules: {e}")
+        esql_rules = ""
+
+    # Determine the issue type
+    issue_description = ""
+    if error_message:
+        issue_description = f"**Error Message:**\n{error_message}\n\nThe query has a syntax error or validation issue."
+    else:
+        issue_description = "The query executed successfully but returned **ZERO results**. Constraints may be too restrictive."
+
+    # Format indexed datasets if provided
+    indexed_datasets_text = ""
+    if indexed_datasets:
+        import json
+        indexed_datasets_text = f"\n**Available Indices:**\n```json\n{json.dumps(indexed_datasets, indent=2)}\n```\n"
+
+    # Build LLM prompt with ES|QL rules
+    prompt = f"""Fix this ES|QL query that has issues.
 
 **Query Name:** {query['name']}
 **Description:** {query.get('description', 'N/A')}
 
-**Current Query (returned 0 results):**
+**Issue:**
+{issue_description}
+
+**Current Query:**
 ```esql
 {current_esql}
 ```
 
 **Data Profile:**
 {data_profile_text}
+{indexed_datasets_text}
+{esql_rules}
 
-**Constraint Relaxation Strategies:**
+**CRITICAL ANTI-PATTERNS TO FIX:**
+
+1. **Redundant JOIN Conditions** - MOST COMMON ERROR
+   ❌ WRONG: `| LOOKUP JOIN products ON product_id == product_id`
+   ✅ CORRECT: `| LOOKUP JOIN products ON product_id`
+
+   When both sides of the == are identical, remove the `== field` part entirely.
+   This is ALWAYS wrong and will cause errors.
+
+2. **Table Prefixes After JOIN**
+   ❌ WRONG: `| LOOKUP JOIN members ON member_id | STATS COUNT(*) BY members.tier`
+   ✅ CORRECT: `| LOOKUP JOIN members ON member_id | STATS COUNT(*) BY tier`
+
+3. **_lookup Suffix**
+   ❌ WRONG: `| LOOKUP JOIN products_lookup ON product_id`
+   ✅ CORRECT: `| LOOKUP JOIN products ON product_id`
+
+4. **MV_EXPAND for Array Fields**
+   If JOIN field contains arrays/comma-separated values, use MV_EXPAND first:
+   ```esql
+   FROM pages
+   | MV_EXPAND product_refs
+   | LOOKUP JOIN products ON product_refs == product_id
+   ```
+
+**Constraint Relaxation Strategies (if zero results):**
 
 1. **Time-based constraints**: Reduce time windows
    - 365 days → 180 days → 90 days → 30 days → 7 days
@@ -76,21 +131,24 @@ Your task is to relax the constraints to make it return results while maintainin
    - status == "critical" → status IN ("critical", "high")
    - MATCH with too many terms → fewer terms
 
-5. **Multiple relaxations**: You may need to relax 2-3 constraints
+5. **Invalid JOIN keys**: If join key doesn't exist in both datasets
+   - Remove the JOIN entirely or use a different field
+   - Check data profile for actual available fields
 
 **Your Task:**
-1. Identify which constraint(s) are too restrictive (use data profile)
-2. Relax them systematically
-3. Explain what you changed and why
+1. First, check for and fix ANY anti-patterns (especially redundant JOIN conditions!)
+2. If there's an error message, fix the syntax/validation issue
+3. If zero results, relax constraints systematically
+4. Explain what you changed and why in ONE sentence
 
 Format your response as:
 
 EXPLANATION:
-[Brief explanation of what you changed and why, in one sentence]
+[Brief one-sentence explanation of what you fixed]
 
-RELAXED QUERY:
+FIXED QUERY:
 ```esql
-[The relaxed query]
+[The fixed query]
 ```
 
 Provide ONLY the format above."""
@@ -106,15 +164,15 @@ Provide ONLY the format above."""
         response_text = response.content[0].text.strip()
 
         # Extract explanation
-        explanation = "Constraints relaxed"
+        explanation = "Query fixed"
         if "EXPLANATION:" in response_text:
-            parts = response_text.split("RELAXED QUERY:")
+            parts = response_text.split("FIXED QUERY:")
             if parts:
                 exp_text = parts[0].replace("EXPLANATION:", "").strip()
                 if exp_text:
                     explanation = exp_text
 
-        # Extract relaxed query
+        # Extract fixed query
         if "```" in response_text:
             code_blocks = response_text.split("```")
             for i, block in enumerate(code_blocks):
@@ -122,20 +180,54 @@ Provide ONLY the format above."""
                     lines = block.strip().split('\n')
                     # Skip language identifier if present
                     if lines[0].lower() in ['esql', 'sql', '']:
-                        relaxed_query = '\n'.join(lines[1:]) if len(lines) > 1 else block.strip()
+                        fixed_query = '\n'.join(lines[1:]) if len(lines) > 1 else block.strip()
                     else:
-                        relaxed_query = block.strip()
+                        fixed_query = block.strip()
 
-                    logger.info(f"Relaxed query for '{query['name']}': {explanation}")
-                    return relaxed_query.strip(), explanation
+                    # Apply deterministic anti-pattern fixes
+                    fixed_query = apply_deterministic_fixes(fixed_query)
+
+                    logger.info(f"Fixed query '{query['name']}': {explanation}")
+                    return fixed_query.strip(), explanation
 
         # If we can't extract, return original
-        logger.warning("Could not extract relaxed query from LLM response")
-        return current_esql, "Failed to optimize query"
+        logger.warning("Could not extract fixed query from LLM response")
+        return current_esql, "Failed to fix query"
 
     except Exception as e:
-        logger.error(f"LLM relaxation failed: {e}", exc_info=True)
-        return current_esql, f"Optimization error: {str(e)}"
+        logger.error(f"LLM fix failed: {e}", exc_info=True)
+        return current_esql, f"Fix error: {str(e)}"
+
+
+def apply_deterministic_fixes(esql: str) -> str:
+    """Apply deterministic regex-based fixes for common anti-patterns
+
+    This catches issues the LLM might miss, especially the redundant JOIN condition.
+
+    Args:
+        esql: ES|QL query string
+
+    Returns:
+        Fixed ES|QL query string
+    """
+    # Fix redundant JOIN conditions like: ON field == field
+    # Pattern: LOOKUP JOIN <table> ON <field> == <same_field>
+    esql = re.sub(
+        r'(LOOKUP\s+JOIN\s+\w+\s+ON\s+)(\w+)\s+==\s+\2\b',
+        r'\1\2',
+        esql,
+        flags=re.IGNORECASE
+    )
+
+    # Remove _lookup suffix from index names
+    esql = re.sub(
+        r'(LOOKUP\s+JOIN\s+)(\w+)_lookup\b',
+        r'\1\2',
+        esql,
+        flags=re.IGNORECASE
+    )
+
+    return esql
 
 
 def load_data_profile(module_name: str) -> Optional[Dict]:
@@ -154,3 +246,7 @@ def load_data_profile(module_name: str) -> Optional[Dict]:
     except Exception as e:
         logger.warning(f"Could not load data profile for {module_name}: {e}")
         return None
+
+
+# Backward compatibility alias
+relax_query_constraints = fix_query

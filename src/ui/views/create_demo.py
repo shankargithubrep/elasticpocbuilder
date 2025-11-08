@@ -29,6 +29,12 @@ def render_create_demo_view():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
+    # Show "View Demo Details" button if a demo was just generated
+    if st.session_state.current_demo_module and st.session_state.view_mode == "create":
+        if st.button("📂 View Demo Details", key="view_demo_btn", type="primary"):
+            st.session_state.view_mode = "browse"
+            st.rerun()
+
     # Process programmatically added messages
     if st.session_state.needs_processing and st.session_state.messages:
         last_message = st.session_state.messages[-1]
@@ -202,12 +208,6 @@ You can now refine the generated modules or start a new demo!"""
 
                         st.markdown(response)
                         st.session_state.messages.append({"role": "assistant", "content": response})
-
-                        # Add button to view in browse mode
-                        if st.button("📂 View Demo Details", key="view_demo_btn", type="primary"):
-                            st.session_state.view_mode = "browse"
-                            st.session_state.current_demo_module = results['module_name']
-                            st.rerun()
 
                     except Exception as e:
                         error_msg = f"Error generating demo: {str(e)}"

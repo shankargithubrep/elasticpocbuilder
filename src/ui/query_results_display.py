@@ -589,7 +589,7 @@ def render_queries_with_execution(
                 optimized_query_key not in st.session_state):  # Only show button if no suggestion exists
 
                 # Show optimize button for zero-results queries
-                if st.button("🔧 Optimize Constraints", key=optimize_key, help="Use LLM to relax constraints and improve results"):
+                if st.button("🔧 Fix Query", key=optimize_key, help="Use LLM to relax constraints and improve results"):
                     with st.spinner("Analyzing constraints..."):
                         try:
                             # Import optimizer

@@ -289,6 +289,14 @@ When using string templates with .format(), ensure placeholder names EXACTLY mat
 - CORRECT: template = "{{username}}" with .format(username="value")  ← Names match exactly
 Check ALL template placeholders match their .format() keyword arguments EXACTLY (case and plurality matter!)
 
+CRITICAL - AVOID EMPTY LIST ERRORS:
+List comprehensions with filters can produce empty lists causing "'a' cannot be empty" errors in np.random.choice().
+ALWAYS provide a fallback when filtering lists:
+- WRONG: choice([s for s in systems if condition])  ← Can be empty!
+- CORRECT: filtered = [s for s in systems if condition]; choice(filtered if filtered else systems)
+- BETTER: choice(systems)  ← Avoid complex filtering when simple random choice works
+When you MUST filter, check the result before passing to safe_choice() or np.random.choice()
+
 Template:
 ```python
 from src.framework.base import DataGeneratorModule, DemoConfig
@@ -1038,7 +1046,10 @@ class {company_class}QueryGenerator(QueryGeneratorModule):
         Uses fixed template since structure is always the same - only content varies.
         Content is dynamically generated from config/datasets/queries at runtime.
         """
-        company_class = config['company_name'].replace(' ', '')
+        # Sanitize company name for use as Python class name
+        # Remove parentheses, brackets, and other special characters that would break syntax
+        import re
+        company_class = re.sub(r'[^a-zA-Z0-9_]', '', config['company_name'].replace(' ', ''))
 
         # Fixed template - structure doesn't change, only runtime content
         code = f"""from src.framework.base import DemoGuideModule, DemoConfig
@@ -1193,6 +1204,14 @@ When using string templates with .format(), ensure placeholder names EXACTLY mat
 - WRONG: template = "{{user_name}}" with .format(username="value")  ← Underscore mismatch!
 - CORRECT: template = "{{username}}" with .format(username="value")  ← Names match exactly
 Check ALL template placeholders match their .format() keyword arguments EXACTLY (case and plurality matter!)
+
+CRITICAL - AVOID EMPTY LIST ERRORS:
+List comprehensions with filters can produce empty lists causing "'a' cannot be empty" errors in np.random.choice().
+ALWAYS provide a fallback when filtering lists:
+- WRONG: choice([s for s in systems if condition])  ← Can be empty!
+- CORRECT: filtered = [s for s in systems if condition]; choice(filtered if filtered else systems)
+- BETTER: choice(systems)  ← Avoid complex filtering when simple random choice works
+When you MUST filter, check the result before passing to safe_choice() or np.random.choice()
 
 Template:
 ```python

@@ -736,7 +736,7 @@ def render_browse_demos_view():
 
                                                 # Show optimize button for zero-results queries
                                                 optimize_key = f"{query_key}_optimize"
-                                                if st.button("🔧 Optimize Constraints", key=optimize_key, help="Use LLM to relax constraints and improve results"):
+                                                if st.button("🔧 Fix Query", key=optimize_key, help="Use LLM to relax constraints and improve results"):
                                                     with st.spinner("Analyzing constraints..."):
                                                         try:
                                                             # Import optimizer

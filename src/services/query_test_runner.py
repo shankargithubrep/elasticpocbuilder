@@ -12,6 +12,7 @@ import re
 
 from .elasticsearch_indexer import ElasticsearchIndexer
 from .sample_values_extractor import SampleValuesExtractor
+from .query_optimizer import fix_query
 
 logger = logging.getLogger(__name__)
 
@@ -144,15 +145,32 @@ class QueryTestRunner:
             # Test the query
             success, response, error = self.indexer.execute_esql(executed_esql)
 
+            # Check for zero results even on success
+            result_count = 0
+            if success and response:
+                # Extract result count from response
+                if isinstance(response, dict):
+                    values = response.get('values', [])
+                    result_count = len(values) if values else 0
+                elif isinstance(response, list):
+                    result_count = len(response)
+
+            # Treat zero results as needing a fix (constraint relaxation)
+            if success and result_count == 0:
+                logger.warning(f"Query '{query['name']}' returned 0 results on attempt {attempt + 1}")
+                success = False
+                error = "Query returned 0 results (constraints may be too restrictive)"
+
             if success:
                 result.was_fixed = True
                 result.final_esql = current_esql
                 result.fix_history.append({
                     'attempt': attempt + 1,
                     'succeeded': True,
-                    'esql': current_esql
+                    'esql': current_esql,
+                    'result_count': result_count
                 })
-                logger.info(f"Query '{query['name']}' succeeded on attempt {attempt + 1}")
+                logger.info(f"Query '{query['name']}' succeeded on attempt {attempt + 1} with {result_count} results")
                 break
 
             # Capture first error
@@ -161,15 +179,26 @@ class QueryTestRunner:
 
             logger.warning(f"Query '{query['name']}' failed on attempt {attempt + 1}: {error}")
 
-            # Try to fix with LLM
+            # Try to fix with centralized query optimizer
             if attempt < max_attempts - 1:
                 try:
-                    fixed_esql = self._fix_query_with_llm(
-                        query=query,
-                        error=error,
-                        indexed_datasets=indexed_datasets,
-                        attempt=attempt
+                    # Get query dict format expected by fix_query
+                    query_dict = {
+                        'name': query.get('name', 'Unknown Query'),
+                        'description': query.get('description', ''),
+                    }
+
+                    # Use centralized fix_query function with data profile and indexed datasets
+                    fixed_esql, explanation = fix_query(
+                        query=query_dict,
+                        current_esql=current_esql,
+                        data_profile=self.data_profile,
+                        llm_client=self.llm_client,
+                        error_message=error if result_count > 0 or not success else None,
+                        indexed_datasets=indexed_datasets
                     )
+
+                    logger.info(f"Fix explanation: {explanation}")
 
                     result.fix_history.append({
                         'attempt': attempt + 1,
@@ -303,146 +332,6 @@ class QueryTestRunner:
 
         return modified_esql
 
-    def _fix_query_with_llm(
-        self,
-        query: Dict,
-        error: str,
-        indexed_datasets: Dict,
-        attempt: int
-    ) -> str:
-        """Use LLM to fix a failed query
-
-        Args:
-            query: Original query dictionary
-            error: Error message from Elasticsearch
-            indexed_datasets: Available indices
-            attempt: Current attempt number
-
-        Returns:
-            Fixed ES|QL query string
-        """
-        # Import and use our strict ES|QL rules
-        try:
-            from src.prompts.esql_strict_rules import get_rules_for_query_fixing
-            esql_rules = get_rules_for_query_fixing()
-        except ImportError:
-            # Fallback if import fails
-            esql_rules = self._read_esql_skill()
-
-        # Format data profile if available (using compact mode)
-        data_profile_text = ""
-        if self.data_profile:
-            try:
-                from src.services.data_profiler import DataProfiler
-                data_profile_text = "\n\n" + DataProfiler.format_profile_for_llm(self.data_profile, compact=True)
-            except Exception as e:
-                logger.warning(f"Could not format data profile: {e}")
-
-        # Add JOIN-specific guidance if this is a JOIN query
-        join_guidance = ""
-        current_esql = query.get('esql') or query.get('query') or query.get('esql_query', '')
-        if self._is_join_query(current_esql):
-            join_guidance = """
-
-**JOIN-SPECIFIC GUIDANCE:**
-This query contains a LOOKUP JOIN. Common issues:
-1. ✅ Syntax must be: `LOOKUP JOIN <index> ON <field>` or `LOOKUP JOIN <index> ON <field1> == <field2>`
-2. ✅ Use `==` for comparison, NOT `=`
-3. ✅ Include MV_EXPAND before JOIN if the source field contains comma-separated values
-4. ✅ Both indices must be indexed in 'lookup' mode
-5. ✅ Use the detected relationships from the data profile (see above) - they show which fields have matching values
-
-Example for array field:
-```
-FROM pages
-| MV_EXPAND product_refs
-| LOOKUP JOIN products ON product_refs == product_id
-```
-"""
-
-        prompt = f"""Fix this ES|QL query that failed with an error.
-
-**Query Name:** {query['name']}
-**Description:** {query.get('description', 'N/A')}
-
-**Original Query:**
-```esql
-{query.get('esql') or query.get('query') or query.get('esql_query', '')}
-```
-
-**Error:**
-```
-{error}
-```
-
-**Available Indices:**
-{json.dumps(indexed_datasets, indent=2)}
-{data_profile_text}{join_guidance}
-
-**ES|QL Fix Rules:**
-{esql_rules}
-
-**Your Task:**
-Analyze the error and apply the fix rules. Follow the transformations IN ORDER:
-1. Remove ALL _lookup suffixes (never add them)
-2. Fix MATCH syntax (must be in WHERE clause)
-3. Fix FORK (no named branches)
-4. Remove parameter NULL checks
-5. Fix DATE function parameter order
-6. Replace invalid aggregates (COUNT_IF, etc.)
-
-Provide ONLY the corrected ES|QL query (no explanations).
-
-**Attempt {attempt + 1} of 3.**
-
-Corrected query:"""
-
-        try:
-            response = self.llm_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=2000,
-                temperature=0.3,  # Lower temperature for precise fixes
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            fixed_query = response.content[0].text.strip()
-
-            # Extract query from code blocks if present
-            if "```" in fixed_query:
-                # Find the code block
-                parts = fixed_query.split("```")
-                for i, part in enumerate(parts):
-                    if i % 2 == 1:  # Odd indices are code blocks
-                        # Remove language identifier if present
-                        lines = part.strip().split('\n')
-                        if lines[0].lower() in ['esql', 'sql']:
-                            fixed_query = '\n'.join(lines[1:])
-                        else:
-                            fixed_query = part.strip()
-                        break
-
-            logger.info(f"LLM generated fix for '{query['name']}'")
-            return fixed_query.strip()
-
-        except Exception as e:
-            logger.error(f"LLM fix failed: {e}", exc_info=True)
-            raise
-
-    def _read_esql_skill(self) -> str:
-        """Read ES|QL skill documentation for reference"""
-        try:
-            from pathlib import Path
-            skill_path = Path('.claude/skills/esql-advanced-commands.md')
-            if skill_path.exists():
-                content = skill_path.read_text()
-                # Truncate to first 1000 chars to save tokens
-                return content[:2000] + "\n...(truncated)"
-            else:
-                return self._get_minimal_esql_reference()
-        except Exception as e:
-            logger.warning(f"Could not read ES|QL skill: {e}")
-            return self._get_minimal_esql_reference()
-
     def _is_join_query(self, esql: str) -> bool:
         """Check if query contains a LOOKUP JOIN
 
@@ -518,24 +407,6 @@ Corrected query:"""
                         }
 
         return {'valid': True}
-
-    def _get_minimal_esql_reference(self) -> str:
-        """Get minimal ES|QL reference"""
-        return """
-ES|QL Key Commands:
-- FROM: Specify index/data stream
-- WHERE: Filter rows
-- EVAL: Create calculated fields
-- STATS: Aggregate with GROUP BY
-- LOOKUP JOIN: Enrich with lookup data (syntax: LOOKUP JOIN <index> ON <field> or ON <field1> == <field2>)
-- MV_EXPAND: Expand multi-value fields before JOIN
-- INLINESTATS: Calculate aggregates keeping all rows
-- DATE_TRUNC: Bucket timestamps
-- DATE_EXTRACT: Extract date parts (syntax: DATE_EXTRACT("part", field))
-- SORT: Order results
-- LIMIT: Limit result count
-- KEEP/DROP: Select/exclude columns
-"""
 
     def get_summary_stats(self, results: Dict) -> Dict[str, Any]:
         """Get summary statistics from test results
