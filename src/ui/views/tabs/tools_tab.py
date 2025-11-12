@@ -61,22 +61,41 @@ def render_tools_tab(loader):
         deployed_tools = [t for t in all_tools if matches_module_prefix(t.get('id', ''), module_prefix)]
 
     if deployed_tools:
+        st.caption(f"Found {len(deployed_tools)} deployed tool(s) for this demo")
+
         for tool in deployed_tools:
-            with st.expander(f"🔧 {tool.get('name', tool.get('id', 'Unknown'))}"):
-                col1, col2 = st.columns([3, 1])
+            tool_name = tool.get('name', tool.get('id', 'Unknown'))
+            tool_id = tool.get('id', 'unknown')
 
-                with col1:
-                    st.json(tool)
+            with st.expander(f"🔧 {tool_name}", expanded=False):
+                # Tool ID badge
+                st.markdown(f"**Tool ID:** `{tool_id}`")
 
-                with col2:
-                    # Delete button
-                    if st.button("🗑️ Delete", key=f"delete_tool_{tool['id']}", use_container_width=True):
-                        result = agent_builder.delete_tool(tool['id'])
-                        if result.get('success'):
-                            st.success(f"Deleted tool: {tool['id']}")
-                            st.rerun()
-                        else:
-                            st.error(f"Failed to delete: {result.get('error')}")
+                if tool.get('description'):
+                    st.markdown(f"**Description:** {tool['description']}")
+
+                st.divider()
+
+                # Tool definition section
+                st.markdown("##### 📋 Full Tool Definition")
+                st.json(tool)
+
+                st.divider()
+
+                # Delete section
+                st.markdown("##### 🗑️ Delete Tool")
+                st.warning("⚠️ This will delete the tool from Agent Builder. This action cannot be undone.")
+
+                if st.button("🗑️ Delete Tool from Deployment",
+                           key=f"delete_tool_{tool_id}",
+                           type="secondary",
+                           use_container_width=True):
+                    result = agent_builder.delete_tool(tool_id)
+                    if result.get('success'):
+                        st.success(f"✅ Successfully deleted tool: {tool_id}")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Failed to delete: {result.get('error')}")
     else:
         st.info("No tools deployed for this demo yet.")
 
