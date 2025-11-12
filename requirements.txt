@@ -15,6 +15,7 @@ langchain-anthropic>=0.0.1
 pandas>=2.0.0
 numpy>=1.24.0
 faker>=19.0.0  # For synthetic data generation
+plotly>=5.18.0  # For interactive visualizations
 
 # Web Search & Research
 httpx>=0.25.0
