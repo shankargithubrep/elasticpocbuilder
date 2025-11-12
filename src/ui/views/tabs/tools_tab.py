@@ -9,7 +9,7 @@ import json
 
 from src.ui.data_loaders import load_demo_queries
 from src.ui.query_results_display import QueryResultsDisplay
-from .utils import get_module_prefix
+from .utils import get_module_prefix, matches_module_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +57,8 @@ def render_tools_tab(loader):
         all_tools = deployed_response.get('tools', [])
         # Extract the company_department prefix for filtering
         module_prefix = get_module_prefix(st.session_state.current_demo_module)
-        st.caption(f"Filtering tools with prefix: `{module_prefix}*`")
-        deployed_tools = [t for t in all_tools if t.get('id', '').startswith(module_prefix)]
+        st.caption(f"Filtering tools with prefix: `{module_prefix}*` (matches both hyphens and underscores)")
+        deployed_tools = [t for t in all_tools if matches_module_prefix(t.get('id', ''), module_prefix)]
 
     if deployed_tools:
         for tool in deployed_tools:

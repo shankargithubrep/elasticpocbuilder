@@ -7,7 +7,7 @@ import logging
 import os
 import json
 
-from .utils import get_module_prefix
+from .utils import get_module_prefix, matches_module_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +57,10 @@ def render_agents_tab(agent_builder):
                 # Use both exact match (for the main agent) and prefix match
                 agent_id = agent_metadata.get('id', 'unknown')
                 module_prefix = get_module_prefix(st.session_state.current_demo_module)
-                st.caption(f"Filtering agents matching: `{agent_id}` or prefix: `{module_prefix}*`")
+                st.caption(f"Filtering agents matching: `{agent_id}` or prefix: `{module_prefix}*` (matches both hyphens and underscores)")
                 deployed_agents = [a for a in all_agents
                     if a.get('id', '') == agent_id or
-                        a.get('id', '').startswith(module_prefix)]
+                        matches_module_prefix(a.get('id', ''), module_prefix)]
 
                 # Get all tools for tool assignment
                 deployed_response = agent_builder.list_tools()
@@ -91,7 +91,7 @@ def render_agents_tab(agent_builder):
 
                             # Get available tools
                             # 1. Module-specific tools
-                            module_tools = [t for t in all_tools if t.get('id', '').startswith(module_prefix)]
+                            module_tools = [t for t in all_tools if matches_module_prefix(t.get('id', ''), module_prefix)]
                             module_tool_ids = [t['id'] for t in module_tools]
 
                             # 2. Platform tools

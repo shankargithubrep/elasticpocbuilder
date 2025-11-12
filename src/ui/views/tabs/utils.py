@@ -56,6 +56,33 @@ def get_module_prefix(module_name: str) -> str:
         return module_name.lower()[:30]
 
 
+def matches_module_prefix(item_id: str, module_prefix: str) -> bool:
+    """Check if an item ID matches the module prefix, handling both hyphens and underscores.
+
+    Args:
+        item_id: The ID to check (tool_id, agent_id, etc.)
+        module_prefix: The prefix to match against
+
+    Returns:
+        True if the item_id matches the prefix (with either - or _ as separator)
+    """
+    # Normalize both to lowercase for case-insensitive comparison
+    item_id_lower = item_id.lower()
+    prefix_lower = module_prefix.lower()
+
+    # Check direct match
+    if item_id_lower.startswith(prefix_lower):
+        return True
+
+    # Check with hyphen/underscore variants
+    # Convert prefix underscores to hyphens and vice versa
+    prefix_with_hyphens = prefix_lower.replace('_', '-')
+    prefix_with_underscores = prefix_lower.replace('-', '_')
+
+    return (item_id_lower.startswith(prefix_with_hyphens) or
+            item_id_lower.startswith(prefix_with_underscores))
+
+
 def load_demo_queries(module_name: str) -> Dict[str, Any]:
     """Load queries from a demo module.
 
