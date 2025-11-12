@@ -204,73 +204,150 @@ class QueryResultsDisplay:
             for k, v in parameters.items()
         ]
 
-        for param_info in param_list:
-            param_name = param_info.get('name', 'unknown')
-            param_type = param_info.get('type', 'string')
-            param_desc = param_info.get('description', '')
-            param_default = param_info.get('default', '')
-            param_required = param_info.get('required', False)
+        # Check if we have date/timestamp parameters (start_date, end_date, etc.)
+        has_date_params = any(
+            'date' in param_info.get('name', '').lower() or
+            'time' in param_info.get('name', '').lower() or
+            param_info.get('type', '').lower() in ['date', 'datetime', 'timestamp']
+            for param_info in param_list
+        )
 
-            # Create input widget based on type
-            label = f"**{param_name}**" + (" *" if param_required else "")
-            help_text = param_desc if param_desc else f"Enter value for {param_name}"
+        # Show sample date ranges if we have date parameters
+        if has_date_params:
+            with st.expander("📅 Sample Date Ranges", expanded=False):
+                st.caption("Copy these sample values to quickly test different time ranges")
 
-            if param_type in ['integer', 'long']:
-                default_val = int(param_default) if param_default and str(param_default).isdigit() else 0
-                value = st.number_input(
-                    label,
-                    value=default_val,
-                    step=1,
-                    key=f"param_{unique_key}_{param_name}",
-                    help=help_text
-                )
-                param_values[param_name] = int(value)
-
-            elif param_type in ['double', 'float']:
-                default_val = float(param_default) if param_default else 0.0
-                value = st.number_input(
-                    label,
-                    value=default_val,
-                    step=0.1,
-                    key=f"param_{unique_key}_{param_name}",
-                    help=help_text
-                )
-                param_values[param_name] = float(value)
-
-            elif param_type == 'boolean':
-                default_val = bool(param_default) if param_default else False
-                value = st.checkbox(
-                    label,
-                    value=default_val,
-                    key=f"param_{unique_key}_{param_name}",
-                    help=help_text
-                )
-                param_values[param_name] = value
-
-            elif param_type == 'date':
                 from datetime import datetime, timedelta
-                # Default to 90 days ago if no default
-                default_date = datetime.now() - timedelta(days=90)
-                value = st.date_input(
-                    label,
-                    value=default_date,
-                    key=f"param_{unique_key}_{param_name}",
-                    help=help_text
-                )
-                param_values[param_name] = value.strftime('%Y-%m-%d')
+                now = datetime.now()
 
-            else:  # string, keyword, or unknown
-                default_val = str(param_default) if param_default else ""
-                value = st.text_input(
-                    label,
-                    value=default_val,
-                    key=f"param_{unique_key}_{param_name}",
-                    help=help_text,
-                    placeholder=f"e.g., {param_desc.split('(e.g., ')[-1].rstrip(')')}..." if '(e.g.,' in param_desc else f"Enter {param_name}"
-                )
-                param_values[param_name] = value
+                # Calculate sample date ranges
+                sample_ranges = [
+                    {
+                        "label": "Last 3 years",
+                        "start": (now - timedelta(days=3*365)).strftime('%Y-%m-%d'),
+                        "end": now.strftime('%Y-%m-%d')
+                    },
+                    {
+                        "label": "3 months ago to last week",
+                        "start": (now - timedelta(days=90)).strftime('%Y-%m-%d'),
+                        "end": (now - timedelta(days=7)).strftime('%Y-%m-%d')
+                    },
+                    {
+                        "label": "Last 30 days",
+                        "start": (now - timedelta(days=30)).strftime('%Y-%m-%d'),
+                        "end": now.strftime('%Y-%m-%d')
+                    },
+                    {
+                        "label": "Last week",
+                        "start": (now - timedelta(days=7)).strftime('%Y-%m-%d'),
+                        "end": now.strftime('%Y-%m-%d')
+                    }
+                ]
+
+                for sample in sample_ranges:
+                    col1, col2, col3 = st.columns([2, 2, 2])
+                    with col1:
+                        st.caption(f"**{sample['label']}**")
+                    with col2:
+                        st.code(sample['start'], language=None)
+                    with col3:
+                        st.code(sample['end'], language=None)
+
+        # Render parameters in a two-column layout for more compact display
+        for i in range(0, len(param_list), 2):
+            # Create two columns
+            col1, col2 = st.columns(2)
+
+            # Render first parameter in left column
+            with col1:
+                if i < len(param_list):
+                    param_values.update(self._render_single_parameter_input(
+                        param_list[i], unique_key
+                    ))
+
+            # Render second parameter in right column (if exists)
+            with col2:
+                if i + 1 < len(param_list):
+                    param_values.update(self._render_single_parameter_input(
+                        param_list[i + 1], unique_key
+                    ))
 
         return param_values
+
+    def _render_single_parameter_input(self, param_info: Dict, unique_key: str) -> Dict[str, Any]:
+        """Render a single parameter input widget
+
+        Args:
+            param_info: Parameter information dictionary
+            unique_key: Unique key for widget
+
+        Returns:
+            Dict with parameter name and value
+        """
+        param_name = param_info.get('name', 'unknown')
+        param_type = param_info.get('type', 'string')
+        param_desc = param_info.get('description', '')
+        param_default = param_info.get('default', '')
+        param_required = param_info.get('required', False)
+
+        # Create input widget based on type
+        label = f"**{param_name}**" + (" *" if param_required else "")
+        help_text = param_desc if param_desc else f"Enter value for {param_name}"
+
+        if param_type in ['integer', 'long']:
+            default_val = int(param_default) if param_default and str(param_default).isdigit() else 0
+            value = st.number_input(
+                label,
+                value=default_val,
+                step=1,
+                key=f"param_{unique_key}_{param_name}",
+                help=help_text
+            )
+            return {param_name: int(value)}
+
+        elif param_type in ['double', 'float']:
+            default_val = float(param_default) if param_default else 0.0
+            value = st.number_input(
+                label,
+                value=default_val,
+                step=0.1,
+                key=f"param_{unique_key}_{param_name}",
+                help=help_text
+            )
+            return {param_name: float(value)}
+
+        elif param_type == 'boolean':
+            default_val = bool(param_default) if param_default else False
+            value = st.checkbox(
+                label,
+                value=default_val,
+                key=f"param_{unique_key}_{param_name}",
+                help=help_text
+            )
+            return {param_name: value}
+
+        elif param_type == 'date':
+            from datetime import datetime, timedelta
+            # Default to 90 days ago if no default
+            default_date = datetime.now() - timedelta(days=90)
+            value = st.date_input(
+                label,
+                value=default_date,
+                key=f"param_{unique_key}_{param_name}",
+                help=help_text
+            )
+            return {param_name: value.strftime('%Y-%m-%d')}
+
+        else:  # string, keyword, or unknown
+            default_val = str(param_default) if param_default else ""
+            value = st.text_input(
+                label,
+                value=default_val,
+                key=f"param_{unique_key}_{param_name}",
+                help=help_text,
+                placeholder=f"e.g., {param_desc.split('(e.g., ')[-1].rstrip(')')}..." if '(e.g.,' in param_desc else f"Enter {param_name}"
+            )
+            return {param_name: value}
 
     def substitute_parameters(self, query_text: str, param_values: Dict[str, Any]) -> str:
         """Substitute parameter values into a parameterized query
