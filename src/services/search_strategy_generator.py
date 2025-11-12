@@ -314,7 +314,7 @@ ES|QL Search Commands:
 """
 
     def _extract_json(self, text: str) -> Dict:
-        """Extract JSON from LLM response"""
+        """Extract JSON from LLM response with robust error handling"""
         if "```json" in text:
             start = text.find("```json") + 7
             end = text.find("```", start)
@@ -326,12 +326,76 @@ ES|QL Search Commands:
         else:
             json_text = text.strip()
 
+        # First attempt: Parse as-is
         try:
             return json.loads(json_text)
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON: {e}")
-            logger.debug(f"JSON text: {json_text[:500]}")
-            raise ValueError(f"Invalid JSON in LLM response: {e}")
+            logger.warning(f"Initial JSON parse failed: {e}")
+            logger.debug(f"Attempting to fix common JSON issues...")
+
+            # Second attempt: Fix common issues
+            try:
+                fixed_json = self._fix_json_issues(json_text)
+                return json.loads(fixed_json)
+            except json.JSONDecodeError as e2:
+                logger.error(f"JSON fix attempt failed: {e2}")
+
+                # Save the problematic JSON for debugging
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                    f.write(json_text)
+                    logger.error(f"Saved problematic JSON to: {f.name}")
+
+                # Try to provide helpful error message
+                error_msg = f"Invalid JSON in LLM response: {e}\n"
+                error_msg += f"This usually means the LLM generated malformed JSON with unescaped quotes or newlines.\n"
+                error_msg += f"Check the saved file at the path above for details."
+                raise ValueError(error_msg)
+
+    def _fix_json_issues(self, json_text: str) -> str:
+        """Attempt to fix common JSON formatting issues from LLM responses
+
+        Args:
+            json_text: Raw JSON text that failed to parse
+
+        Returns:
+            Fixed JSON text
+        """
+        import re
+
+        # Step 1: Replace actual newlines within string values with \n
+        # This regex finds strings and replaces newlines within them
+        def fix_newlines_in_strings(match):
+            # The matched string content (without quotes)
+            content = match.group(1)
+            # Replace actual newlines with escaped newlines
+            fixed_content = content.replace('\n', '\\n').replace('\r', '\\r')
+            # Return the fixed string with quotes
+            return f'"{fixed_content}"'
+
+        # Match string values (handling escaped quotes)
+        # This pattern matches: "..." where ... can contain \" but not unescaped "
+        json_text = re.sub(r'"((?:[^"\\]|\\.)*)(?<!\\)"', fix_newlines_in_strings, json_text)
+
+        # Step 2: Fix unescaped quotes within string values
+        # This is trickier - we need to identify quotes that should be escaped
+
+        # Step 3: Remove trailing commas before closing brackets/braces
+        json_text = re.sub(r',(\s*[}\]])', r'\1', json_text)
+
+        # Step 4: Ensure consistent quote usage (replace single quotes around keys/values)
+        # But be careful not to replace single quotes within string values
+        json_text = re.sub(r"'([^']*)'(\s*:)", r'"\1"\2', json_text)  # Fix keys
+        json_text = re.sub(r":\s*'([^']*)'", r': "\1"', json_text)    # Fix simple string values
+
+        # Step 5: Remove any BOM or zero-width spaces
+        json_text = json_text.replace('\ufeff', '').replace('\u200b', '')
+
+        # Step 6: Handle common encoding issues
+        json_text = json_text.encode('utf-8', errors='ignore').decode('utf-8')
+
+        logger.debug("Applied JSON fixes: newlines, trailing commas, quotes, encoding")
+        return json_text
 
     def extract_data_requirements(self, strategy: Dict) -> Dict[str, Dict]:
         """Extract data generation requirements from search strategy"""

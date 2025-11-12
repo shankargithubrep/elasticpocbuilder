@@ -1200,7 +1200,7 @@ class {company_class}DemoGuide(DemoGuideModule):
 
     def generate_guide(self) -> str:
         \"\"\"Generate customized demo guide\"\"\"
-        return '''{{guide_content}}'''
+        return '''{guide_content}'''
 
     def get_talk_track(self) -> Dict[str, str]:
         \"\"\"Talk track for each query\"\"\"
