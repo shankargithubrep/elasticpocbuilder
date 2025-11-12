@@ -61,7 +61,11 @@ class AgentBuilderService:
                 timeout=30
             )
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            # Normalize the response - API returns 'results' but UI expects 'tools'
+            return {
+                'tools': data.get('results', [])
+            }
         except requests.exceptions.RequestException as e:
             return {
                 'error': str(e),
@@ -223,7 +227,11 @@ class AgentBuilderService:
                 timeout=30
             )
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            # Normalize the response - API returns 'results' but UI expects 'agents'
+            return {
+                'agents': data.get('results', [])
+            }
         except requests.exceptions.RequestException as e:
             return {
                 'error': str(e),
