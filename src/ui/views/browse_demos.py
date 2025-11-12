@@ -16,7 +16,6 @@ from .tabs import (
     render_data_tab,
     render_queries_tab,
     render_guide_tab,
-    render_conversation_tab,
     render_tools_tab,
     render_agents_tab
 )
@@ -28,14 +27,15 @@ def render_browse_demos_view():
     """Render the demo browsing interface - demo details only (list is in sidebar)"""
     # Show details if a module is selected
     if st.session_state.current_demo_module:
-        st.title(f"📊 {st.session_state.current_demo_module}")
+        st.markdown(f"#### 📊 {st.session_state.current_demo_module}")
 
         manager = DemoModuleManager()
         loader = manager.get_module(st.session_state.current_demo_module)
 
         if loader:
             # Create tabs FIRST to prevent resets
-            tabs = st.tabs(["📋 Config", "🗂️ Data", "🔍 Queries", "📝 Guide", "💬 Conversation", "🔧 Tools", "🤖 Agents"])
+            # New order: Config, Data, Queries, Tools, Agents, Guide
+            tabs = st.tabs(["📋 Config", "🗂️ Data", "🔍 Queries", "🔧 Tools", "🤖 Agents", "📝 Guide"])
 
             # Auto-load assets when demo is selected (after tabs are created)
             # Use a session state key specific to this demo to track if we've loaded
@@ -67,15 +67,9 @@ def render_browse_demos_view():
                 render_queries_tab(loader)
 
             with tabs[3]:
-                render_guide_tab()
-
-            with tabs[4]:
-                render_conversation_tab(loader)
-
-            with tabs[5]:
                 render_tools_tab(loader)
 
-            with tabs[6]:
+            with tabs[4]:
                 # Initialize Agent Builder service for agents tab
                 from src.services.agent_builder_service import AgentBuilderService
 
@@ -85,5 +79,8 @@ def render_browse_demos_view():
                 except Exception as e:
                     st.error(f"❌ Agent Builder Service not configured: {e}")
                     st.info("Please set ELASTICSEARCH_KIBANA_URL and ELASTICSEARCH_API_KEY in your .env file")
+
+            with tabs[5]:
+                render_guide_tab()
         else:
             st.info("👈 Select a demo from the sidebar to view details")

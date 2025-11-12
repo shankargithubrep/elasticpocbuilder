@@ -13,13 +13,13 @@ logger = logging.getLogger(__name__)
 
 def render_create_demo_view():
     """Render the demo creation interface"""
-    st.title("🚀 Elastic Agent Builder Demo Generator")
-    st.markdown("*Create custom demos with LLM-generated modules*")
+    st.markdown("### Vulcan")
+    st.markdown("*Vulcan helps create custom demo modules containing sample data, queries, and agentic tools.*")
 
     # Display messages
     if not st.session_state.messages:
         st.markdown("""
-        ### 👋 Welcome to Vulcan!
+        ### 👋 Get Started
 
         **Quick Start:** Paste your customer description below and I'll extract context automatically.
 
@@ -222,10 +222,13 @@ def render_create_demo_view():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Show "View Demo Details" button if a demo was just generated
-    if st.session_state.current_demo_module and st.session_state.view_mode == "create":
+    # Show "View Demo Details" button if a demo was just generated in this conversation
+    if (st.session_state.current_demo_module and
+        st.session_state.view_mode == "create" and
+        st.session_state.get("demo_just_generated", False)):
         if st.button("📂 View Demo Details", key="view_demo_btn", type="primary"):
             st.session_state.view_mode = "browse"
+            st.session_state.demo_just_generated = False  # Clear the flag
             st.rerun()
 
     # Process programmatically added messages
@@ -379,6 +382,7 @@ def render_create_demo_view():
                         )
 
                         st.session_state.current_demo_module = results['module_name']
+                        st.session_state.demo_just_generated = True  # Set flag to show "View Demo Details" button
 
                         st.balloons()
                         st.success(f"✅ Demo module created: **{results['module_name']}**")

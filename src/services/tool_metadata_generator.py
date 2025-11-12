@@ -105,7 +105,15 @@ CRITICAL REQUIREMENTS:
    - Include technical tags (e.g., "esql", "analytics")
    - Keep tags lowercase and single words
 
-Return ONLY valid JSON, no other text or markdown formatting."""
+4. "sample_question": A natural, realistic user question that would trigger an agent to call this tool
+   - Should sound like a real human asking a business question
+   - Should NOT feel too formal or obviously matching the description
+   - Should reflect the actual business context and pain points
+   - Example (for performance analysis): "I'm trying to decide between Intel and AMD servers for our next batch of hardware. Which ones give us better bang for our buck?"
+   - Example (for cost analysis): "Can you show me where we're spending the most on cloud infrastructure this quarter?"
+   - Make it conversational and contextual to the specific query purpose
+
+Return ONLY valid JSON with these 4 fields, no other text or markdown formatting."""
 
     try:
         # Call the LLM
@@ -163,6 +171,12 @@ Return ONLY valid JSON, no other text or markdown formatting."""
         if isinstance(metadata.get('tags'), str):
             metadata['tags'] = [metadata['tags']]
 
+        # Add fallback sample_question if not provided
+        if 'sample_question' not in metadata:
+            # Create a basic sample question from the query name
+            query_name = query.get('name', 'this analysis')
+            metadata['sample_question'] = f"Can you show me {query_name.lower()}?"
+
         # Add the query text to metadata
         metadata['query'] = query_text
 
@@ -185,6 +199,7 @@ Return ONLY valid JSON, no other text or markdown formatting."""
             'tool_id': tool_id,
             'description': query.get('description', 'ES|QL query tool for data analysis'),
             'tags': ['esql', 'analytics', company],
+            'sample_question': f"Can you show me {query_name.lower()}?",
             'query': query_text
         }
 
@@ -196,10 +211,13 @@ Return ONLY valid JSON, no other text or markdown formatting."""
         tool_id = re.sub(r'[^a-z0-9._]', '_', tool_id)
         tool_id = re.sub(r'_+', '_', tool_id)
 
+        query_name = query.get('name', 'this analysis')
+
         return {
             'tool_id': tool_id,
             'description': f"ES|QL query tool: {query.get('description', 'Data analysis query')}",
             'tags': ['esql', 'analytics'],
+            'sample_question': f"Can you help me with {query_name.lower()}?",
             'query': query_text,
             'error': str(e)
         }

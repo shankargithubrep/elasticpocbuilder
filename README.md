@@ -1,4 +1,4 @@
-# Demo Builder: LLM-Powered Demo Generation Platform
+# Vulcan: LLM-Powered Demo Generation Platform
 
 An AI-powered platform for Elastic Solutions Architects that generates custom Python code modules to create customer-specific demo assets. Each demo is built through a sophisticated planning process that aligns ES|QL queries with business intent, then designs data generation to support those queries.
 
@@ -6,7 +6,7 @@ An AI-powered platform for Elastic Solutions Architects that generates custom Py
 
 ## Overview
 
-Demo Builder uses LLM code generation to create custom Python modules for each customer. These modules generate synthetic data, ES|QL queries, and demo narratives tailored to specific business contexts. The platform emphasizes query-first planning, where business intent drives query design, which then informs data generation strategy.
+Vulcan uses LLM code generation to create custom Python modules for each customer. These modules generate synthetic data, ES|QL queries, and demo narratives tailored to specific business contexts. The platform emphasizes query-first planning, where business intent drives query design, which then informs data generation strategy.
 
 ### Key Approach
 
@@ -59,7 +59,7 @@ The platform aims for working demos in a single generation cycle through:
 
 ## Demo Types: Search vs Analytics
 
-Demo Builder supports two distinct demo types, each with specialized query strategies and data generation:
+Vulcan supports two distinct demo types, each with specialized query strategies and data generation:
 
 ### 🔍 Search/RAG Demos
 **When to use**: Document retrieval, knowledge base search, semantic search, policy lookup
@@ -328,7 +328,7 @@ if len(results['values']) == 0:
 
 ### Overview
 
-Demo Builder now includes full integration with Elastic Agent Builder, allowing you to deploy validated ES|QL queries as reusable tools and create AI agents that can use these tools. This enables your demos to become production-ready AI assistants.
+Vulcan now includes full integration with Elastic Agent Builder, allowing you to deploy validated ES|QL queries as reusable tools and create AI agents that can use these tools. This enables your demos to become production-ready AI assistants.
 
 ### Tools Deployment
 

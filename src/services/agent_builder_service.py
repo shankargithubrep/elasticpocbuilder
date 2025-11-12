@@ -383,13 +383,124 @@ class AgentBuilderService:
                 'success': False
             }
 
-    def extract_esql_parameters(self, query: str) -> Dict[str, Dict[str, str]]:
+    def _extract_field_from_parameter(self, query: str, param: str) -> str:
         """
-        Extract parameters from an ES|QL query.
-        Parameters in ES|QL are denoted with ?parameter_name syntax.
+        Extract the field name that a parameter is filtering.
+
+        Args:
+            query: ES|QL query string
+            param: Parameter name
+
+        Returns:
+            Field name being filtered, or empty string if not found
+        """
+        import re
+
+        # Pattern: field_name OPERATOR ?param
+        # Handles: WHERE field >= ?param, WHERE field == ?param, etc.
+        pattern = rf'(\w+)\s*[><=!]+\s*\?{param}\b'
+        match = re.search(pattern, query, re.IGNORECASE)
+
+        return match.group(1) if match else ""
+
+    def _is_timestamp_parameter(self, query: str, param: str) -> bool:
+        """
+        Detect if parameter filters @timestamp or event time field.
+        These should NOT be created as parameters (agents handle via execute_esql).
+
+        Args:
+            query: ES|QL query string
+            param: Parameter name
+
+        Returns:
+            True if this is an @timestamp or event timestamp parameter
+        """
+        import re
+
+        # Check if parameter is used with @timestamp
+        pattern = rf'@timestamp\s*[><=!]+\s*\?{param}\b'
+        if re.search(pattern, query, re.IGNORECASE):
+            return True
+
+        # Check parameter name patterns that suggest event timestamps
+        timestamp_patterns = ['timestamp', 'created_at', 'updated_at', 'event_time', 'indexed_at']
+        field_name = self._extract_field_from_parameter(query, param)
+
+        return any(p in field_name.lower() for p in timestamp_patterns)
+
+    def _is_business_date_parameter(
+        self,
+        query: str,
+        param: str,
+        data_profile: Optional[Dict] = None
+    ) -> bool:
+        """
+        Detect if parameter filters a business date field.
+        These SHOULD be created as parameters.
+
+        Args:
+            query: ES|QL query string
+            param: Parameter name
+            data_profile: Optional data profile to validate field types
+
+        Returns:
+            True if this is a business date field parameter
+        """
+        # Extract the field name being filtered
+        field_name = self._extract_field_from_parameter(query, param)
+
+        if not field_name:
+            return False
+
+        # Rule 1: Not @timestamp
+        if field_name == '@timestamp':
+            return False
+
+        # Rule 2: Check if field exists in data profile as datetime
+        if data_profile:
+            for dataset in data_profile.get('datasets', {}).values():
+                fields = dataset.get('fields', {})
+                if field_name in fields:
+                    field_type = fields[field_name].get('type', '')
+                    # Check for datetime type indicators
+                    if 'datetime' in field_type.lower():
+                        return True
+
+        # Rule 3: Name matches business date pattern
+        business_patterns = [
+            'deployment', 'deploy', 'hire', 'hired', 'expiration', 'expires',
+            'launch', 'launched', 'renewal', 'renew', 'completion', 'completed',
+            'due', 'purchase', 'purchased', 'start', 'end', 'begin', 'finish',
+            'activation', 'deactivation', 'termination', 'effective'
+        ]
+
+        # Check both parameter name and field name
+        param_lower = param.lower()
+        field_lower = field_name.lower()
+
+        for pattern in business_patterns:
+            if pattern in param_lower or pattern in field_lower:
+                # Additional check: not an event timestamp
+                if not self._is_timestamp_parameter(query, param):
+                    return True
+
+        return False
+
+    def extract_esql_parameters(
+        self,
+        query: str,
+        data_profile: Optional[Dict] = None
+    ) -> Dict[str, Dict[str, str]]:
+        """
+        Extract parameters from an ES|QL query with sophisticated detection
+        to distinguish business date fields from @timestamp filtering.
+
+        Business date fields (deployment_date, hire_date, etc.) get parameters.
+        @timestamp filtering does NOT get parameters (agents handle via execute_esql).
 
         Args:
             query: The ES|QL query string
+            data_profile: Optional data profile to validate field types
 
         Returns:
             Dict of parameters with their types
@@ -403,12 +514,24 @@ class AgentBuilderService:
         # Create parameter definitions with inferred types
         param_definitions = {}
         for param in params:
+            # CRITICAL: Skip @timestamp parameters (agents handle via execute_esql)
+            if self._is_timestamp_parameter(query, param):
+                # Don't create parameter - agents will handle temporal filtering
+                continue
+
             param_lower = param.lower()
 
+            # Check if this is a business date parameter
+            is_business_date = self._is_business_date_parameter(query, param, data_profile)
+
             # Infer type based on parameter name
-            if 'date' in param_lower or 'time' in param_lower:
+            if is_business_date or 'date' in param_lower or 'time' in param_lower:
                 param_type = 'date'
-                description = f"Date/time parameter for {param}"
+                if is_business_date:
+                    field_name = self._extract_field_from_parameter(query, param)
+                    description = f"Business date filter for {field_name}"
+                else:
+                    description = f"Date/time parameter for {param}"
             elif 'count' in param_lower or 'limit' in param_lower or 'size' in param_lower:
                 param_type = 'integer'
                 description = f"Number parameter for {param}"
@@ -424,7 +547,8 @@ class AgentBuilderService:
 
             param_definitions[param] = {
                 'type': param_type,
-                'description': description
+                'description': description,
+                'optional': False  # All extracted params default to required
             }
 
         return param_definitions

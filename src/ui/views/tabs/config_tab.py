@@ -74,3 +74,40 @@ def render_config_tab(loader, assets_key: str):
                 st.error(f"Error regenerating assets: {e}")
                 import traceback
                 st.code(traceback.format_exc())
+
+    # Original Conversation Section
+    st.divider()
+    st.markdown("### Original Conversation")
+    st.caption("The conversation that led to the creation of this demo")
+
+    import json
+    conversation_file = loader.module_path / 'conversation.json'
+    if conversation_file.exists():
+        try:
+            with open(conversation_file, 'r') as f:
+                conversation_data = json.load(f)
+
+            messages = conversation_data.get('messages', [])
+
+            if messages:
+                st.markdown(f"**Generated:** {conversation_data.get('timestamp', 'Unknown')}")
+                st.divider()
+
+                # Display messages in chat format
+                for msg in messages:
+                    role = msg.get('role', 'unknown')
+                    content = msg.get('content', '')
+
+                    if role == 'user':
+                        with st.chat_message("user"):
+                            st.markdown(content)
+                    elif role == 'assistant':
+                        with st.chat_message("assistant"):
+                            st.markdown(content)
+            else:
+                st.info("No conversation messages found.")
+        except Exception as e:
+            st.error(f"Error loading conversation: {e}")
+            st.code(str(e))
+    else:
+        st.info("💬 No conversation history found for this demo. This feature was added in a recent update.")

@@ -849,11 +849,36 @@ Pain Points: {", ".join(config["pain_points"])}
 - Include parameter definitions with types and defaults
 - Link to conceptual base query for trust
 
+**CRITICAL - Smart Parameter Selection:**
+
+✅ **CREATE parameters for BUSINESS-SPECIFIC logic:**
+- Domain fields: `WHERE category == ?category`, `WHERE status == ?status`
+- Business date fields: `WHERE deployment_date >= ?deploy_start`, `WHERE hire_date BETWEEN ?from AND ?to`
+- Schema-specific: `WHERE provider_id == ?provider`, `WHERE priority_level >= ?min_priority`
+
+❌ **AVOID parameters for CROSS-CUTTING concerns:**
+- `@timestamp` filtering (agents handle dynamically via platform.core.execute_esql)
+- Event timestamps: created_at, updated_at, indexed_at
+- Generic operations: LIMIT, SORT direction
+
+**Business Date Fields - GOOD Examples:**
+```
+WHERE deployment_date >= ?deploy_start  # ✓ Business date field
+WHERE expiration_date < ?expiry_cutoff  # ✓ Domain-specific date
+WHERE hire_date BETWEEN ?from AND ?to   # ✓ Business temporal logic
+```
+
+**@timestamp Filtering - AVOID:**
+```
+WHERE @timestamp >= ?start_date  # ✗ Agent handles this via execute_esql
+WHERE @timestamp <= ?end_date    # ✗ Cross-cutting concern
+```
+
 **ES|QL Parameter Syntax:**
 ```
-WHERE field == ?value
-WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date
-LIMIT ?limit
+WHERE category == ?category
+WHERE deployment_date >= ?deploy_start  # Use business dates, not @timestamp
+LIMIT ?limit  # Optional - consider if necessary
 ```
 
 **Method Template:**
@@ -871,34 +896,28 @@ def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
         "description": "Configurable version of X",
         "tool_metadata": {{  # REQUIRED for Agent Builder
             "tool_id": "{company_slug}_{dept_slug}_configurable",
-            "description": "Analyzes data with filters. Allows custom date ranges and limits for targeted analysis.",
+            "description": "Analyzes data with business-specific filters. Focus on domain logic, not time ranges (agents handle those).",
             "tags": ["analytics", "configurable", "esql"]
         }},
         "esql": \"\"\"
             FROM index_name
-            | WHERE field == ?value
-            | WHERE @timestamp >= ?start_date
-            | STATS aggregation BY category
+            | WHERE category == ?category
+            | WHERE status == ?status
+            | STATS aggregation BY field
             | SORT _count DESC
-            | LIMIT ?limit
+            | LIMIT 100
         \"\"\",
         "parameters": {{
-            "value": {{
+            "category": {{
                 "type": "keyword",
-                "description": "Filter value",
-                "default": "example_value",
+                "description": "Business category filter",
+                "default": "example_category",
                 "required": True
             }},
-            "start_date": {{
-                "type": "date",
-                "description": "Start of date range",
-                "default": "NOW() - 7 days",
-                "required": True
-            }},
-            "limit": {{
-                "type": "integer",
-                "description": "Max results",
-                "default": "10",
+            "status": {{
+                "type": "keyword",
+                "description": "Status filter (active, pending, completed)",
+                "default": "active",
                 "required": False
             }}
         }},

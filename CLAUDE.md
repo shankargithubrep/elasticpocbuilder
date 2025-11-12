@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Demo Builder** is a modular platform for generating custom Elastic Agent Builder demonstrations. It uses LLM-generated Python modules to create customer-specific demos with realistic data, ES|QL queries, and demo guides.
+**Vulcan** is a modular platform for generating custom Elastic Agent Builder demonstrations. It uses LLM-generated Python modules to create customer-specific demos with realistic data, ES|QL queries, and demo guides.
 
 **Architecture**: Streamlit UI + Modular Plugin Framework + LLM Code Generation
 
@@ -325,7 +325,7 @@ guide = guide_gen.generate_guide()
 ## Project Structure
 
 ```
-demo-builder/
+vulcan/
 ├── app.py                          # Unified Streamlit interface
 ├── src/
 │   ├── framework/                  # Modular architecture

@@ -157,17 +157,20 @@ def render_tools_tab(loader):
                         tool_id = metadata.get('tool_id', f"{st.session_state.current_demo_module}_{query_id}")
                         tool_description = metadata.get('description', query.get('description', ''))
                         tool_tags = metadata.get('tags', [])
+                        sample_question = metadata.get('sample_question', '')
                     elif query.get('tool_metadata'):
                         # Use pre-generated tool metadata from query module
                         pre_gen = query['tool_metadata']
                         tool_id = pre_gen.get('tool_id', f"{st.session_state.current_demo_module}_{query_id}")
                         tool_description = pre_gen.get('description', query.get('description', ''))
                         tool_tags = pre_gen.get('tags', [])
+                        sample_question = pre_gen.get('sample_question', '')
                     else:
                         # Fallback defaults
                         tool_id = f"{st.session_state.current_demo_module}_{query_id}"
                         tool_description = query.get('description', '')
                         tool_tags = []
+                        sample_question = ''
 
                     # Input fields for tool metadata (removed name field)
                     new_tool_id = st.text_input(
@@ -194,9 +197,62 @@ def render_tools_tab(loader):
                     )
                     new_tool_tags = [t.strip() for t in tags_str.split(',') if t.strip()] if tags_str else []
 
+                    # Sample question input
+                    new_sample_question = st.text_input(
+                        "Sample Agent Question 💬",
+                        value=sample_question,
+                        key=f"sample_question_{query_id}",
+                        help="A realistic user question that would trigger an agent to call this tool",
+                        placeholder="e.g., 'Can you show me where we're spending the most on infrastructure?'"
+                    )
+
                     # Info message if using pre-generated metadata
                     if query.get('tool_metadata') and not metadata:
                         st.info("ℹ️ Using pre-generated tool metadata from query module. You can edit these values before saving.")
+
+                    # Parameter Configuration Section (for parameterized/RAG queries)
+                    param_optional_settings = {}  # Store which params are optional
+                    if candidate['type'] in ['parameterized', 'rag']:
+                        st.markdown("##### Parameter Configuration")
+
+                        # Load data profile for parameter extraction
+                        from src.ui.data_loaders import load_demo_data_profile
+                        data_profile = load_demo_data_profile(st.session_state.current_demo_module)
+
+                        # Extract parameters from query
+                        extracted_params = agent_builder.extract_esql_parameters(
+                            display._get_query_text(query),
+                            data_profile
+                        )
+
+                        if extracted_params:
+                            st.caption(f"Found {len(extracted_params)} parameter(s) in query")
+
+                            # Create a table-like display for parameters
+                            for param_name, param_info in extracted_params.items():
+                                with st.container():
+                                    col1, col2, col3 = st.columns([2, 2, 1])
+
+                                    with col1:
+                                        st.markdown(f"**`{param_name}`**")
+                                        st.caption(f"Type: `{param_info['type']}`")
+
+                                    with col2:
+                                        st.caption(param_info['description'])
+
+                                    with col3:
+                                        # Checkbox to mark as optional
+                                        is_optional = st.checkbox(
+                                            "Optional",
+                                            value=param_info.get('optional', False),
+                                            key=f"param_optional_{query_id}_{param_name}",
+                                            help="Check to make this parameter optional"
+                                        )
+                                        param_optional_settings[param_name] = is_optional
+
+                            st.divider()
+                        else:
+                            st.info("ℹ️ No parameters detected in query")
 
                     # API Call Preview Section
                     with st.expander("🔍 Preview API Call", expanded=False):
@@ -214,24 +270,23 @@ def render_tools_tab(loader):
                             }
                         }
 
-                        # Add parameters if this is a parameterized or RAG query
-                        if candidate['type'] in ['parameterized', 'rag'] and query.get('parameters'):
-                            # Extract parameter definitions from query
-                            params = {}
-                            for param in query['parameters']:
-                                if isinstance(param, dict):
-                                    param_name = param.get('name', '')
-                                    if param_name:
-                                        params[param_name] = {
-                                            "type": param.get('type', 'text'),
-                                            "description": param.get('description', ''),
-                                            "required": param.get('required', True)
-                                        }
-                                        if 'default' in param:
-                                            params[param_name]['default'] = param['default']
-                                        if 'example' in param:
-                                            params[param_name]['example'] = param['example']
+                        # Add parameters using the SAME extraction logic as deployment
+                        if candidate['type'] in ['parameterized', 'rag']:
+                            # Load data profile for sophisticated parameter detection
+                            from src.ui.data_loaders import load_demo_data_profile
+                            data_profile = load_demo_data_profile(st.session_state.current_demo_module)
+
+                            # Extract parameters from query (with business date detection)
+                            params = agent_builder.extract_esql_parameters(
+                                display._get_query_text(query),
+                                data_profile
+                            )
                             if params:
+                                # Apply optional settings from checkboxes
+                                for param_name in params:
+                                    if param_name in param_optional_settings:
+                                        params[param_name]['optional'] = param_optional_settings[param_name]
+
                                 api_payload['configuration']['params'] = params
 
                         # Display the payload as JSON
@@ -261,6 +316,7 @@ def render_tools_tab(loader):
                                 'tool_id': new_tool_id,
                                 'description': new_tool_description,
                                 'tags': new_tool_tags,
+                                'sample_question': new_sample_question,
                                 'query': display._get_query_text(query),
                                 'query_type': candidate['type']
                             }
@@ -294,9 +350,21 @@ def render_tools_tab(loader):
                                             'query': deploy_metadata['query']
                                         }
 
-                                        # Extract parameters from query
-                                        params = agent_builder.extract_esql_parameters(deploy_metadata['query'])
+                                        # Load data profile for sophisticated parameter detection
+                                        from src.ui.data_loaders import load_demo_data_profile
+                                        data_profile = load_demo_data_profile(st.session_state.current_demo_module)
+
+                                        # Extract parameters from query (with business date detection)
+                                        params = agent_builder.extract_esql_parameters(
+                                            deploy_metadata['query'],
+                                            data_profile
+                                        )
                                         if params:
+                                            # Apply optional settings from checkboxes
+                                            for param_name in params:
+                                                if param_name in param_optional_settings:
+                                                    params[param_name]['optional'] = param_optional_settings[param_name]
+
                                             tool_config['params'] = params
 
                                         # Deploy the tool
