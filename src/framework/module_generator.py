@@ -74,7 +74,6 @@ class ModuleGenerator:
             self._generate_query_module_with_plan(config, module_path, query_plan)
             self._generate_guide_module(config, module_path)
             self._generate_config_file(config, module_path)
-            self._generate_agent_metadata(config, module_path)
         else:
             logger.info("Using original data-first generation (no query plan)")
             # Generate each component (Python modules) - original flow
@@ -82,10 +81,12 @@ class ModuleGenerator:
             self._generate_query_module(config, module_path)
             self._generate_guide_module(config, module_path)
             self._generate_config_file(config, module_path)
-            self._generate_agent_metadata(config, module_path)
 
-        # Generate static files for quick loading
+        # Generate static files for quick loading (must happen before agent metadata)
         self._generate_static_files(module_path)
+
+        # Generate agent metadata AFTER static files (needs queries.json)
+        self._generate_agent_metadata(config, module_path)
 
         logger.info(f"Generated demo module at: {module_path}")
         return str(module_path)
@@ -125,10 +126,12 @@ class ModuleGenerator:
         self._generate_query_module_with_strategy(config, module_path, query_strategy)
         self._generate_guide_module(config, module_path)
         self._generate_config_file(config, module_path)
-        self._generate_agent_metadata(config, module_path)
 
-        # Generate static files for quick loading
+        # Generate static files for quick loading (must happen before agent metadata)
         self._generate_static_files(module_path)
+
+        # Generate agent metadata AFTER static files (needs queries.json)
+        self._generate_agent_metadata(config, module_path)
 
         logger.info(f"Generated demo module with strategy at: {module_path}")
         return str(module_path)
