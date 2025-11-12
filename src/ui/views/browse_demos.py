@@ -1009,12 +1009,6 @@ def render_browse_demos_view():
                                     st.json(tool)
 
                                 with col2:
-                                    # View details button
-                                    if st.button("👁️ View", key=f"view_tool_{tool['id']}", use_container_width=True):
-                                        details = agent_builder.get_tool(tool['id'])
-                                        if 'error' not in details:
-                                            st.session_state[f"tool_details_{tool['id']}"] = details
-
                                     # Delete button
                                     if st.button("🗑️ Delete", key=f"delete_tool_{tool['id']}", use_container_width=True):
                                         result = agent_builder.delete_tool(tool['id'])
@@ -1023,11 +1017,6 @@ def render_browse_demos_view():
                                             st.rerun()
                                         else:
                                             st.error(f"Failed to delete: {result.get('error')}")
-
-                                # Show details if fetched
-                                if f"tool_details_{tool['id']}" in st.session_state:
-                                    st.markdown("##### Tool Details")
-                                    st.json(st.session_state[f"tool_details_{tool['id']}"])
                     else:
                         st.info("No tools deployed for this demo yet.")
 
