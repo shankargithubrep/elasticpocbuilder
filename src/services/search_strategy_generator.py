@@ -170,6 +170,46 @@ Examples:
 **NOTE**: Most search demos use lookup mode for ALL datasets (document collections).
 Only use data_stream for high-volume event logs with timestamps.
 
+**⚠️ CRITICAL ES|QL ANTI-PATTERNS TO AVOID:**
+❌ NEVER use window functions: LAG(), LEAD(), OVER, PARTITION BY (in window context)
+❌ NEVER use ranking functions: ROW_NUMBER(), RANK(), DENSE_RANK()
+❌ NEVER try to reference other rows: metric[-1], previous values, or row positions
+❌ NEVER use unsupported syntax like: OVER (ORDER BY...), OVER (PARTITION BY...)
+
+**✅ For Search Queries, Remember:**
+- Search queries focus on RETRIEVAL, not complex analytics
+- Use SORT and LIMIT for ranking, not ROW_NUMBER()
+- Use _score for relevance ranking (automatically calculated by MATCH)
+- INLINESTATS is rarely needed in search (it's for analytics)
+
+**Example of CORRECT search ranking:**
+```esql
+FROM knowledge_base
+| MATCH(content, "user query")
+| SORT _score DESC
+| LIMIT 10
+```
+
+**🎯 CRITICAL: KEEP Field Prioritization for Agent Tool Calls**
+⚠️ **ONLY THE FIRST 5 FIELDS in KEEP are visible to agents!** Fields 6+ are truncated in tool responses.
+
+**For SEARCH queries, prioritize fields like this:**
+1. **Position 1**: Document/entity ID (for retrieval)
+2. **Position 2**: Relevance score or rank
+3. **Position 3**: Title or name (for display)
+4. **Position 4**: Content snippet or summary
+5. **Position 5**: Category or type
+6. **Positions 6+**: Metadata (author, date, tags) - NOT visible to agents
+
+**Example KEEP for search:**
+```esql
+// GOOD: Most relevant fields first
+| KEEP article_id, _score, title, content_snippet, category, author, created_date
+
+// BAD: ID and title buried
+| KEEP created_date, author, tags, status, article_id, title, content
+```
+
 **Output Format (MUST be valid JSON):**
 ```json
 {{
@@ -363,13 +403,18 @@ ES|QL Search Commands:
         """
         import re
 
-        # Step 1: Replace actual newlines within string values with \n
+        # Step 1: Check if JSON appears truncated and attempt to complete it
+        json_text = self._complete_truncated_json(json_text)
+
+        # Step 2: Replace actual newlines within string values with \n
         # This regex finds strings and replaces newlines within them
         def fix_newlines_in_strings(match):
             # The matched string content (without quotes)
             content = match.group(1)
             # Replace actual newlines with escaped newlines
             fixed_content = content.replace('\n', '\\n').replace('\r', '\\r')
+            # Replace tabs with escaped tabs
+            fixed_content = fixed_content.replace('\t', '\\t')
             # Return the fixed string with quotes
             return f'"{fixed_content}"'
 
@@ -377,24 +422,119 @@ ES|QL Search Commands:
         # This pattern matches: "..." where ... can contain \" but not unescaped "
         json_text = re.sub(r'"((?:[^"\\]|\\.)*)(?<!\\)"', fix_newlines_in_strings, json_text)
 
-        # Step 2: Fix unescaped quotes within string values
-        # This is trickier - we need to identify quotes that should be escaped
+        # Step 3: Fix unescaped quotes within string values more aggressively
+        # Look for patterns where we have quotes inside a string value
+        # This is a more aggressive approach for fixing nested quotes
+        def fix_quotes_in_value(text):
+            # Find string values that might have unescaped quotes
+            # This looks for patterns like: "value": "text with "quote" inside"
+            pattern = r'("(?:query|description|name|pain_point|esql)":\s*")(.*?)("(?:\s*,|\s*\}))'
 
-        # Step 3: Remove trailing commas before closing brackets/braces
+            def escape_internal_quotes(match):
+                prefix = match.group(1)
+                content = match.group(2)
+                suffix = match.group(3)
+                # Escape any unescaped quotes in the content
+                fixed_content = re.sub(r'(?<!\\)"', r'\"', content)
+                return prefix + fixed_content + suffix
+
+            return re.sub(pattern, escape_internal_quotes, text, flags=re.DOTALL)
+
+        json_text = fix_quotes_in_value(json_text)
+
+        # Step 4: Remove trailing commas before closing brackets/braces
         json_text = re.sub(r',(\s*[}\]])', r'\1', json_text)
 
-        # Step 4: Ensure consistent quote usage (replace single quotes around keys/values)
+        # Step 5: Ensure consistent quote usage (replace single quotes around keys/values)
         # But be careful not to replace single quotes within string values
         json_text = re.sub(r"'([^']*)'(\s*:)", r'"\1"\2', json_text)  # Fix keys
         json_text = re.sub(r":\s*'([^']*)'", r': "\1"', json_text)    # Fix simple string values
 
-        # Step 5: Remove any BOM or zero-width spaces
+        # Step 6: Remove any BOM or zero-width spaces
         json_text = json_text.replace('\ufeff', '').replace('\u200b', '')
 
-        # Step 6: Handle common encoding issues
+        # Step 7: Handle common encoding issues
         json_text = json_text.encode('utf-8', errors='ignore').decode('utf-8')
 
-        logger.debug("Applied JSON fixes: newlines, trailing commas, quotes, encoding")
+        logger.debug("Applied JSON fixes: truncation, newlines, trailing commas, quotes, encoding")
+        return json_text
+
+    def _complete_truncated_json(self, json_text: str) -> str:
+        """Attempt to complete truncated JSON by closing open structures
+
+        Args:
+            json_text: Potentially truncated JSON text
+
+        Returns:
+            Completed JSON text
+        """
+        import re
+
+        # Count open brackets and braces
+        open_braces = json_text.count('{') - json_text.count('}')
+        open_brackets = json_text.count('[') - json_text.count(']')
+
+        # Check if we're in the middle of a string value
+        # Look for the last quote and determine if we're inside a string
+        in_string = False
+        escape_next = False
+        quote_count = 0
+
+        for char in json_text:
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\':
+                escape_next = True
+                continue
+            if char == '"':
+                quote_count += 1
+                in_string = not in_string
+
+        # If we're in a string, close it
+        if in_string:
+            json_text += '"'
+            logger.debug("Closed incomplete string value")
+
+        # Now check if we need to close the current object/array context
+        # Look at the last few characters to understand the context
+        trimmed = json_text.rstrip()
+
+        # If the last character is a quote, we just closed a string
+        # Check what comes before the string to see if we need a closing brace/bracket
+        if trimmed.endswith('"'):
+            # Look backwards to find the context
+            # Find the last opening that would contain this string
+            # Simple heuristic: if we just closed a string after "query": "...",
+            # we likely need to close the object containing this query
+            last_100_chars = trimmed[-100:] if len(trimmed) > 100 else trimmed
+
+            # Check if this looks like the end of a query field
+            if '"query"' in last_100_chars or '"esql"' in last_100_chars:
+                # This is likely a truncated query field, need to close the parent object
+                # But first check if there are more fields expected
+                # Simple approach: assume query is the last field in queries array item
+                pass  # Will be handled by structure closing below
+
+        # Now close structures based on count
+        closing = ''
+
+        # We need to be smart about closing - check the context
+        # If we just ended with a string value, we might need to close the containing object first
+        if open_braces > 0 or open_brackets > 0:
+            # Analyze the last part to understand nesting
+            # Simple approach: close in LIFO order (close brackets before braces)
+
+            # First close any arrays
+            closing += ']' * open_brackets
+
+            # Then close any objects
+            closing += '}' * open_braces
+
+        if closing:
+            logger.debug(f"Completing truncated JSON with: {closing}")
+            json_text += closing
+
         return json_text
 
     def extract_data_requirements(self, strategy: Dict) -> Dict[str, Dict]:

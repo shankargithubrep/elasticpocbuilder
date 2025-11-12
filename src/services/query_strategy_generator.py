@@ -60,29 +60,101 @@ class QueryStrategyGenerator:
         # Read ES|QL skill for reference
         esql_skill = self._read_esql_skill()
 
-        prompt = self._build_strategy_prompt(context, esql_skill)
+        # Start with requested number of queries
+        num_queries = 5  # Reduced from 7 to avoid truncation
+        max_retries = 2
 
-        # Call LLM to generate strategy
-        try:
-            response = self.llm_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=8000,
-                temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]
-            )
+        for attempt in range(max_retries):
+            try:
+                # Adjust prompt based on attempt
+                if attempt > 0:
+                    logger.info(f"Retry {attempt}: Requesting {num_queries} queries to avoid truncation")
 
-            strategy_text = response.content[0].text
-            strategy_json = self._extract_json(strategy_text)
+                prompt = self._build_strategy_prompt(context, esql_skill, num_queries=num_queries)
 
-            logger.info(f"Generated strategy with {len(strategy_json.get('queries', []))} queries")
-            return strategy_json
+                # Call LLM to generate strategy
+                response = self.llm_client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=8000,
+                    temperature=0.7,
+                    messages=[{"role": "user", "content": prompt}]
+                )
 
-        except Exception as e:
-            logger.error(f"Failed to generate query strategy: {e}", exc_info=True)
-            raise
+                strategy_text = response.content[0].text
 
-    def _build_strategy_prompt(self, context: Dict, esql_skill: str) -> str:
-        """Build the LLM prompt for query strategy generation"""
+                # Check if response appears truncated
+                if self._is_likely_truncated(strategy_text):
+                    logger.warning(f"Response appears truncated (attempt {attempt + 1}/{max_retries})")
+                    # Reduce number of queries for next attempt
+                    num_queries = max(3, num_queries - 2)
+                    if attempt < max_retries - 1:
+                        continue
+
+                strategy_json = self._extract_json(strategy_text)
+
+                logger.info(f"Generated strategy with {len(strategy_json.get('queries', []))} queries")
+                return strategy_json
+
+            except ValueError as e:
+                if "Invalid JSON" in str(e) and attempt < max_retries - 1:
+                    # Try with fewer queries on JSON parsing errors
+                    logger.warning(f"JSON parsing failed (attempt {attempt + 1}/{max_retries}): {e}")
+                    num_queries = max(3, num_queries - 2)
+                    continue
+                else:
+                    logger.error(f"Failed to generate query strategy: {e}", exc_info=True)
+                    raise
+
+            except Exception as e:
+                logger.error(f"Failed to generate query strategy: {e}", exc_info=True)
+                raise
+
+        # If we get here, all retries failed
+        raise ValueError("Failed to generate valid query strategy after all retries")
+
+    def _is_likely_truncated(self, text: str) -> bool:
+        """Check if the response text appears to be truncated
+
+        Args:
+            text: Response text from LLM
+
+        Returns:
+            True if text appears truncated
+        """
+        # Check for common signs of truncation
+        text = text.rstrip()
+
+        # If it doesn't end with typical JSON endings, might be truncated
+        if not (text.endswith('}') or text.endswith(']') or text.endswith('```')):
+            return True
+
+        # If JSON block started but not closed
+        if '```json' in text and not text.endswith('```'):
+            return True
+
+        # Check for severely imbalanced brackets/braces
+        open_braces = text.count('{')
+        close_braces = text.count('}')
+        open_brackets = text.count('[')
+        close_brackets = text.count(']')
+
+        # If there's a large imbalance, likely truncated
+        if abs(open_braces - close_braces) > 2 or abs(open_brackets - close_brackets) > 2:
+            return True
+
+        return False
+
+    def _build_strategy_prompt(self, context: Dict, esql_skill: str, num_queries: int = 5) -> str:
+        """Build the LLM prompt for query strategy generation
+
+        Args:
+            context: Customer context
+            esql_skill: ES|QL skill documentation
+            num_queries: Number of queries to generate (default 5)
+
+        Returns:
+            Prompt string
+        """
 
         prompt = f"""You are an ES|QL expert designing a demo for Elastic Agent Builder.
 
@@ -96,7 +168,7 @@ class QueryStrategyGenerator:
 - Metrics: {json.dumps(context.get('metrics', []), indent=2)}
 
 **Your Task:**
-Design 5-7 ES|QL queries that directly address their pain points and use cases.
+Design EXACTLY {num_queries} ES|QL queries that directly address their pain points and use cases.
 For each query, specify the EXACT data structure needed to make it work.
 
 **ES|QL Capabilities Reference:**
@@ -111,6 +183,69 @@ For each query, specify the EXACT data structure needed to make it work.
    - **index_mode: "data_stream"** - If dataset is ONLY used in FROM clauses AND has a timestamp field
 5. Define relationships between datasets (foreign keys)
 6. Mark fields that should use semantic_text for vector search
+
+**⚠️ CRITICAL ES|QL ANTI-PATTERNS TO AVOID:**
+❌ NEVER use window functions: LAG(), LEAD(), OVER, PARTITION BY (in window context)
+❌ NEVER use ranking functions: ROW_NUMBER(), RANK(), DENSE_RANK()
+❌ NEVER try to reference other rows: metric[-1], previous values, or row positions
+❌ NEVER use unsupported syntax like: OVER (ORDER BY...), OVER (PARTITION BY...)
+
+**✅ RECOMMENDED PATTERNS FOR COMMON USE CASES:**
+
+1. **For Anomaly Detection** (instead of LAG/LEAD):
+```esql
+| STATS metric_value = AVG(field) BY time_bucket, dimension
+| INLINESTATS
+    avg_metric = AVG(metric_value),
+    stddev_metric = STD_DEV(metric_value)
+  BY dimension
+| EVAL z_score = (metric_value - avg_metric) / COALESCE(stddev_metric, 1)
+| WHERE z_score > 3
+```
+
+2. **For Change Detection** (instead of LAG for period-over-period):
+```esql
+| INLINESTATS
+    baseline = AVG(metric),
+    threshold = PERCENTILE(metric, 95)
+  BY category
+| EVAL pct_deviation = ((metric - baseline) / baseline) * 100
+| WHERE ABS(pct_deviation) > 25
+```
+
+3. **For Top N Results** (instead of ROW_NUMBER):
+```esql
+| STATS max_value = MAX(metric) BY dimension
+| SORT max_value DESC
+| LIMIT 10
+```
+
+**✅ WHAT INLINESTATS CAN DO:**
+- Statistical aggregations: AVG(), STD_DEV(), VARIANCE()
+- Counting: COUNT(), COUNT_DISTINCT()
+- Min/Max: MIN(), MAX()
+- Percentiles: PERCENTILE(field, n), MEDIAN()
+- Sums: SUM()
+
+**REMEMBER:** INLINESTATS = Aggregations ONLY. No window functions, no row references!
+
+**🎯 CRITICAL: KEEP Field Prioritization for Agent Tool Calls**
+⚠️ **ONLY THE FIRST 5 FIELDS in KEEP are visible to agents!** Fields 6+ are truncated in tool responses.
+
+**KEEP Field Order Requirements:**
+1. **Positions 1-2**: Primary identifiers (customer_id, user_id, entity_id)
+2. **Positions 3-4**: Critical values (severity, score, amount, status)
+3. **Position 5**: Human context (error_message, description, summary)
+4. **Positions 6+**: Supporting data (timestamps, metadata) - NOT visible to agents
+
+**Example KEEP statements:**
+```esql
+// GOOD: Critical fields first
+| KEEP customer_id, anomaly_severity, metric_name, z_score, current_value, timestamp, details
+
+// BAD: Critical fields buried
+| KEEP timestamp, session_id, trace_id, span_id, details, customer_id, severity
+```
 
 **CRITICAL Index Mode Decision Rule:**
 For each dataset, determine index_mode based on how it will be used:
@@ -162,17 +297,16 @@ Examples:
   ],
   "queries": [
     {{
-      "name": "Sales Spike Detection with Product Enrichment",
-      "pain_point": "Cannot quickly correlate sales spikes with product categories",
-      "esql_features": ["STATS", "DATE_TRUNC", "LOOKUP JOIN", "EVAL"],
-      "required_datasets": ["sales_transactions", "products"],
+      "name": "Sales Anomaly Detection with Statistical Z-Score",
+      "pain_point": "Cannot quickly identify abnormal sales patterns across regions",
+      "esql_features": ["STATS", "DATE_TRUNC", "INLINESTATS", "EVAL", "STD_DEV"],
+      "required_datasets": ["sales_transactions"],
       "required_fields": {{
-        "sales_transactions": ["@timestamp", "product_id", "amount", "region"],
-        "products": ["product_id", "category", "product_name"]
+        "sales_transactions": ["@timestamp", "amount", "region", "store_id"]
       }},
-      "join_chain": ["sales_transactions -> products"],
-      "description": "Detect revenue spikes by hour, enrich with product details to identify which categories are driving growth",
-      "complexity": "medium"
+      "description": "Detect statistical anomalies in hourly sales using z-score analysis, identify stores with unusual patterns",
+      "complexity": "medium",
+      "esql_query": "FROM sales_transactions | EVAL hour = DATE_TRUNC(1 hour, @timestamp) | STATS hourly_sales = SUM(amount) BY hour, store_id, region | INLINESTATS avg_sales = AVG(hourly_sales), stddev_sales = STD_DEV(hourly_sales), p95_sales = PERCENTILE(hourly_sales, 95) BY region | EVAL z_score = (hourly_sales - avg_sales) / COALESCE(stddev_sales, 1) | WHERE z_score > 3 OR z_score < -3 | EVAL anomaly_type = CASE(z_score > 3, 'SPIKE', 'DROP') | SORT ABS(z_score) DESC"
     }}
   ],
   "relationships": [
@@ -292,13 +426,18 @@ ES|QL Key Features:
         """
         import re
 
-        # Step 1: Replace actual newlines within string values with \n
+        # Step 1: Check if JSON appears truncated and attempt to complete it
+        json_text = self._complete_truncated_json(json_text)
+
+        # Step 2: Replace actual newlines within string values with \n
         # This regex finds strings and replaces newlines within them
         def fix_newlines_in_strings(match):
             # The matched string content (without quotes)
             content = match.group(1)
             # Replace actual newlines with escaped newlines
             fixed_content = content.replace('\n', '\\n').replace('\r', '\\r')
+            # Replace tabs with escaped tabs
+            fixed_content = fixed_content.replace('\t', '\\t')
             # Return the fixed string with quotes
             return f'"{fixed_content}"'
 
@@ -306,26 +445,119 @@ ES|QL Key Features:
         # This pattern matches: "..." where ... can contain \" but not unescaped "
         json_text = re.sub(r'"((?:[^"\\]|\\.)*)(?<!\\)"', fix_newlines_in_strings, json_text)
 
-        # Step 2: Fix unescaped quotes within string values
-        # This is trickier - we need to identify quotes that should be escaped
-        # Look for patterns like: "text "quoted" text" and fix to: "text \"quoted\" text"
+        # Step 3: Fix unescaped quotes within string values more aggressively
+        # Look for patterns where we have quotes inside a string value
+        # This is a more aggressive approach for fixing nested quotes
+        def fix_quotes_in_value(text):
+            # Find string values that might have unescaped quotes
+            # This looks for patterns like: "value": "text with "quote" inside"
+            pattern = r'("(?:query|description|name|pain_point|esql)":\s*")(.*?)("(?:\s*,|\s*\}))'
 
-        # Step 3: Remove trailing commas before closing brackets/braces
+            def escape_internal_quotes(match):
+                prefix = match.group(1)
+                content = match.group(2)
+                suffix = match.group(3)
+                # Escape any unescaped quotes in the content
+                fixed_content = re.sub(r'(?<!\\)"', r'\"', content)
+                return prefix + fixed_content + suffix
+
+            return re.sub(pattern, escape_internal_quotes, text, flags=re.DOTALL)
+
+        json_text = fix_quotes_in_value(json_text)
+
+        # Step 4: Remove trailing commas before closing brackets/braces
         json_text = re.sub(r',(\s*[}\]])', r'\1', json_text)
 
-        # Step 4: Ensure consistent quote usage (replace single quotes around keys/values)
+        # Step 5: Ensure consistent quote usage (replace single quotes around keys/values)
         # But be careful not to replace single quotes within string values
-        # This is a simplified approach - might need refinement
         json_text = re.sub(r"'([^']*)'(\s*:)", r'"\1"\2', json_text)  # Fix keys
         json_text = re.sub(r":\s*'([^']*)'", r': "\1"', json_text)    # Fix simple string values
 
-        # Step 5: Remove any BOM or zero-width spaces
+        # Step 6: Remove any BOM or zero-width spaces
         json_text = json_text.replace('\ufeff', '').replace('\u200b', '')
 
-        # Step 6: Handle common encoding issues
+        # Step 7: Handle common encoding issues
         json_text = json_text.encode('utf-8', errors='ignore').decode('utf-8')
 
-        logger.debug("Applied JSON fixes: newlines, trailing commas, quotes, encoding")
+        logger.debug("Applied JSON fixes: truncation, newlines, trailing commas, quotes, encoding")
+        return json_text
+
+    def _complete_truncated_json(self, json_text: str) -> str:
+        """Attempt to complete truncated JSON by closing open structures
+
+        Args:
+            json_text: Potentially truncated JSON text
+
+        Returns:
+            Completed JSON text
+        """
+        import re
+
+        # Count open brackets and braces
+        open_braces = json_text.count('{') - json_text.count('}')
+        open_brackets = json_text.count('[') - json_text.count(']')
+
+        # Check if we're in the middle of a string value
+        # Look for the last quote and determine if we're inside a string
+        in_string = False
+        escape_next = False
+        quote_count = 0
+
+        for char in json_text:
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\':
+                escape_next = True
+                continue
+            if char == '"':
+                quote_count += 1
+                in_string = not in_string
+
+        # If we're in a string, close it
+        if in_string:
+            json_text += '"'
+            logger.debug("Closed incomplete string value")
+
+        # Now check if we need to close the current object/array context
+        # Look at the last few characters to understand the context
+        trimmed = json_text.rstrip()
+
+        # If the last character is a quote, we just closed a string
+        # Check what comes before the string to see if we need a closing brace/bracket
+        if trimmed.endswith('"'):
+            # Look backwards to find the context
+            # Find the last opening that would contain this string
+            # Simple heuristic: if we just closed a string after "query": "...",
+            # we likely need to close the object containing this query
+            last_100_chars = trimmed[-100:] if len(trimmed) > 100 else trimmed
+
+            # Check if this looks like the end of a query field
+            if '"query"' in last_100_chars or '"esql"' in last_100_chars:
+                # This is likely a truncated query field, need to close the parent object
+                # But first check if there are more fields expected
+                # Simple approach: assume query is the last field in queries array item
+                pass  # Will be handled by structure closing below
+
+        # Now close structures based on count
+        closing = ''
+
+        # We need to be smart about closing - check the context
+        # If we just ended with a string value, we might need to close the containing object first
+        if open_braces > 0 or open_brackets > 0:
+            # Analyze the last part to understand nesting
+            # Simple approach: close in LIFO order (close brackets before braces)
+
+            # First close any arrays
+            closing += ']' * open_brackets
+
+            # Then close any objects
+            closing += '}' * open_braces
+
+        if closing:
+            logger.debug(f"Completing truncated JSON with: {closing}")
+            json_text += closing
+
         return json_text
 
     def extract_data_requirements(self, strategy: Dict) -> Dict[str, Dict]:

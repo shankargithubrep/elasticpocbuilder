@@ -172,6 +172,12 @@ def render_sidebar():
         st.caption(f"🔄 RERANK: `{st.session_state.inference_endpoints['rerank']}`")
         st.caption(f"🤖 COMPLETION: `{st.session_state.inference_endpoints['completion']}`")
 
+        # Under the Hood button
+        st.markdown("---")
+        if st.button("🔧 Under the Hood", use_container_width=True, key="under_the_hood_btn"):
+            st.session_state.show_under_the_hood = True
+            st.rerun()
+
     else:  # Browse mode
         st.markdown("### 📚 Demo Modules")
 

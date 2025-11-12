@@ -106,6 +106,9 @@ if "current_demo_module" not in st.session_state:
 if "view_mode" not in st.session_state:
     st.session_state.view_mode = "create"  # "create" or "browse"
 
+if "show_under_the_hood" not in st.session_state:
+    st.session_state.show_under_the_hood = False
+
 
 
 def main():
@@ -115,11 +118,22 @@ def main():
     with st.sidebar:
         render_sidebar()
 
-    # Render main content based on mode
-    if st.session_state.view_mode == "create":
-        render_create_demo_view()
+    # Check if showing "Under the hood" view
+    if st.session_state.get("show_under_the_hood", False):
+        from src.ui.views.under_the_hood import render_under_the_hood
+
+        # Add a back button
+        if st.button("← Back to Create Demo", key="back_from_under_hood"):
+            st.session_state.show_under_the_hood = False
+            st.rerun()
+
+        render_under_the_hood()
     else:
-        render_browse_demos_view()
+        # Render main content based on mode
+        if st.session_state.view_mode == "create":
+            render_create_demo_view()
+        else:
+            render_browse_demos_view()
 
 
 if __name__ == "__main__":
