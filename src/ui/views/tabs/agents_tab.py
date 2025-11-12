@@ -137,7 +137,7 @@ def render_agents_tab(agent_builder):
                                                 selected_tools.append(tool_id)
 
                                     # Update button
-                                    if st.form_submit_button("🔄 Update Tools", use_container_width=True):
+                                    if st.form_submit_button("🔧 Set Active Tools for this Agent", use_container_width=True):
                                         with st.spinner("Updating agent tools..."):
                                             # Update agent with new tools
                                             update_config = {
