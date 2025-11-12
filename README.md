@@ -107,8 +107,8 @@ See `docs/RAG_SEARCH_ARCHITECTURE.md` for technical details on the dual-track ar
 
 ```bash
 # Clone repository
-git clone https://github.com/elastic/demo-builder.git
-cd demo-builder
+git clone https://github.com/elastic/vulcan.git
+cd vulcan
 
 # Setup environment
 python3 -m venv venv
@@ -449,7 +449,7 @@ python -m pytest tests/test_integration.py -v          # End-to-end
 ## Project Structure
 
 ```
-demo-builder/
+vulcan/
 ├── app.py                          # Main Streamlit application
 ├── src/
 │   ├── framework/                  # Core generation framework
