@@ -198,7 +198,14 @@ Examples:
 - Use LOOKUP JOIN syntax: "FROM timeseries | LOOKUP JOIN reference ON key"
 - Use the actual dataset name in LOOKUP JOIN (no suffix needed)
 
-Generate the complete strategy as valid JSON:"""
+**CRITICAL JSON FORMATTING RULES:**
+1. Return ONLY valid JSON - no markdown, no commentary, no explanations
+2. Ensure all strings are properly escaped (use \\" for quotes inside strings)
+3. Do NOT include newlines inside JSON string values - use \\n instead
+4. Do NOT include unescaped special characters in string values
+5. Enclose the entire JSON in a ```json code block
+
+Generate the complete strategy as valid JSON now:"""
 
         return prompt
 
@@ -252,8 +259,19 @@ ES|QL Key Features:
             return json.loads(json_text)
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON: {e}")
-            logger.debug(f"JSON text: {json_text[:500]}")
-            raise ValueError(f"Invalid JSON in LLM response: {e}")
+            logger.debug(f"JSON text preview: {json_text[:1000]}")
+
+            # Save the problematic JSON for debugging
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                f.write(json_text)
+                logger.error(f"Saved problematic JSON to: {f.name}")
+
+            # Try to provide helpful error message
+            error_msg = f"Invalid JSON in LLM response: {e}\n"
+            error_msg += f"This usually means the LLM generated malformed JSON with unescaped quotes or newlines.\n"
+            error_msg += f"Check the saved file at the path above for details."
+            raise ValueError(error_msg)
 
     def extract_data_requirements(self, strategy: Dict) -> Dict[str, Dict]:
         """Extract data generation requirements from query strategy

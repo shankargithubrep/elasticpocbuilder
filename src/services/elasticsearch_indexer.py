@@ -244,14 +244,19 @@ class ElasticsearchIndexer:
                 progress_callback(0.1, "Analyzed dataset structure")
 
             # Determine index type: use explicit index_mode if provided, otherwise auto-detect
-            if index_mode:
-                # Use explicit mode from strategy
-                use_data_stream = (index_mode == "data_stream")
-                logger.info(f"Using explicit index_mode: {index_mode}")
-            else:
-                # Fall back to auto-detection based on timestamp fields
-                use_data_stream = mapping_info["is_timeseries"]
-                logger.info(f"Auto-detected index type: {'data_stream' if use_data_stream else 'lookup'}")
+            # COMMENTED OUT: Always use lookup mode for all datasets
+            # if index_mode:
+            #     # Use explicit mode from strategy
+            #     use_data_stream = (index_mode == "data_stream")
+            #     logger.info(f"Using explicit index_mode: {index_mode}")
+            # else:
+            #     # Fall back to auto-detection based on timestamp fields
+            #     use_data_stream = mapping_info["is_timeseries"]
+            #     logger.info(f"Auto-detected index type: {'data_stream' if use_data_stream else 'lookup'}")
+
+            # OVERRIDE: Always use lookup mode (data streams disabled temporarily)
+            use_data_stream = False
+            logger.info(f"FORCED: Always using lookup mode for all datasets (data streams disabled)")
 
             # Create index or data stream
             if use_data_stream:

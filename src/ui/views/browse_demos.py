@@ -78,7 +78,7 @@ def render_browse_demos_view():
 
         if loader:
             # Create tabs FIRST to prevent resets
-            tabs = st.tabs(["📋 Config", "🗂️ Data", "🔍 Queries", "📝 Guide", "💬 Conversation", "🤖 Agents & Tools"])
+            tabs = st.tabs(["📋 Config", "🗂️ Data", "🔍 Queries", "📝 Guide", "💬 Conversation", "🔧 Tools", "🤖 Agents"])
 
             # Auto-load assets when demo is selected (after tabs are created)
             # Use a session state key specific to this demo to track if we've loaded
@@ -955,7 +955,7 @@ def render_browse_demos_view():
                 else:
                     st.info("💬 No conversation history found for this demo. This feature was added in a recent update.")
 
-            with tabs[5]:  # Agents & Tools tab
+            with tabs[5]:  # Tools tab
                 # Import necessary services
                 from src.services.agent_builder_service import AgentBuilderService
                 from src.services.query_validation_service import QueryValidationService
@@ -963,478 +963,472 @@ def render_browse_demos_view():
                 # Initialize services
                 validation_service = QueryValidationService(loader.module_path)
 
-                # Create sub-tabs for Tools and Agents
-                agent_tabs = st.tabs(["🔧 Tools", "🤖 Agents"])
+                st.markdown("### Tool Management")
 
-                with agent_tabs[0]:  # Tools tab
-                    st.markdown("### Tool Management")
+                # Initialize Agent Builder service
+                try:
+                    agent_builder = AgentBuilderService()
+                    connection_valid = agent_builder.validate_connection()
 
-                    # Initialize Agent Builder service
-                    try:
-                        agent_builder = AgentBuilderService()
-                        connection_valid = agent_builder.validate_connection()
-
-                        if not connection_valid['success']:
-                            st.error(f"❌ Cannot connect to Agent Builder API: {connection_valid.get('error', 'Unknown error')}")
-                            st.info("Please check your ELASTICSEARCH_KIBANA_URL and ELASTICSEARCH_API_KEY environment variables.")
-                            st.stop()
-                    except Exception as e:
-                        st.error(f"❌ Agent Builder Service not configured: {e}")
-                        st.info("Please set ELASTICSEARCH_KIBANA_URL and ELASTICSEARCH_API_KEY in your .env file")
+                    if not connection_valid['success']:
+                        st.error(f"❌ Cannot connect to Agent Builder API: {connection_valid.get('error', 'Unknown error')}")
+                        st.info("Please check your ELASTICSEARCH_KIBANA_URL and ELASTICSEARCH_API_KEY environment variables.")
                         st.stop()
+                except Exception as e:
+                    st.error(f"❌ Agent Builder Service not configured: {e}")
+                    st.info("Please set ELASTICSEARCH_KIBANA_URL and ELASTICSEARCH_API_KEY in your .env file")
+                    st.stop()
 
-                    # Section 1: Deployed Tools
-                    st.markdown("#### 📤 Deployed Tools")
+                # Section 1: Deployed Tools
+                st.markdown("#### 📤 Deployed Tools")
 
-                    # Get list of deployed tools from API
-                    deployed_response = agent_builder.list_tools()
+                # Get list of deployed tools from API
+                deployed_response = agent_builder.list_tools()
 
-                    if 'error' in deployed_response:
-                        st.warning(f"Could not fetch deployed tools: {deployed_response['error']}")
-                        deployed_tools = []
-                    else:
-                        # Get tools that belong to this demo
-                        all_tools = deployed_response.get('tools', [])
-                        # Extract the company_department prefix for filtering
-                        module_prefix = get_module_prefix(st.session_state.current_demo_module)
-                        st.caption(f"Filtering tools with prefix: `{module_prefix}*`")
-                        deployed_tools = [t for t in all_tools if t.get('id', '').startswith(module_prefix)]
+                if 'error' in deployed_response:
+                    st.warning(f"Could not fetch deployed tools: {deployed_response['error']}")
+                    deployed_tools = []
+                else:
+                    # Get tools that belong to this demo
+                    all_tools = deployed_response.get('tools', [])
+                    # Extract the company_department prefix for filtering
+                    module_prefix = get_module_prefix(st.session_state.current_demo_module)
+                    st.caption(f"Filtering tools with prefix: `{module_prefix}*`")
+                    deployed_tools = [t for t in all_tools if t.get('id', '').startswith(module_prefix)]
 
-                    if deployed_tools:
-                        for tool in deployed_tools:
-                            with st.expander(f"🔧 {tool.get('name', tool.get('id', 'Unknown'))}"):
-                                col1, col2 = st.columns([3, 1])
+                if deployed_tools:
+                    for tool in deployed_tools:
+                        with st.expander(f"🔧 {tool.get('name', tool.get('id', 'Unknown'))}"):
+                            col1, col2 = st.columns([3, 1])
 
+                            with col1:
+                                st.json(tool)
+
+                            with col2:
+                                # Delete button
+                                if st.button("🗑️ Delete", key=f"delete_tool_{tool['id']}", use_container_width=True):
+                                    result = agent_builder.delete_tool(tool['id'])
+                                    if result.get('success'):
+                                        st.success(f"Deleted tool: {tool['id']}")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"Failed to delete: {result.get('error')}")
+                else:
+                    st.info("No tools deployed for this demo yet.")
+
+                st.divider()
+
+                # Section 2: Tool Candidates
+                st.markdown("#### 🎯 Tool Candidates")
+                st.caption("Validated queries from this module ready for deployment as Agent Builder tools")
+
+                # Load queries for this specific module
+                try:
+                    queries_dict = load_demo_queries(st.session_state.current_demo_module)
+                    all_queries = []
+
+                    # Combine all query types with their metadata
+                    for query_type in ['scripted', 'parameterized', 'rag']:
+                        for i, query in enumerate(queries_dict.get(query_type, []), 1):
+                            query_id = f"{query_type}_query_{i}"
+                            # Only check if validated in this module's validation service
+                            if validation_service.is_query_validated(query_id):
+                                all_queries.append({
+                                    'query_id': query_id,
+                                    'query': query,
+                                    'type': query_type,
+                                    'is_deployed': validation_service.is_tool_deployed(query_id),
+                                    'metadata': validation_service.get_tool_metadata(query_id) or query.get('tool_metadata')
+                                })
+
+                    # Separate deployed and undeployed
+                    undeployed_queries = [q for q in all_queries if not q['is_deployed']]
+                    already_deployed = [q for q in all_queries if q['is_deployed']]
+
+                    if undeployed_queries:
+                        st.success(f"Found {len(undeployed_queries)} validated queries ready for deployment")
+
+                        for candidate in undeployed_queries:
+                            query_id = candidate['query_id']
+                            query = candidate['query']
+                            metadata = candidate['metadata']
+
+                            # Create badge for query type
+                            type_badge = {
+                                'scripted': '📊 SCRIPTED',
+                                'parameterized': '🔧 PARAMETERIZED',
+                                'rag': '🤖 RAG'
+                            }.get(candidate['type'], '❓ ' + candidate['type'].upper())
+
+                            # Use query name or fallback to query_id
+                            query_name = query.get('name', query_id)
+
+                            with st.expander(f"{type_badge} | {query_name}", expanded=False):
+                                # Show query type and description
+                                col1, col2 = st.columns([1, 3])
                                 with col1:
-                                    st.json(tool)
+                                    # Display query type as a colored badge
+                                    if candidate['type'] == 'scripted':
+                                        st.info(f"**Type:** SCRIPTED")
+                                    elif candidate['type'] == 'parameterized':
+                                        st.warning(f"**Type:** PARAMETERIZED")
+                                    elif candidate['type'] == 'rag':
+                                        st.success(f"**Type:** RAG")
+                                    else:
+                                        st.markdown(f"**Type:** {candidate['type'].upper()}")
 
                                 with col2:
-                                    # Delete button
-                                    if st.button("🗑️ Delete", key=f"delete_tool_{tool['id']}", use_container_width=True):
-                                        result = agent_builder.delete_tool(tool['id'])
-                                        if result.get('success'):
-                                            st.success(f"Deleted tool: {tool['id']}")
-                                            st.rerun()
-                                        else:
-                                            st.error(f"Failed to delete: {result.get('error')}")
-                    else:
-                        st.info("No tools deployed for this demo yet.")
+                                    if query.get('description'):
+                                        st.markdown(f"**Description:** {query['description']}")
 
-                    st.divider()
+                                # Tool metadata form
+                                st.markdown("##### Tool Configuration")
 
-                    # Section 2: Tool Candidates
-                    st.markdown("#### 🎯 Tool Candidates")
-                    st.caption("Validated queries from this module ready for deployment as Agent Builder tools")
+                                # Check if metadata already exists (from saved or pre-generated)
+                                # Priority: 1) Saved metadata, 2) Pre-generated from query, 3) Defaults
+                                if metadata:
+                                    tool_id = metadata.get('tool_id', f"{st.session_state.current_demo_module}_{query_id}")
+                                    tool_description = metadata.get('description', query.get('description', ''))
+                                    tool_tags = metadata.get('tags', [])
+                                elif query.get('tool_metadata'):
+                                    # Use pre-generated tool metadata from query module
+                                    pre_gen = query['tool_metadata']
+                                    tool_id = pre_gen.get('tool_id', f"{st.session_state.current_demo_module}_{query_id}")
+                                    tool_description = pre_gen.get('description', query.get('description', ''))
+                                    tool_tags = pre_gen.get('tags', [])
+                                else:
+                                    # Fallback defaults
+                                    tool_id = f"{st.session_state.current_demo_module}_{query_id}"
+                                    tool_description = query.get('description', '')
+                                    tool_tags = []
 
-                    # Load queries for this specific module
-                    try:
-                        queries_dict = load_demo_queries(st.session_state.current_demo_module)
-                        all_queries = []
+                                # Input fields for tool metadata (removed name field)
+                                new_tool_id = st.text_input(
+                                    "Tool ID",
+                                    value=tool_id,
+                                    key=f"tool_id_{query_id}",
+                                    help="Unique identifier for the tool in Agent Builder (e.g., company_dept_purpose)"
+                                )
 
-                        # Combine all query types with their metadata
-                        for query_type in ['scripted', 'parameterized', 'rag']:
-                            for i, query in enumerate(queries_dict.get(query_type, []), 1):
-                                query_id = f"{query_type}_query_{i}"
-                                # Only check if validated in this module's validation service
-                                if validation_service.is_query_validated(query_id):
-                                    all_queries.append({
-                                        'query_id': query_id,
-                                        'query': query,
-                                        'type': query_type,
-                                        'is_deployed': validation_service.is_tool_deployed(query_id),
-                                        'metadata': validation_service.get_tool_metadata(query_id) or query.get('tool_metadata')
-                                    })
+                                new_tool_description = st.text_area(
+                                    "Tool Description",
+                                    value=tool_description,
+                                    key=f"tool_desc_{query_id}",
+                                    height=100,
+                                    help="First ~50 chars appear in tool list. Start with a brief summary, then explain when to use it."
+                                )
 
-                        # Separate deployed and undeployed
-                        undeployed_queries = [q for q in all_queries if not q['is_deployed']]
-                        already_deployed = [q for q in all_queries if q['is_deployed']]
+                                # Tags input
+                                tags_str = st.text_input(
+                                    "Tags (comma-separated)",
+                                    value=", ".join(tool_tags) if tool_tags else "",
+                                    key=f"tool_tags_{query_id}",
+                                    help="Tags to categorize the tool"
+                                )
+                                new_tool_tags = [t.strip() for t in tags_str.split(',') if t.strip()] if tags_str else []
 
-                        if undeployed_queries:
-                            st.success(f"Found {len(undeployed_queries)} validated queries ready for deployment")
+                                # Info message if using pre-generated metadata
+                                if query.get('tool_metadata') and not metadata:
+                                    st.info("ℹ️ Using pre-generated tool metadata from query module. You can edit these values before saving.")
 
-                            for candidate in undeployed_queries:
-                                query_id = candidate['query_id']
-                                query = candidate['query']
-                                metadata = candidate['metadata']
+                                # API Call Preview Section
+                                with st.expander("🔍 Preview API Call", expanded=False):
+                                    st.markdown("##### API Payload Preview")
+                                    st.caption("This is what will be sent to the Kibana Agent Builder API")
 
-                                # Create badge for query type
-                                type_badge = {
-                                    'scripted': '📊 SCRIPTED',
-                                    'parameterized': '🔧 PARAMETERIZED',
-                                    'rag': '🤖 RAG'
-                                }.get(candidate['type'], '❓ ' + candidate['type'].upper())
+                                    # Build the API payload based on current form values
+                                    api_payload = {
+                                        "id": new_tool_id,
+                                        "type": "esql",
+                                        "description": new_tool_description,
+                                        "tags": new_tool_tags,
+                                        "configuration": {
+                                            "query": display._get_query_text(query)
+                                        }
+                                    }
 
-                                # Use query name or fallback to query_id
-                                query_name = query.get('name', query_id)
+                                    # Add parameters if this is a parameterized or RAG query
+                                    if candidate['type'] in ['parameterized', 'rag'] and query.get('parameters'):
+                                        # Extract parameter definitions from query
+                                        params = {}
+                                        for param in query['parameters']:
+                                            if isinstance(param, dict):
+                                                param_name = param.get('name', '')
+                                                if param_name:
+                                                    params[param_name] = {
+                                                        "type": param.get('type', 'text'),
+                                                        "description": param.get('description', ''),
+                                                        "required": param.get('required', True)
+                                                    }
+                                                    if 'default' in param:
+                                                        params[param_name]['default'] = param['default']
+                                                    if 'example' in param:
+                                                        params[param_name]['example'] = param['example']
+                                        if params:
+                                            api_payload['configuration']['params'] = params
 
-                                with st.expander(f"{type_badge} | {query_name}", expanded=False):
-                                    # Show query type and description
-                                    col1, col2 = st.columns([1, 3])
-                                    with col1:
-                                        # Display query type as a colored badge
-                                        if candidate['type'] == 'scripted':
-                                            st.info(f"**Type:** SCRIPTED")
-                                        elif candidate['type'] == 'parameterized':
-                                            st.warning(f"**Type:** PARAMETERIZED")
-                                        elif candidate['type'] == 'rag':
-                                            st.success(f"**Type:** RAG")
-                                        else:
-                                            st.markdown(f"**Type:** {candidate['type'].upper()}")
+                                    # Display the payload as JSON
+                                    st.json(api_payload)
 
-                                    with col2:
-                                        if query.get('description'):
-                                            st.markdown(f"**Description:** {query['description']}")
+                                    # Show the API endpoint
+                                    st.markdown("##### API Endpoint")
+                                    st.code(f"POST {os.getenv('ELASTICSEARCH_KIBANA_URL', '<KIBANA_URL>')}/api/agent_builder/tools", language="bash")
 
-                                    # Tool metadata form
-                                    st.markdown("##### Tool Configuration")
+                                    # Show curl command
+                                    st.markdown("##### Example cURL Command")
+                                    curl_command = f"""curl -X POST \\
+"{os.getenv('ELASTICSEARCH_KIBANA_URL', '<KIBANA_URL>')}/api/agent_builder/tools" \\
+-H "Authorization: ApiKey ${{API_KEY}}" \\
+-H "Content-Type: application/json" \\
+-H "kbn-xsrf: true" \\
+-d '{json.dumps(api_payload, indent=2)}'"""
+                                    st.code(curl_command, language="bash")
 
-                                    # Check if metadata already exists (from saved or pre-generated)
-                                    # Priority: 1) Saved metadata, 2) Pre-generated from query, 3) Defaults
-                                    if metadata:
-                                        tool_id = metadata.get('tool_id', f"{st.session_state.current_demo_module}_{query_id}")
-                                        tool_description = metadata.get('description', query.get('description', ''))
-                                        tool_tags = metadata.get('tags', [])
-                                    elif query.get('tool_metadata'):
-                                        # Use pre-generated tool metadata from query module
-                                        pre_gen = query['tool_metadata']
-                                        tool_id = pre_gen.get('tool_id', f"{st.session_state.current_demo_module}_{query_id}")
-                                        tool_description = pre_gen.get('description', query.get('description', ''))
-                                        tool_tags = pre_gen.get('tags', [])
-                                    else:
-                                        # Fallback defaults
-                                        tool_id = f"{st.session_state.current_demo_module}_{query_id}"
-                                        tool_description = query.get('description', '')
-                                        tool_tags = []
+                                # Save metadata button
+                                col_save, col_deploy = st.columns(2)
 
-                                    # Input fields for tool metadata (removed name field)
-                                    new_tool_id = st.text_input(
-                                        "Tool ID",
-                                        value=tool_id,
-                                        key=f"tool_id_{query_id}",
-                                        help="Unique identifier for the tool in Agent Builder (e.g., company_dept_purpose)"
-                                    )
-
-                                    new_tool_description = st.text_area(
-                                        "Tool Description",
-                                        value=tool_description,
-                                        key=f"tool_desc_{query_id}",
-                                        height=100,
-                                        help="First ~50 chars appear in tool list. Start with a brief summary, then explain when to use it."
-                                    )
-
-                                    # Tags input
-                                    tags_str = st.text_input(
-                                        "Tags (comma-separated)",
-                                        value=", ".join(tool_tags) if tool_tags else "",
-                                        key=f"tool_tags_{query_id}",
-                                        help="Tags to categorize the tool"
-                                    )
-                                    new_tool_tags = [t.strip() for t in tags_str.split(',') if t.strip()] if tags_str else []
-
-                                    # Info message if using pre-generated metadata
-                                    if query.get('tool_metadata') and not metadata:
-                                        st.info("ℹ️ Using pre-generated tool metadata from query module. You can edit these values before saving.")
-
-                                    # API Call Preview Section
-                                    with st.expander("🔍 Preview API Call", expanded=False):
-                                        st.markdown("##### API Payload Preview")
-                                        st.caption("This is what will be sent to the Kibana Agent Builder API")
-
-                                        # Build the API payload based on current form values
-                                        api_payload = {
-                                            "id": new_tool_id,
-                                            "type": "esql",
-                                            "description": new_tool_description,
-                                            "tags": new_tool_tags,
-                                            "configuration": {
-                                                "query": display._get_query_text(query)
-                                            }
+                                with col_save:
+                                    if st.button("💾 Save Metadata", key=f"save_{query_id}", use_container_width=True):
+                                        # Save the metadata (removed name field)
+                                        new_metadata = {
+                                            'tool_id': new_tool_id,
+                                            'description': new_tool_description,
+                                            'tags': new_tool_tags,
+                                            'query': display._get_query_text(query),
+                                            'query_type': candidate['type']
                                         }
 
-                                        # Add parameters if this is a parameterized or RAG query
-                                        if candidate['type'] in ['parameterized', 'rag'] and query.get('parameters'):
-                                            # Extract parameter definitions from query
-                                            params = {}
-                                            for param in query['parameters']:
-                                                if isinstance(param, dict):
-                                                    param_name = param.get('name', '')
-                                                    if param_name:
-                                                        params[param_name] = {
-                                                            "type": param.get('type', 'text'),
-                                                            "description": param.get('description', ''),
-                                                            "required": param.get('required', True)
-                                                        }
-                                                        if 'default' in param:
-                                                            params[param_name]['default'] = param['default']
-                                                        if 'example' in param:
-                                                            params[param_name]['example'] = param['example']
-                                            if params:
-                                                api_payload['configuration']['params'] = params
+                                        # Extract parameters if present
+                                        if query.get('parameters'):
+                                            new_metadata['parameters'] = query['parameters']
 
-                                        # Display the payload as JSON
-                                        st.json(api_payload)
+                                        validation_service.save_tool_metadata(query_id, new_metadata)
+                                        st.success("Metadata saved!")
+                                        st.rerun()
 
-                                        # Show the API endpoint
-                                        st.markdown("##### API Endpoint")
-                                        st.code(f"POST {os.getenv('ELASTICSEARCH_KIBANA_URL', '<KIBANA_URL>')}/api/agent_builder/tools", language="bash")
+                                with col_deploy:
+                                    # Check if ready for deployment
+                                    is_ready = validation_service.is_tool_ready_for_deployment(query_id)
 
-                                        # Show curl command
-                                        st.markdown("##### Example cURL Command")
-                                        curl_command = f"""curl -X POST \\
-  "{os.getenv('ELASTICSEARCH_KIBANA_URL', '<KIBANA_URL>')}/api/agent_builder/tools" \\
-  -H "Authorization: ApiKey ${{API_KEY}}" \\
-  -H "Content-Type: application/json" \\
-  -H "kbn-xsrf: true" \\
-  -d '{json.dumps(api_payload, indent=2)}'"""
-                                        st.code(curl_command, language="bash")
+                                    if is_ready:
+                                        if st.button("🚀 Deploy Tool", key=f"deploy_{query_id}",
+                                            use_container_width=True, type="primary"):
+                                            with st.spinner("Deploying tool to Agent Builder..."):
+                                                try:
+                                                    # Get the full metadata
+                                                    deploy_metadata = validation_service.get_tool_metadata(query_id)
 
-                                    # Save metadata button
-                                    col_save, col_deploy = st.columns(2)
+                                                    # Create tool configuration
+                                                    tool_config = {
+                                                        'id': deploy_metadata['tool_id'],
+                                                        'type': 'esql',
+                                                        'description': deploy_metadata['description'],
+                                                        'tags': deploy_metadata.get('tags', []),
+                                                        'query': deploy_metadata['query']
+                                                    }
 
-                                    with col_save:
-                                        if st.button("💾 Save Metadata", key=f"save_{query_id}", use_container_width=True):
-                                            # Save the metadata (removed name field)
-                                            new_metadata = {
-                                                'tool_id': new_tool_id,
-                                                'description': new_tool_description,
-                                                'tags': new_tool_tags,
-                                                'query': display._get_query_text(query),
-                                                'query_type': candidate['type']
-                                            }
+                                                    # Extract parameters from query
+                                                    params = agent_builder.extract_esql_parameters(deploy_metadata['query'])
+                                                    if params:
+                                                        tool_config['params'] = params
 
-                                            # Extract parameters if present
-                                            if query.get('parameters'):
-                                                new_metadata['parameters'] = query['parameters']
+                                                    # Deploy the tool
+                                                    result = agent_builder.create_tool(tool_config)
 
-                                            validation_service.save_tool_metadata(query_id, new_metadata)
-                                            st.success("Metadata saved!")
-                                            st.rerun()
+                                                    if result.get('success'):
+                                                        validation_service.mark_tool_deployed(query_id, deploy_metadata['tool_id'])
+                                                        st.success(f"✅ Tool deployed successfully: {deploy_metadata['tool_id']}")
+                                                        st.balloons()
+                                                        st.rerun()
+                                                    else:
+                                                        st.error(f"❌ Deployment failed: {result.get('error')}")
 
-                                    with col_deploy:
-                                        # Check if ready for deployment
-                                        is_ready = validation_service.is_tool_ready_for_deployment(query_id)
+                                                except Exception as e:
+                                                    st.error(f"❌ Error during deployment: {e}")
+                                    else:
+                                        st.warning("Please fill in all required fields before deploying")
 
-                                        if is_ready:
-                                            if st.button("🚀 Deploy Tool", key=f"deploy_{query_id}",
-                                                        use_container_width=True, type="primary"):
-                                                with st.spinner("Deploying tool to Agent Builder..."):
-                                                    try:
-                                                        # Get the full metadata
-                                                        deploy_metadata = validation_service.get_tool_metadata(query_id)
+                    # Show already deployed queries at the bottom
+                    if already_deployed:
+                        with st.expander(f"✅ Already Deployed ({len(already_deployed)})", expanded=False):
+                            for deployed in already_deployed:
+                                deployed_tool_id = validation_service.get_deployed_tool_id(deployed['query_id'])
+                                st.success(f"• {deployed['query'].get('name', deployed['query_id'])} → {deployed_tool_id}")
 
-                                                        # Create tool configuration
-                                                        tool_config = {
-                                                            'id': deploy_metadata['tool_id'],
-                                                            'type': 'esql',
-                                                            'description': deploy_metadata['description'],
-                                                            'tags': deploy_metadata.get('tags', []),
-                                                            'query': deploy_metadata['query']
-                                                        }
+                    if not undeployed_queries and not already_deployed:
+                        st.info("No validated queries found. Go to the Queries tab and validate queries after testing them.")
 
-                                                        # Extract parameters from query
-                                                        params = agent_builder.extract_esql_parameters(deploy_metadata['query'])
-                                                        if params:
-                                                            tool_config['params'] = params
+                except Exception as e:
+                    st.error(f"Error loading queries: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
 
-                                                        # Deploy the tool
-                                                        result = agent_builder.create_tool(tool_config)
+            with tabs[6]:  # Agents tab
+                st.markdown("### Agent Management")
 
-                                                        if result.get('success'):
-                                                            validation_service.mark_tool_deployed(query_id, deploy_metadata['tool_id'])
-                                                            st.success(f"✅ Tool deployed successfully: {deploy_metadata['tool_id']}")
-                                                            st.balloons()
-                                                            st.rerun()
-                                                        else:
-                                                            st.error(f"❌ Deployment failed: {result.get('error')}")
+                # Load agent metadata from module if it exists
+                agent_metadata_path = os.path.join(
+                    "demos",
+                    st.session_state.current_demo_module,
+                    "agent_metadata.json"
+                )
 
-                                                    except Exception as e:
-                                                        st.error(f"❌ Error during deployment: {e}")
-                                        else:
-                                            st.warning("Please fill in all required fields before deploying")
-
-                        # Show already deployed queries at the bottom
-                        if already_deployed:
-                            with st.expander(f"✅ Already Deployed ({len(already_deployed)})", expanded=False):
-                                for deployed in already_deployed:
-                                    deployed_tool_id = validation_service.get_deployed_tool_id(deployed['query_id'])
-                                    st.success(f"• {deployed['query'].get('name', deployed['query_id'])} → {deployed_tool_id}")
-
-                        if not undeployed_queries and not already_deployed:
-                            st.info("No validated queries found. Go to the Queries tab and validate queries after testing them.")
-
+                agent_metadata = None
+                if os.path.exists(agent_metadata_path):
+                    try:
+                        with open(agent_metadata_path, 'r') as f:
+                            agent_metadata = json.load(f)
                     except Exception as e:
-                        st.error(f"Error loading queries: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
+                        st.error(f"Error loading agent metadata: {e}")
 
-                with agent_tabs[1]:  # Agents tab
-                    st.markdown("### Agent Management")
-
-                    # Load agent metadata from module if it exists
-                    agent_metadata_path = os.path.join(
-                        "demos",
-                        st.session_state.current_demo_module,
-                        "agent_metadata.json"
-                    )
-
-                    agent_metadata = None
-                    if os.path.exists(agent_metadata_path):
-                        try:
-                            with open(agent_metadata_path, 'r') as f:
-                                agent_metadata = json.load(f)
-                        except Exception as e:
-                            st.error(f"Error loading agent metadata: {e}")
-
-                    if not agent_metadata:
-                        st.warning("No agent metadata found for this demo. Agent metadata is generated automatically for new demos.")
-                        st.info("To add agent metadata to older demos, regenerate the demo module.")
-                        return
-
+                if not agent_metadata:
+                    st.warning("No agent metadata found for this demo. Agent metadata is generated automatically for new demos.")
+                    st.info("To add agent metadata to older demos, regenerate the demo module.")
+                else:
                     # Section 1: Deployed Agents
                     st.markdown("#### 🤖 Deployed Agents")
 
                     # Check connection
-                    if not agent_builder.validate_connection():
+                    if not agent_builder.validate_connection()['success']:
                         st.error("❌ Cannot connect to Elastic Agent Builder. Please check your environment variables.")
-                        return
-
-                    # List all agents
-                    all_agents_response = agent_builder.list_agents()
-                    if 'error' in all_agents_response:
-                        st.error(f"Error listing agents: {all_agents_response['error']}")
-                        deployed_agents = []
                     else:
-                        all_agents = all_agents_response.get('agents', [])
-                        # Filter for agents matching this demo
-                        # Use both exact match (for the main agent) and prefix match
-                        agent_id = agent_metadata.get('id', 'unknown')
-                        module_prefix = get_module_prefix(st.session_state.current_demo_module)
-                        st.caption(f"Filtering agents matching: `{agent_id}` or prefix: `{module_prefix}*`")
-                        deployed_agents = [a for a in all_agents
-                                         if a.get('id', '') == agent_id or
-                                         a.get('id', '').startswith(module_prefix)]
+                        # List all agents
+                        all_agents_response = agent_builder.list_agents()
+                        if 'error' in all_agents_response:
+                            st.error(f"Error listing agents: {all_agents_response['error']}")
+                            deployed_agents = []
+                        else:
+                            all_agents = all_agents_response.get('agents', [])
+                            # Filter for agents matching this demo
+                            # Use both exact match (for the main agent) and prefix match
+                            agent_id = agent_metadata.get('id', 'unknown')
+                            module_prefix = get_module_prefix(st.session_state.current_demo_module)
+                            st.caption(f"Filtering agents matching: `{agent_id}` or prefix: `{module_prefix}*`")
+                            deployed_agents = [a for a in all_agents
+                                if a.get('id', '') == agent_id or
+                                    a.get('id', '').startswith(module_prefix)]
 
-                    if deployed_agents:
-                        for agent in deployed_agents:
-                            with st.expander(f"🤖 {agent.get('name', agent.get('id', 'Unknown'))}"):
-                                # Get current tools assigned to this agent
-                                agent_tools = agent.get('configuration', {}).get('tools', [])
-                                current_tool_ids = []
-                                if agent_tools and isinstance(agent_tools, list) and len(agent_tools) > 0:
-                                    if isinstance(agent_tools[0], dict):
-                                        current_tool_ids = agent_tools[0].get('tool_ids', [])
+                            if deployed_agents:
+                                for agent in deployed_agents:
+                                    with st.expander(f"🤖 {agent.get('name', agent.get('id', 'Unknown'))}"):
+                                        # Get current tools assigned to this agent
+                                        agent_tools = agent.get('configuration', {}).get('tools', [])
+                                        current_tool_ids = []
+                                        if agent_tools and isinstance(agent_tools, list) and len(agent_tools) > 0:
+                                            if isinstance(agent_tools[0], dict):
+                                                current_tool_ids = agent_tools[0].get('tool_ids', [])
 
-                                # Show current tools
-                                st.markdown("##### 🛠️ Currently Assigned Tools")
-                                if current_tool_ids:
-                                    for tool_id in current_tool_ids:
-                                        st.text(f"• {tool_id}")
-                                else:
-                                    st.info("No tools currently assigned")
+                                        # Show current tools
+                                        st.markdown("##### 🛠️ Currently Assigned Tools")
+                                        if current_tool_ids:
+                                            for tool_id in current_tool_ids:
+                                                st.text(f"• {tool_id}")
+                                        else:
+                                            st.info("No tools currently assigned")
 
-                                st.divider()
+                                        st.divider()
 
-                                # Tool assignment section
-                                st.markdown("##### ➕ Manage Tool Assignment")
+                                        # Tool assignment section
+                                        st.markdown("##### ➕ Manage Tool Assignment")
 
-                                # Get available tools
-                                # 1. Module-specific tools
-                                module_tools = [t for t in all_tools if t.get('id', '').startswith(module_prefix)]
-                                module_tool_ids = [t['id'] for t in module_tools]
+                                        # Get available tools
+                                        # 1. Module-specific tools
+                                        module_tools = [t for t in all_tools if t.get('id', '').startswith(module_prefix)]
+                                        module_tool_ids = [t['id'] for t in module_tools]
 
-                                # 2. Platform tools
-                                platform_tools = [t for t in all_tools if t.get('id', '').startswith('platform.')]
-                                platform_tool_ids = [t['id'] for t in platform_tools]
+                                        # 2. Platform tools
+                                        platform_tools = [t for t in all_tools if t.get('id', '').startswith('platform.')]
+                                        platform_tool_ids = [t['id'] for t in platform_tools]
 
-                                # Combine all available tools
-                                all_available_ids = []
-                                if module_tool_ids:
-                                    all_available_ids.extend(module_tool_ids)
-                                if platform_tool_ids:
-                                    all_available_ids.extend(platform_tool_ids)
-
-                                if all_available_ids:
-                                    with st.form(f"tool_assignment_{agent['id']}"):
-                                        st.markdown("**Select tools to assign:**")
-
-                                        # Multi-select with sections
-                                        selected_tools = []
-
-                                        # Module tools section
+                                        # Combine all available tools
+                                        all_available_ids = []
                                         if module_tool_ids:
-                                            st.caption("📦 Module-specific tools:")
-                                            for tool_id in module_tool_ids:
-                                                checked = st.checkbox(
-                                                    tool_id,
-                                                    value=tool_id in current_tool_ids,
-                                                    key=f"check_{agent['id']}_{tool_id}"
-                                                )
-                                                if checked:
-                                                    selected_tools.append(tool_id)
-
-                                        # Platform tools section
+                                            all_available_ids.extend(module_tool_ids)
                                         if platform_tool_ids:
-                                            st.caption("🌐 Platform tools:")
-                                            for tool_id in platform_tool_ids:
-                                                checked = st.checkbox(
-                                                    tool_id,
-                                                    value=tool_id in current_tool_ids,
-                                                    key=f"check_{agent['id']}_{tool_id}"
-                                                )
-                                                if checked:
-                                                    selected_tools.append(tool_id)
+                                            all_available_ids.extend(platform_tool_ids)
 
-                                        # Update button
-                                        if st.form_submit_button("🔄 Update Tools", use_container_width=True):
-                                            with st.spinner("Updating agent tools..."):
-                                                # Update agent with new tools
-                                                update_config = {
-                                                    'name': agent.get('name'),
-                                                    'description': agent.get('description'),
-                                                    'labels': agent.get('labels', []),
-                                                    'avatar_color': agent.get('avatar_color'),
-                                                    'avatar_symbol': agent.get('avatar_symbol'),
-                                                    'instructions': agent.get('configuration', {}).get('instructions', ''),
-                                                    'configuration': {
-                                                        'instructions': agent.get('configuration', {}).get('instructions', ''),
-                                                        'tools': [{'tool_ids': selected_tools}] if selected_tools else []
-                                                    }
-                                                }
+                                        if all_available_ids:
+                                            with st.form(f"tool_assignment_{agent['id']}"):
+                                                st.markdown("**Select tools to assign:**")
 
-                                                result = agent_builder.update_agent(agent['id'], update_config)
+                                                # Multi-select with sections
+                                                selected_tools = []
+
+                                                # Module tools section
+                                                if module_tool_ids:
+                                                    st.caption("📦 Module-specific tools:")
+                                                    for tool_id in module_tool_ids:
+                                                        checked = st.checkbox(
+                                                            tool_id,
+                                                            value=tool_id in current_tool_ids,
+                                                            key=f"check_{agent['id']}_{tool_id}"
+                                                        )
+                                                        if checked:
+                                                            selected_tools.append(tool_id)
+
+                                                # Platform tools section
+                                                if platform_tool_ids:
+                                                    st.caption("🌐 Platform tools:")
+                                                    for tool_id in platform_tool_ids:
+                                                        checked = st.checkbox(
+                                                            tool_id,
+                                                            value=tool_id in current_tool_ids,
+                                                            key=f"check_{agent['id']}_{tool_id}"
+                                                        )
+                                                        if checked:
+                                                            selected_tools.append(tool_id)
+
+                                                # Update button
+                                                if st.form_submit_button("🔄 Update Tools", use_container_width=True):
+                                                    with st.spinner("Updating agent tools..."):
+                                                        # Update agent with new tools
+                                                        update_config = {
+                                                            'name': agent.get('name'),
+                                                            'description': agent.get('description'),
+                                                            'labels': agent.get('labels', []),
+                                                            'avatar_color': agent.get('avatar_color'),
+                                                            'avatar_symbol': agent.get('avatar_symbol'),
+                                                            'instructions': agent.get('configuration', {}).get('instructions', ''),
+                                                            'configuration': {
+                                                                'instructions': agent.get('configuration', {}).get('instructions', ''),
+                                                                'tools': [{'tool_ids': selected_tools}] if selected_tools else []
+                                                            }
+                                                        }
+
+                                                        result = agent_builder.update_agent(agent['id'], update_config)
+                                                        if result.get('success'):
+                                                            st.success(f"✅ Tools updated for agent: {agent['id']}")
+                                                            st.rerun()
+                                                        else:
+                                                            st.error(f"❌ Failed to update tools: {result.get('error')}")
+                                        else:
+                                            st.warning("No tools available to assign. Deploy some tools first!")
+
+                                        st.divider()
+
+                                        # Actions
+                                        col1, col2 = st.columns(2)
+                                        with col1:
+                                            # View details button
+                                            if st.button("👁️ View Raw JSON", key=f"view_agent_{agent['id']}", use_container_width=True):
+                                                st.session_state[f"show_json_{agent['id']}"] = not st.session_state.get(f"show_json_{agent['id']}", False)
+
+                                        with col2:
+                                            # Delete button
+                                            if st.button("🗑️ Delete Agent", key=f"delete_agent_{agent['id']}", use_container_width=True):
+                                                result = agent_builder.delete_agent(agent['id'])
                                                 if result.get('success'):
-                                                    st.success(f"✅ Tools updated for agent: {agent['id']}")
+                                                    st.success(f"Deleted agent: {agent['id']}")
                                                     st.rerun()
                                                 else:
-                                                    st.error(f"❌ Failed to update tools: {result.get('error')}")
-                                else:
-                                    st.warning("No tools available to assign. Deploy some tools first!")
+                                                    st.error(f"Failed to delete: {result.get('error')}")
 
-                                st.divider()
-
-                                # Actions
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    # View details button
-                                    if st.button("👁️ View Raw JSON", key=f"view_agent_{agent['id']}", use_container_width=True):
-                                        st.session_state[f"show_json_{agent['id']}"] = not st.session_state.get(f"show_json_{agent['id']}", False)
-
-                                with col2:
-                                    # Delete button
-                                    if st.button("🗑️ Delete Agent", key=f"delete_agent_{agent['id']}", use_container_width=True):
-                                        result = agent_builder.delete_agent(agent['id'])
-                                        if result.get('success'):
-                                            st.success(f"Deleted agent: {agent['id']}")
-                                            st.rerun()
-                                        else:
-                                            st.error(f"Failed to delete: {result.get('error')}")
-
-                                # Show JSON if toggled
-                                if st.session_state.get(f"show_json_{agent['id']}"):
-                                    st.markdown("##### Raw Agent JSON")
-                                    st.json(agent)
-                    else:
-                        st.info("No agents deployed for this demo yet.")
+                                        # Show JSON if toggled
+                                        if st.session_state.get(f"show_json_{agent['id']}"):
+                                            st.markdown("##### Raw Agent JSON")
+                                            st.json(agent)
+                            else:
+                                st.info("No agents deployed for this demo yet.")
 
                     st.divider()
 
@@ -1567,7 +1561,6 @@ def render_browse_demos_view():
                                         if result.get('success'):
                                             st.rerun()
 
-
-    else:
-        st.info("👈 Select a demo from the sidebar to view details")
+        else:
+            st.info("👈 Select a demo from the sidebar to view details")
 

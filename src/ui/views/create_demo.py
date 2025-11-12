@@ -19,7 +19,7 @@ def render_create_demo_view():
     # Display messages
     if not st.session_state.messages:
         st.markdown("""
-        ### 👋 Welcome to Elastic Demo Builder!
+        ### 👋 Welcome to Vulcan!
 
         **Quick Start:** Paste your customer description below and I'll extract context automatically.
 

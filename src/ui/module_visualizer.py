@@ -95,17 +95,33 @@ class ModuleVisualizer:
             'rag': len(self.rag_queries)
         }
 
-        # Calculate total records
-        self.total_records = sum(self._parse_row_count(d.get('row_count', '0')) for d in self.datasets)
+        # Calculate total records from ACTUAL data (not query_strategy estimates)
+        self.total_records = self._get_actual_record_count()
+
+        # Also store actual row counts per dataset for display
+        self.actual_row_counts = self._get_actual_row_counts_by_dataset()
 
     def _parse_row_count(self, count_str: str) -> int:
         """Parse row count string to integer"""
         if isinstance(count_str, int):
             return count_str
         # Handle strings like "500000+", "1000-5000", etc.
-        count_str = str(count_str).replace('+', '').replace('~', '').split('-')[0]
+        count_str = str(count_str).strip()
+
+        # Remove suffixes like '+', '~'
+        count_str = count_str.replace('+', '').replace('~', '')
+
+        # Handle ranges - take the first number
+        if '-' in count_str:
+            count_str = count_str.split('-')[0].strip()
+
+        # Try to parse as integer
         try:
-            return int(''.join(c for c in count_str if c.isdigit()))
+            # Clean the string to only keep digits
+            cleaned = ''.join(c for c in count_str if c.isdigit())
+            if cleaned:
+                return int(cleaned)
+            return 0
         except:
             return 0
 
@@ -305,7 +321,16 @@ Fields: {len(dataset.get('required_fields', {}))}"""
         st.markdown("### 📁 Datasets")
 
         for dataset in self.datasets:
-            with st.expander(f"**{dataset['name']}** ({dataset.get('type', 'unknown')} - {dataset.get('row_count', 'unknown')} records)"):
+            dataset_name = dataset['name']
+
+            # Get actual row count if available, otherwise use estimated
+            actual_count = self.actual_row_counts.get(dataset_name)
+            if actual_count is not None:
+                count_display = f"{actual_count:,} records"
+            else:
+                count_display = f"{dataset.get('row_count', 'unknown')} records (estimated)"
+
+            with st.expander(f"**{dataset_name}** ({dataset.get('type', 'unknown')} - {count_display})"):
 
                 # Purpose (if we can derive it)
                 purpose = self._derive_dataset_purpose(dataset)
@@ -321,14 +346,14 @@ Fields: {len(dataset.get('required_fields', {}))}"""
                     st.markdown(f"**Key Fields:** {', '.join(field_list)}")
 
                 # Join relationships
-                relationships = self._find_dataset_relationships(dataset['name'])
+                relationships = self._find_dataset_relationships(dataset_name)
                 if relationships:
                     st.markdown("**Relationships:**")
                     for rel in relationships:
-                        st.text(f"  → {rel}")
+                        st.text(f"  {rel}")
 
                 # Query usage
-                query_usage = self._count_query_usage(dataset['name'])
+                query_usage = self._count_query_usage(dataset_name)
                 st.markdown(f"**Used in:** {query_usage} queries")
 
         # Query Strategy
@@ -410,12 +435,39 @@ Fields: {len(dataset.get('required_fields', {}))}"""
 
         return relationships
 
+    def _get_actual_record_count(self) -> int:
+        """Get actual record count from generated data files"""
+        try:
+            from .data_loaders import load_demo_datasets
+            # Load actual datasets
+            datasets = load_demo_datasets(self.module_name)
+            # Sum the row counts
+            return sum(len(df) for df in datasets.values())
+        except Exception as e:
+            logger.warning(f"Could not load actual datasets to count records: {e}")
+            # Fallback to zero
+            return 0
+
+    def _get_actual_row_counts_by_dataset(self) -> Dict[str, int]:
+        """Get actual row count for each dataset from generated data"""
+        try:
+            from .data_loaders import load_demo_datasets
+            datasets = load_demo_datasets(self.module_name)
+            return {name: len(df) for name, df in datasets.items()}
+        except Exception as e:
+            logger.warning(f"Could not load actual datasets for row counts: {e}")
+            return {}
+
     def _count_query_usage(self, dataset_name: str) -> int:
-        """Count how many queries use this dataset"""
+        """Count how many queries use this dataset by parsing query text"""
         count = 0
         for query in self.queries:
-            required_datasets = query.get('required_datasets', [])
-            if dataset_name in required_datasets:
+            # Get the query text from the query dict
+            query_text = query.get('query', '')
+
+            # Check if dataset name appears in the query text
+            # Look for patterns like "FROM dataset_name" or "LOOKUP JOIN dataset_name"
+            if dataset_name in query_text:
                 count += 1
         return count
 

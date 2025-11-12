@@ -97,24 +97,33 @@ Parameters are ALWAYS required when used. If optional behavior is needed:
 ❌ WRONG: `| RERANK field WITH query` - Wrong syntax
 ❌ WRONG: `WHERE RERANK(...)` - RERANK is a pipe operation
 
-### 6. COUNT_DISTINCT Syntax ⚠️
+### 6. COUNT_DISTINCT Syntax ⚠️⚠️ VERY COMMON ERROR
 ✅ CORRECT: `COUNT_DISTINCT(field)` - Single function name
 ❌ WRONG: `COUNT(DISTINCT field)` - SQL syntax doesn't work in ES|QL
 
-### 7. STATS Conditional Aggregation ⚠️
+**This is a VERY COMMON mistake**. ES|QL uses `COUNT_DISTINCT()` as a single function, NOT the SQL `COUNT(DISTINCT ...)` pattern.
+
+### 7. INLINESTATS Syntax - Single BY Clause ⚠️⚠️ VERY COMMON ERROR
+✅ CORRECT: `INLINESTATS avg_val = AVG(value), max_val = MAX(value) BY category`
+❌ WRONG: `INLINESTATS avg_val = AVG(value) BY category, max_val = MAX(value) BY category`
+
+**Rule**: INLINESTATS uses ONE BY clause at the end (just like STATS), NOT one BY clause per aggregation.
+This is the SAME syntax pattern as STATS - the BY clause applies to all aggregations together.
+
+### 8. STATS Conditional Aggregation ⚠️
 ✅ CORRECT: `STATS denied = SUM(CASE(status == "denied", 1, 0))`
 ✅ CORRECT: `STATS high_risk = COUNT(*) WHERE risk > 0.8` (ES|QL 8.13+)
 ❌ WRONG: `STATS denied = COUNT(*) WHERE status == "denied"` in older versions
 ❌ WRONG: `STATS denied = COUNT_IF(status == "denied")` - No COUNT_IF function
 ❌ WRONG: `COUNT(CASE(...))` - Use SUM(CASE(...)) for conditional counting
 
-### 8. DATE Functions - Parameter Order ⚠️
+### 9. DATE Functions - Parameter Order ⚠️
 ✅ CORRECT: `DATE_TRUNC(1 hour, @timestamp)`
 ✅ CORRECT: `DATE_EXTRACT("month", @timestamp)`
 ❌ WRONG: `DATE_TRUNC(@timestamp, 1 hour)` - Wrong order
 ❌ WRONG: `DATE_EXTRACT(@timestamp, "month")` - Wrong order
 
-### 8. Index Modes for LOOKUP JOIN ⚠️ CRITICAL
+### 10. Index Modes for LOOKUP JOIN ⚠️ CRITICAL
 When using LOOKUP JOIN, the target index MUST be in lookup mode:
 
 **Index Mode Requirements:**
@@ -130,13 +139,13 @@ When using LOOKUP JOIN, the target index MUST be in lookup mode:
 - Solution: Reference datasets MUST be created as lookup indices, not data streams
 - You CANNOT fix this in the query - the index creation mode must be corrected
 
-### 9. Field Names - Case Sensitive ⚠️
+### 11. Field Names - Case Sensitive ⚠️
 - Use `@timestamp` for time fields (not `timestamp`)
 - Field names are CASE SENSITIVE and must match exactly
 - Never invent field names - use only fields from the schema
 - After STATS, only grouped fields and calculated fields are available
 
-### 10. Date Arithmetic - ALWAYS Use TO_LONG() ⚠️⚠️ CRITICAL
+### 12. Date Arithmetic - ALWAYS Use TO_LONG() ⚠️⚠️ CRITICAL
 **Common Error**: `[-] has arguments with incompatible types [datetime] and [datetime]`
 
 ✅ CORRECT: `EVAL days_diff = (TO_LONG(NOW()) - TO_LONG(last_updated)) / 86400000`
@@ -146,12 +155,12 @@ When using LOOKUP JOIN, the target index MUST be in lookup mode:
 
 **Rule**: You CANNOT subtract datetime values directly. Always wrap both sides in TO_LONG() first.
 
-### 11. Division and Type Casting ⚠️
+### 13. Division and Type Casting ⚠️
 ✅ CORRECT: `EVAL rate = TO_DOUBLE(numerator) / denominator`
 ✅ CORRECT: `EVAL pct = numerator * 100.0 / denominator`
 ❌ WRONG: `EVAL rate = numerator / denominator` - Integer division loses precision
 
-### 12. LOOKUP JOIN Schema Validation ⚠️⚠️⚠️ CRITICAL - CANNOT BE AUTO-FIXED
+### 14. LOOKUP JOIN Schema Validation ⚠️⚠️⚠️ CRITICAL - CANNOT BE AUTO-FIXED
 **Common Error**: `Unknown column [field_name] in right/left side of join`
 
 This is the MOST COMMON failure that CANNOT be automatically fixed. The join key MUST exist in BOTH datasets.
@@ -192,12 +201,35 @@ FROM pages
 - Auto-fix CANNOT resolve this - it requires data model changes
 - You must either: use a different join key that exists in both, or abandon the join
 
-### 13. COMPLETION Syntax (RAG Queries) ⚠️
+### 15. COMPLETION Syntax (RAG Queries) ⚠️
 ✅ CORRECT: `| COMPLETION "prompt" WITH ?user_question`
 ❌ WRONG: `| COMPLETION "prompt" ON field` - Wrong syntax
 Note: COMPLETION may not be available in all Elasticsearch versions
 
-### 14. Experimental Features ⚠️
+### 16. Time Filtering - Different Patterns for Scripted vs Parameterized ⚠️⚠️ CRITICAL
+**The Problem**: Demo data is static with fixed timestamps. Using `NOW()` in scripted queries will return NO RESULTS.
+
+**SCRIPTED QUERIES** (no parameters, for exploration):
+❌ WRONG: `WHERE @timestamp > NOW() - 7 days` - Will return empty results with static demo data
+❌ WRONG: `WHERE @timestamp >= NOW() - 30 days` - Same problem
+✅ CORRECT: **OMIT time filters entirely** - Let users control time range via Kibana time picker
+
+**PARAMETERIZED QUERIES** (user-facing tools with parameters):
+✅ CORRECT: `WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date`
+✅ CORRECT: `WHERE @timestamp >= ?start_date` - For open-ended queries
+✅ CORRECT: Use parameters for user-controlled time filtering
+
+**Why This Matters**:
+- Demo data has fixed timestamps (e.g., generated for 2024-11-01 to 2024-11-15)
+- `NOW() - 7 days` only works if current date happens to overlap with demo data range
+- Kibana's time picker lets users select any time range that matches the demo data
+- Parameterized queries can accept user input for flexible time filtering
+
+**Rule**:
+- Scripted queries: NO `@timestamp` filters (rely on Kibana time picker)
+- Parameterized queries: Use `?start_date` and `?end_date` parameters
+
+### 17. Experimental Features ⚠️
 These may fail depending on ES version:
 - CHANGE_POINT - Use INLINESTATS with z-score calculation instead
 - LAG/LEAD - Window functions may not be supported
@@ -221,14 +253,30 @@ FROM events
 | STATS revenue = SUM(amount) BY segment            -- ✅ No prefix!
 ```
 
-### INLINESTATS - Keep All Rows While Aggregating
+### INLINESTATS - Keep All Rows While Aggregating ⚠️
 **Purpose**: Add aggregate calculations without grouping
+
+✅ CORRECT - Single BY clause for all aggregations:
 ```esql
 FROM transactions
-| INLINESTATS avg_amount = AVG(amount) BY category
+| INLINESTATS
+    avg_amount = AVG(amount),
+    max_amount = MAX(amount),
+    total_count = COUNT(*)
+  BY category
 | EVAL variance_from_avg = amount - avg_amount
 | WHERE variance_from_avg > 1000
 ```
+
+❌ WRONG - Multiple BY clauses (one per aggregation):
+```esql
+FROM transactions
+| INLINESTATS
+    avg_amount = AVG(amount) BY category,
+    max_amount = MAX(amount) BY category  -- ❌ Syntax error!
+```
+
+**Rule**: INLINESTATS uses the SAME syntax as STATS - ONE BY clause at the end that applies to ALL aggregations.
 
 ### FORK - Parallel Analysis Paths
 **Purpose**: Split pipeline for multiple analyses
@@ -273,7 +321,6 @@ ESQL_QUERY_PATTERNS = """
 ### 1. Scripted Query (No Parameters, Testable)
 ```esql
 FROM transactions
-| WHERE @timestamp >= NOW() - 30 days
 | WHERE status == "pending"
 | LOOKUP JOIN products ON product_id
 | STATS
@@ -284,13 +331,14 @@ FROM transactions
 | SORT total DESC
 | LIMIT 20
 ```
+Note: NO `@timestamp` filter - users control time via Kibana time picker
 
 ### 2. Parameterized Query (Required Parameters Only)
 ```esql
 FROM customers
+| WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date
 | WHERE region == ?region
 | WHERE segment == ?segment
-| WHERE created_date >= ?start_date
 | STATS
     customer_count = COUNT(*),
     avg_revenue = AVG(total_revenue)
@@ -298,6 +346,7 @@ FROM customers
 | SORT customer_count DESC
 ```
 Note: ALL parameters are REQUIRED. No NULL checking or optional params.
+Time filtering uses ?start_date and ?end_date parameters (NOT NOW())
 
 ### 3. RAG Query (Semantic Search + LLM)
 ```esql
@@ -310,21 +359,21 @@ FROM knowledge_base
 ```
 Note: MATCH within WHERE, proper field selection with KEEP
 
-### 4. Complex Aggregation with Enrichment
+### 4. Complex Aggregation with Enrichment (Scripted)
 ```esql
 FROM call_events
-| WHERE @timestamp >= NOW() - 7 days
 | LOOKUP JOIN agents ON agent_id
 | LOOKUP JOIN customers ON customer_id
 | STATS
     call_count = COUNT(*),
     avg_duration = AVG(duration_seconds),
     resolved = SUM(CASE(status == "resolved", 1, 0))
-  BY agents.team, agents.tier, customers.segment
+  BY team, tier, segment
 | EVAL resolution_rate = TO_DOUBLE(resolved) * 100.0 / call_count
 | WHERE call_count > 10
 | SORT resolution_rate DESC
 ```
+Note: No `@timestamp` filter - Kibana time picker controls the time range
 """
 
 # ============================================================================
@@ -338,6 +387,9 @@ COMMON_ERROR_FIXES = """
 |--------------|------------|-----|
 | "Unknown column [field] in right/left side of join" | Join key doesn't exist in both datasets | **CANNOT AUTO-FIX** - Verify schemas and use field that exists in BOTH |
 | "[-] has arguments with incompatible types [datetime]" | Direct datetime subtraction | Wrap both sides in TO_LONG(): `(TO_LONG(NOW()) - TO_LONG(field))` |
+| "Unknown function [COUNT]" with DISTINCT | Using SQL `COUNT(DISTINCT field)` | Use `COUNT_DISTINCT(field)` instead |
+| INLINESTATS syntax error with multiple BY | Multiple BY clauses per aggregation | Use ONE BY clause: `INLINESTATS a = AVG(x), b = MAX(y) BY category` |
+| Query returns no results (scripted query) | Using `NOW() - X days` with static demo data | Remove `@timestamp` filters from scripted queries - use Kibana time picker |
 | "Unknown index [x_lookup]" | Adding _lookup suffix | Remove _lookup suffix entirely |
 | "Unknown column [providers_lookup.field]" | Using table prefix after JOIN | Remove prefix: `providers.field` → `field` |
 | "Unknown column [table.field]" after JOIN | Field reference with prefix | Reference fields directly without table prefix |
@@ -372,8 +424,10 @@ LLM_PROMPTING_GUIDELINES = """
 6. ALWAYS use @timestamp for time fields
 7. ALWAYS put MATCH inside WHERE clause
 8. ALWAYS check index mode compatibility for LOOKUP JOIN
-9. PREFER INLINESTATS over window functions
-10. PREFER SUM(CASE()) over conditional COUNT
+9. ALWAYS omit `@timestamp` filters in SCRIPTED queries (let Kibana time picker control range)
+10. ALWAYS use `?start_date` and `?end_date` parameters for time filtering in PARAMETERIZED queries
+11. PREFER INLINESTATS over window functions
+12. PREFER SUM(CASE()) over conditional COUNT
 
 ### DON'Ts:
 1. NEVER use table prefixes after LOOKUP JOIN (use `specialty` not `providers.specialty`)
@@ -387,6 +441,10 @@ LLM_PROMPTING_GUIDELINES = """
 9. NEVER assume fields exist after STATS without including in GROUP BY
 10. NEVER use COUNT_IF or other non-existent functions
 11. NEVER mix parameter order in DATE functions
+12. NEVER use SQL syntax `COUNT(DISTINCT field)` - use `COUNT_DISTINCT(field)` instead
+13. NEVER use multiple BY clauses in INLINESTATS - use ONE BY clause for all aggregations
+14. NEVER use `NOW() - X days` in SCRIPTED queries - omit time filters entirely
+15. NEVER use `NOW()` in any query - use parameters or omit time filters
 
 ### Query Generation Process:
 1. Start with scripted query (concrete values)
@@ -433,15 +491,29 @@ When fixing queries, apply these transformations IN ORDER:
    - `DATE_TRUNC(@timestamp, 1 hour)` → `DATE_TRUNC(1 hour, @timestamp)`
    - `DATE_EXTRACT(@timestamp, "month")` → `DATE_EXTRACT("month", @timestamp)`
 
-6. **Replace invalid aggregates**:
+6. **Fix COUNT(DISTINCT ...) pattern**:
+   - `COUNT(DISTINCT field)` → `COUNT_DISTINCT(field)`
+   - This is SQL syntax, not ES|QL syntax
+
+7. **Fix INLINESTATS multiple BY clauses**:
+   - `INLINESTATS a = AVG(x) BY cat, b = MAX(y) BY cat` → `INLINESTATS a = AVG(x), b = MAX(y) BY cat`
+   - Move all aggregations before the single BY clause
+
+8. **Remove NOW() time filters from scripted queries**:
+   - Delete lines like `WHERE @timestamp >= NOW() - 7 days`
+   - Delete lines like `WHERE @timestamp > NOW() - 30 days`
+   - Scripted queries should NOT filter by time - users control via Kibana time picker
+   - Keep `@timestamp` filters ONLY in parameterized queries with `?start_date` and `?end_date`
+
+9. **Replace invalid aggregates**:
    - `COUNT_IF(condition)` → `SUM(CASE(condition, 1, 0))`
    - `COUNT(*) WHERE condition` → `SUM(CASE(condition, 1, 0))` (if not supported)
 
-7. **Fix division**:
+10. **Fix division**:
    - `a / b` → `TO_DOUBLE(a) / b` (when precision needed)
    - `a / b` → `a * 1.0 / b` (alternative)
 
-8. **Fix RERANK syntax**:
+11. **Fix RERANK syntax**:
    - `RERANK field WITH query` → `RERANK query ON field`
    - `RERANK semantic_text WITH ?q` → `RERANK ?q ON semantic_text`
 
