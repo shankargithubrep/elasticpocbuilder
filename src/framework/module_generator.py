@@ -6,7 +6,7 @@ Generates demo-specific modules that implement the base framework
 import os
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 import logging
 
@@ -74,6 +74,7 @@ class ModuleGenerator:
             self._generate_query_module_with_plan(config, module_path, query_plan)
             self._generate_guide_module(config, module_path)
             self._generate_config_file(config, module_path)
+            self._generate_agent_metadata(config, module_path)
         else:
             logger.info("Using original data-first generation (no query plan)")
             # Generate each component (Python modules) - original flow
@@ -81,6 +82,7 @@ class ModuleGenerator:
             self._generate_query_module(config, module_path)
             self._generate_guide_module(config, module_path)
             self._generate_config_file(config, module_path)
+            self._generate_agent_metadata(config, module_path)
 
         # Generate static files for quick loading
         self._generate_static_files(module_path)
@@ -123,6 +125,7 @@ class ModuleGenerator:
         self._generate_query_module_with_strategy(config, module_path, query_strategy)
         self._generate_guide_module(config, module_path)
         self._generate_config_file(config, module_path)
+        self._generate_agent_metadata(config, module_path)
 
         # Generate static files for quick loading
         self._generate_static_files(module_path)
@@ -458,6 +461,9 @@ Generate the complete implementation:"""
         # Get centralized ES|QL rules
         esql_rules = self._get_esql_strict_rules()
 
+        # Get tool metadata instructions
+        tool_metadata_prompt = self._get_tool_metadata_instructions(config)
+
         # Call existing method with enhanced prompt including schema
         base_prompt = f"""Generate the `generate_queries()` method for a QueryGeneratorModule.
 
@@ -470,6 +476,8 @@ Pain Points: {", ".join(config["pain_points"])}
 
 **Planned Scripted Queries:**
 {json.dumps(scripted_plans, indent=2)}
+
+{tool_metadata_prompt}
 
 **CRITICAL - Method Signature:**
 ```python
@@ -511,6 +519,9 @@ Access data via self.datasets. Use EXACT field names from the schema. ALWAYS use
         # Get centralized ES|QL rules
         esql_rules = self._get_esql_strict_rules()
 
+        # Get tool metadata instructions
+        tool_metadata_prompt = self._get_tool_metadata_instructions(config)
+
         base_prompt = f"""Generate the `generate_parameterized_queries()` method for a QueryGeneratorModule.
 
 **Customer Context:**
@@ -522,6 +533,8 @@ Pain Points: {", ".join(config["pain_points"])}
 
 **Planned Parameterized Queries:**
 {json.dumps(param_plans, indent=2)}
+
+{tool_metadata_prompt}
 
 **CRITICAL - Method Signature:**
 ```python
@@ -567,6 +580,9 @@ Access data via self.datasets. Use ?parameter syntax for Agent Builder tools. Us
         # Get centralized ES|QL rules
         esql_rules = self._get_esql_strict_rules()
 
+        # Get tool metadata instructions
+        tool_metadata_prompt = self._get_tool_metadata_instructions(config)
+
         base_prompt = f"""Generate the `generate_rag_queries()` method for a QueryGeneratorModule.
 
 **Customer Context:**
@@ -578,6 +594,8 @@ Pain Points: {", ".join(config["pain_points"])}
 
 **Planned RAG Queries:**
 {json.dumps(rag_plans, indent=2)}
+
+{tool_metadata_prompt}
 
 **CRITICAL - Method Signature:**
 ```python
@@ -612,13 +630,13 @@ queries.append({{
    ❌ WRONG: `| MATCH field ?parameter` (MATCH is NOT a pipe operation)
 
 2. **RERANK (pipe operation with ON and WITH)**:
-   ✅ CORRECT: `| RERANK ?query ON field WITH {{ "inference_id": "{rerank_endpoint}" }}`
-   ✅ CORRECT: `| RERANK ?query ON field1, field2 WITH {{ "inference_id": "{rerank_endpoint}" }}`
+   ✅ CORRECT: `| RERANK ?query ON field WITH {{ "inference_id": """ + f'"{rerank_endpoint}"' + """ }}`
+   ✅ CORRECT: `| RERANK ?query ON field1, field2 WITH {{ "inference_id": """ + f'"{rerank_endpoint}"' + """ }}`
    ❌ WRONG: `| RERANK field ?query` (missing ON keyword)
    ❌ WRONG: `| RERANK ?query ON field MODEL "model"` (use WITH, not MODEL)
 
 3. **COMPLETION (pipe operation with WITH - optional for RAG)**:
-   ✅ CORRECT: `| COMPLETION answer = prompt WITH {{ "inference_id": "{completion_endpoint}" }}`
+   ✅ CORRECT: `| COMPLETION answer = prompt WITH {{ "inference_id": """ + f'"{completion_endpoint}"' + """ }}`
    ✅ CORRECT: Build prompts with EVAL: `| EVAL prompt = CONCAT("Q: ", ?query, " A: ", content)`
    ❌ WRONG: `| COMPLETION "text" MODEL "gpt-4"` (use WITH, not MODEL)
    ❌ WRONG: Using template syntax like `{{{{#results}}}}` (not supported)
@@ -636,7 +654,7 @@ queries.append({{
    | WHERE MATCH(semantic_field, ?user_question)
    | SORT _score DESC
    | LIMIT 100
-   | RERANK ?user_question ON field WITH {{ "inference_id": "{rerank_endpoint}" }}
+   | RERANK ?user_question ON field WITH {{ "inference_id": """ + f'"{rerank_endpoint}"' + """ }}
    | LIMIT 10
    | KEEP fields...
    ```
@@ -645,7 +663,7 @@ queries.append({{
    ```
    | LIMIT 5  # CRITICAL: Limit before COMPLETION to reduce API calls
    | EVAL prompt = CONCAT("Question: ", ?user_question, " Content: ", content)
-   | COMPLETION answer = prompt WITH {{ "inference_id": "{completion_endpoint}" }}
+   | COMPLETION answer = prompt WITH {{ "inference_id": """ + f'"{completion_endpoint}"' + """ }}
    ```
 
 **Inference Endpoints (ALWAYS use these exact IDs)**:
@@ -664,12 +682,75 @@ Access data via self.datasets. Use correct MATCH/RERANK syntax. Use EXACT field 
 
         return self._call_llm(base_prompt + "\n\n" + esql_docs[:1000])
 
+    def _get_tool_metadata_instructions(self, config: Dict[str, Any]) -> str:
+        """Get instructions for generating tool metadata for Agent Builder"""
+
+        # Extract company and department for tool ID generation
+        company_slug = config['company_name'].lower().replace(' ', '_')[:15]
+        dept_slug = config.get('department', 'analytics').lower().replace(' ', '_')[:10]
+
+        return f"""
+**IMPORTANT: Agent Builder Tool Metadata**
+
+Each query MUST include 'tool_metadata' for deployment to Elastic Agent Builder.
+This metadata allows queries to become reusable tools that AI agents can invoke.
+
+For EACH query you generate, include a 'tool_metadata' field with:
+
+1. 'tool_id': Unique identifier following pattern: <customer>_<dept>_<purpose>
+   - MUST start and end with a letter or number
+   - ONLY lowercase letters, numbers, dots, underscores
+   - Maximum 50 characters
+   - Use company prefix: {company_slug}
+   - Department: {dept_slug}
+   - Examples:
+     * "{company_slug}_{dept_slug}_performance" ✓
+     * "{company_slug}_{dept_slug}_inventory_alerts" ✓
+     * "Query-1-{config['company_name']}" ✗ (no uppercase/hyphens)
+
+2. 'description': Tool description for Agent Builder (NOT the same as query description)
+   - First ~50 characters appear in tool list - make them count!
+   - Start with WHAT it does (verb): "Analyzes...", "Compares...", "Identifies..."
+   - Then explain WHEN to use it and what insights it provides
+   - Focus on business value, not technical implementation
+   - Bad: "ES|QL query for metrics analysis"
+   - Good: "Analyzes performance metrics across regions. Identifies underperforming areas and trends for optimization."
+
+3. 'tags': Array of 3-5 lowercase tags for categorization
+   - Include domain tags based on use case
+   - Include functional tags (performance, cost, analytics)
+   - Include "esql" for all ES|QL queries
+   - Keep single words, no spaces
+
+Example query structure with tool_metadata:
+{{
+    'name': 'Regional Performance Analysis',
+    'description': 'Analyze performance metrics across different regions',  # Original query description
+    'tool_metadata': {{
+        'tool_id': '{company_slug}_{dept_slug}_regional_performance',
+        'description': 'Analyzes regional performance metrics. Identifies underperforming regions and trends for strategic planning.',
+        'tags': ['analytics', 'performance', 'regional', 'esql']
+    }},
+    'esql': 'FROM metrics | STATS avg_performance = AVG(score) BY region',
+    'pain_point': 'Lack of visibility into regional performance'
+}}
+
+Tool metadata is REQUIRED - every query must have valid tool_metadata for Agent Builder deployment.
+"""
+
     def _generate_scripted_queries(self, config: Dict[str, Any], esql_docs: str) -> str:
         """Generate ONLY the generate_queries() method (scripted queries)
 
         Target: ~5K tokens
         Returns: Just the method code, not the full class
         """
+        # Get tool metadata instructions
+        tool_metadata_prompt = self._get_tool_metadata_instructions(config)
+
+        # Get company and department slugs for the template
+        company_slug = config['company_name'].lower().replace(' ', '_')[:15]
+        dept_slug = config.get('department', 'analytics').lower().replace(' ', '_')[:10]
+
         prompt = f"""Generate the `generate_queries()` method for a QueryGeneratorModule.
 
 **Customer Context:**
@@ -677,6 +758,8 @@ Company: {config["company_name"]}
 Department: {config["department"]}
 Pain Points: {", ".join(config["pain_points"])}
 Use Cases: {", ".join(config["use_cases"])}
+
+{tool_metadata_prompt}
 
 **Task**: Generate 5-7 SCRIPTED (non-parameterized) ES|QL queries that address their pain points.
 
@@ -704,6 +787,11 @@ def generate_queries(self) -> List[Dict[str, Any]]:
         "query_type": "scripted",
         "name": "descriptive_name",
         "description": "What it demonstrates",
+        "tool_metadata": {{  # REQUIRED for Agent Builder
+            "tool_id": "{company_slug}_{dept_slug}_purpose",
+            "description": "Short action summary. Details about when to use and insights provided.",
+            "tags": ["domain", "function", "esql"]
+        }},
         "esql": \"\"\"
             FROM index_name
             | WHERE condition
@@ -736,12 +824,21 @@ Generate ONLY the method implementation (including the def line and all queries)
         Target: ~4K tokens
         Returns: Just the method code, not the full class
         """
+        # Get tool metadata instructions
+        tool_metadata_prompt = self._get_tool_metadata_instructions(config)
+
+        # Get company and department slugs for the template
+        company_slug = config['company_name'].lower().replace(' ', '_')[:15]
+        dept_slug = config.get('department', 'analytics').lower().replace(' ', '_')[:10]
+
         prompt = f"""Generate the `generate_parameterized_queries()` method for a QueryGeneratorModule.
 
 **Customer Context:**
 Company: {config["company_name"]}
 Department: {config["department"]}
 Pain Points: {", ".join(config["pain_points"])}
+
+{tool_metadata_prompt}
 
 **Task**: Generate 3-5 PARAMETERIZED queries for Agent Builder ES|QL tools.
 
@@ -772,6 +869,11 @@ def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
         "query_type": "parameterized",
         "name": "parameterized_query_name",
         "description": "Configurable version of X",
+        "tool_metadata": {{  # REQUIRED for Agent Builder
+            "tool_id": "{company_slug}_{dept_slug}_configurable",
+            "description": "Analyzes data with filters. Allows custom date ranges and limits for targeted analysis.",
+            "tags": ["analytics", "configurable", "esql"]
+        }},
         "esql": \"\"\"
             FROM index_name
             | WHERE field == ?value
@@ -825,6 +927,13 @@ Generate ONLY the method implementation. Do NOT include class definition or impo
         Target: ~6K tokens
         Returns: Just the method code, not the full class
         """
+        # Get tool metadata instructions
+        tool_metadata_prompt = self._get_tool_metadata_instructions(config)
+
+        # Get company and department slugs for the template
+        company_slug = config['company_name'].lower().replace(' ', '_')[:15]
+        dept_slug = config.get('department', 'analytics').lower().replace(' ', '_')[:10]
+
         # Get endpoint IDs for substitution in prompt
         rerank_endpoint = self.inference_endpoints['rerank']
         completion_endpoint = self.inference_endpoints['completion']
@@ -835,6 +944,8 @@ Generate ONLY the method implementation. Do NOT include class definition or impo
 Company: {config["company_name"]}
 Department: {config["department"]}
 Pain Points: {", ".join(config["pain_points"])}
+
+{tool_metadata_prompt}
 
 **Task**: Generate 1-3 RAG queries using MATCH -> RERANK -> INLINE STATS -> COMPLETION pipeline.
 
@@ -877,6 +988,11 @@ def generate_rag_queries(self) -> List[Dict[str, Any]]:
         "query_type": "rag",
         "name": "semantic_search_rag",
         "description": "Ask questions about [data type]",
+        "tool_metadata": {{  # REQUIRED for Agent Builder
+            "tool_id": "{company_slug}_{dept_slug}_ai_search",
+            "description": "Searches knowledge base with AI answers. Provides contextual responses using semantic search and completion.",
+            "tags": ["search", "ai", "rag", "esql"]
+        }},
         "esql": \"\"\"
             FROM index_name METADATA _score
             | WHERE MATCH(text_field1, ?user_question, {"boost": 2.0, "fuzziness": "AUTO"})
@@ -887,7 +1003,7 @@ def generate_rag_queries(self) -> List[Dict[str, Any]]:
             | LIMIT 100
             | RERANK ?user_question
                 ON text_field1, text_field2, text_field3
-                WITH {{"inference_id": "{rerank_endpoint}"}}
+                WITH {{"inference_id": """ + f'"{rerank_endpoint}"' + """}}
             | LIMIT 5
             | EVAL context = CONCAT(
                 "Record: ", id_field, " | ",
@@ -902,7 +1018,7 @@ def generate_rag_queries(self) -> List[Dict[str, Any]]:
                 "\\\\n\\\\nProvide a detailed answer:"
               )
             | COMPLETION answer = prompt
-                WITH {{"inference_id": "{completion_endpoint}"}}
+                WITH {{"inference_id": """ + f'"{completion_endpoint}"' + """}}
             | KEEP answer, all_context
         \"\"\",
         "parameters": {{
@@ -916,11 +1032,7 @@ def generate_rag_queries(self) -> List[Dict[str, Any]]:
         "search_fields": ["text_field1", "text_field2"],
         "rerank_fields": ["text_field1", "text_field2", "text_field3"],
         "context_fields": ["id_field", "text_field1", "text_field2", "status"],
-        "time_boundary": "120 days",
-        "agent_builder_tool": {{
-            "tool_name": "search_dataset_name",
-            "tool_description": "Search and analyze [data type] with AI-powered answers"
-        }}
+        "time_boundary": "120 days"
     }})
 
     # Optionally add 1-2 more RAG queries for different use cases...
@@ -1051,6 +1163,9 @@ class {company_class}QueryGenerator(QueryGeneratorModule):
         import re
         company_class = re.sub(r'[^a-zA-Z0-9_]', '', config['company_name'].replace(' ', ''))
 
+        # Generate comprehensive demo guide content using LLM
+        guide_content = self._generate_demo_guide_content(config, module_path)
+
         # Fixed template - structure doesn't change, only runtime content
         code = f"""from src.framework.base import DemoGuideModule, DemoConfig
 from typing import Dict, List, Any, Optional
@@ -1066,37 +1181,7 @@ class {company_class}DemoGuide(DemoGuideModule):
 
     def generate_guide(self) -> str:
         \"\"\"Generate customized demo guide\"\"\"
-        # Extract pain points
-        pain_points = ', '.join(self.config.pain_points[:2]) if self.config.pain_points else 'operational challenges'
-
-        # Extract query names
-        query_names = [q.get('name', f'Query {{i+1}}') for i, q in enumerate(self.queries[:5])]
-        query_list = '\\n'.join([f'{{i+1}}. {{name}}' for i, name in enumerate(query_names)])
-
-        return f\"\"\"# Demo Guide: {{self.config.company_name}} - {{self.config.department}}
-
-## Overview
-**Industry:** {{self.config.industry}}
-**Focus Areas:** {{pain_points}}
-
-## Demo Flow
-1. **Introduction** - Establish context around their key challenges
-2. **Data Exploration** - Show {{len(self.queries)}} targeted queries addressing pain points
-3. **Business Impact** - Highlight speed, accuracy, and insights gained
-
-## Key Queries
-{{query_list}}
-
-## Value Proposition
-- **Speed:** Insights in seconds vs hours/days
-- **Scalability:** Handles growing data volumes
-- **Self-Service:** Empowers teams with intuitive query language
-
-## Closing Points
-- ES|QL provides SQL-like simplicity with Elasticsearch power
-- Queries run directly on indexed data (millisecond response times)
-- Most teams productive within days, not weeks
-\"\"\"
+        return '''{{guide_content}}'''
 
     def get_talk_track(self) -> Dict[str, str]:
         \"\"\"Talk track for each query\"\"\"
@@ -1408,6 +1493,9 @@ This may result in field name mismatches or typos. Use extreme care with field n
         # Get ES|QL rules (might also contain curly braces)
         esql_rules = self._get_esql_strict_rules()
 
+        # Get tool metadata instructions
+        tool_metadata_prompt = self._get_tool_metadata_instructions(config)
+
         # Get endpoint IDs for substitution in prompts
         rerank_endpoint = self.inference_endpoints['rerank']
         completion_endpoint = self.inference_endpoints['completion']
@@ -1430,12 +1518,15 @@ This may result in field name mismatches or typos. Use extreme care with field n
             "",
             "CRITICAL - IMPLEMENT THE QUERIES FROM THE STRATEGY ABOVE.",
             "",
+            tool_metadata_prompt,  # Tool metadata instructions for Agent Builder
+            "",
             "The module should:",
             "1. Implement QueryGeneratorModule base class",
             "2. Generate the EXACT queries from the strategy with proper ES|QL syntax",
             "3. Use field names that MATCH the generated data",
             "4. Include query descriptions that explain the business value",
-            "5. Return queries in the order that builds a compelling narrative",
+            "5. Include tool_metadata for each query for Agent Builder deployment",
+            "6. Return queries in the order that builds a compelling narrative",
             "",
             "**ES|QL STRICT SYNTAX RULES - MUST FOLLOW:**",
             esql_rules,  # Might contain curly braces too
@@ -1471,13 +1562,13 @@ This may result in field name mismatches or typos. Use extreme care with field n
             "        queries = []",
             "",
             "        # Implement SCRIPTED queries (simple, no parameters)",
-            "        # Each query should have: name, description, query, query_type=\"scripted\"",
+            "        # Each query should have: name, description, tool_metadata, query, query_type=\"scripted\"",
             "",
             "        # Implement PARAMETERIZED queries (user can customize)",
-            "        # Each query should have: name, description, query, query_type=\"parameterized\", parameters",
+            "        # Each query should have: name, description, tool_metadata, query, query_type=\"parameterized\", parameters",
             "",
             "        # Implement RAG queries for semantic_text fields",
-            "        # Each query should have: name, description, query, query_type=\"rag\"",
+            "        # Each query should have: name, description, tool_metadata, query, query_type=\"rag\"",
             "        # RAG queries MUST use: MATCH -> RERANK (optional) -> COMPLETION pipeline",
             "",
             "        return queries",
@@ -1510,7 +1601,7 @@ This may result in field name mismatches or typos. Use extreme care with field n
             "        | RERANK ?user_question ON semantic_field",
             "        | LIMIT 5",
             "        | EVAL prompt = CONCAT(\"Answer this question: \", ?user_question)",
-            f"        | COMPLETION answer = prompt WITH {{{{\\\"inference_id\\\": \\\"{completion_endpoint}\\\"}}}}",
+            '        | COMPLETION answer = prompt WITH {{"inference_id": "' + completion_endpoint + '"}}',
             "        \"\"\"",
             "        queries = []",
             "",
@@ -1530,7 +1621,8 @@ This may result in field name mismatches or typos. Use extreme care with field n
             "1. ALL THREE methods must be implemented (generate_queries, generate_parameterized_queries, generate_rag_queries)",
             "2. RAG queries MUST use the COMPLETION command with semantic_text fields from the strategy",
             "3. Each query must have proper query_type metadata (\"scripted\", \"parameterized\", or \"rag\")",
-            "4. Extract semantic_text fields from the strategy datasets to guide RAG generation",
+            "4. Each query MUST include tool_metadata with tool_id, description, and tags for Agent Builder",
+            "5. Extract semantic_text fields from the strategy datasets to guide RAG generation",
             "",
             "Generate the complete implementation with ALL queries from the strategy:"
         ]
@@ -1591,6 +1683,555 @@ This may result in field name mismatches or typos. Use extreme care with field n
 
         config_file = module_path / 'config.json'
         config_file.write_text(json.dumps(config_data, indent=2))
+
+    def _generate_agent_metadata(self, config: Dict[str, Any], module_path: Path):
+        """Generate agent metadata for Elastic Agent Builder deployment
+
+        Creates agent_metadata.json with all required fields for the Kibana API.
+        """
+        logger.info("Generating agent metadata...")
+
+        # Generate agent ID and basic info
+        company_slug = config['company_name'].lower().replace(' ', '_')[:20]
+        dept_slug = config.get('department', 'general').lower().replace(' ', '_')[:15]
+        agent_id = f"{company_slug}_{dept_slug}_agent"
+
+        # Generate avatar symbol from company initials
+        company_words = config['company_name'].split()
+        if len(company_words) >= 2:
+            avatar_symbol = (company_words[0][0] + company_words[1][0]).upper()[:2]
+        else:
+            avatar_symbol = config['company_name'][:2].upper()
+
+        # Select color based on demo type
+        demo_type = config.get('demo_type', 'analytics')
+        avatar_color = "#3B82F6" if demo_type == 'analytics' else "#10B981"  # Blue for analytics, green for search
+
+        # Prepare context for LLM to generate instructions
+        try:
+            # Load queries to understand what the agent can do
+            queries_file = module_path / 'queries.json'
+            if queries_file.exists():
+                with open(queries_file, 'r') as f:
+                    queries = json.load(f)
+                query_descriptions = [q.get('description', q.get('name', '')) for q in queries[:10]]  # First 10 queries
+            else:
+                query_descriptions = []
+
+            # Load datasets to understand what data is available
+            datasets_info = []
+            data_dir = module_path / 'data'
+            if data_dir.exists():
+                for csv_file in data_dir.glob('*.csv'):
+                    dataset_name = csv_file.stem
+                    datasets_info.append(dataset_name)
+
+        except Exception as e:
+            logger.warning(f"Could not load context for agent instructions: {e}")
+            query_descriptions = []
+            datasets_info = []
+
+        # Generate agent instructions using LLM
+        instructions = self._generate_agent_instructions(config, query_descriptions, datasets_info)
+
+        # Create agent metadata structure
+        agent_metadata = {
+            "id": agent_id,
+            "name": f"{config['company_name']} {config.get('department', 'Analytics')} Assistant",
+            "description": f"AI assistant specialized in {config.get('department', 'data analysis')} for {config['company_name']}. I can help analyze your data, answer questions, and provide insights based on your specific use cases.",
+            "labels": [
+                company_slug,
+                dept_slug,
+                demo_type,
+                "demo-builder",
+                config.get('industry', 'general').lower()
+            ],
+            "avatar_color": avatar_color,
+            "avatar_symbol": avatar_symbol,
+            "configuration": {
+                "instructions": instructions,
+                "tools": []  # Initially empty, tools will be added separately
+            }
+        }
+
+        # Save agent metadata
+        agent_file = module_path / 'agent_metadata.json'
+        agent_file.write_text(json.dumps(agent_metadata, indent=2))
+        logger.info(f"Generated agent_metadata.json with ID: {agent_id}")
+
+    def _generate_demo_guide_content(self, config: Dict[str, Any], module_path: Path) -> str:
+        """Generate comprehensive demo guide content using LLM
+
+        Args:
+            config: Demo configuration
+            module_path: Path to module directory
+
+        Returns:
+            Formatted markdown demo guide content
+        """
+        # Load query strategy and data profile for context
+        try:
+            import json
+            query_strategy_file = module_path / 'query_strategy.json'
+            data_profile_file = module_path / 'data_profile.json'
+
+            query_strategy = {}
+            data_profile = {}
+
+            if query_strategy_file.exists():
+                with open(query_strategy_file, 'r') as f:
+                    query_strategy = json.load(f)
+
+            if data_profile_file.exists():
+                with open(data_profile_file, 'r') as f:
+                    data_profile = json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load strategy/profile for guide generation: {e}")
+            query_strategy = {}
+            data_profile = {}
+
+        # Fallback if no LLM available
+        if not self.llm_client:
+            return self._generate_fallback_demo_guide(config, query_strategy, data_profile)
+
+        # Build comprehensive context for LLM
+        datasets_info = []
+        for dataset in query_strategy.get('datasets', []):
+            dataset_desc = f"**{dataset['name']}** ({dataset.get('type', 'unknown')} - {dataset.get('row_count', 'unknown')} records)"
+            datasets_info.append(dataset_desc)
+
+        queries_info = []
+        for query in query_strategy.get('queries', [])[:8]:  # Top 8 queries
+            query_desc = f"**{query['name']}**: {query.get('description', '')}"
+            queries_info.append(query_desc)
+
+        # Create template guide structure to show LLM the desired format
+        template_guide = """# **Elastic Agent Builder Demo for {COMPANY}**
+
+## **Internal Demo Script & Reference Guide**
+
+---
+
+## **📋 Demo Overview**
+
+**Total Time:** 25-30 minutes
+**Audience:** {DEPARTMENT} technical/business stakeholders
+**Goal:** Show how Agent Builder enables AI-powered {DEMO_TYPE} on {COMPANY} data
+
+**Demo Flow:**
+1. AI Agent Chat Teaser (5 min)
+2. ES|QL Query Building (10 min)
+3. Agent & Tool Creation (5 min)
+4. AI Agent Q&A Session (5-10 min)
+
+---
+
+## **🗂️ Dataset Architecture**
+
+{DATASETS_SECTION}
+
+---
+
+## **🚀 Demo Setup Instructions**
+
+### **Step 1: Upload Sample Datasets in Kibana**
+
+**CRITICAL: All indexes need "index.mode": "lookup" for joins to work**
+
+{DATASET_UPLOAD_INSTRUCTIONS}
+
+---
+
+## **Part 1: AI Agent Chat Teaser (5 minutes)**
+
+### **Setup**
+- Navigate to your AI Agent chat interface
+- Have the agent already configured with all tools
+
+### **Demo Script**
+
+**Presenter:** "Before we dive into how this works, let me show you the end result. I'm going to ask our AI agent a complex business question."
+
+**Sample questions to demonstrate:**
+
+{TEASER_QUESTIONS}
+
+**Transition:** "So how does this actually work? Let's go under the hood and build these queries from scratch."
+
+---
+
+## **Part 2: ES|QL Query Building (10 minutes)**
+
+### **Setup**
+- Open Kibana Dev Tools Console
+- Have the indices already created and populated
+
+---
+
+### **Query 1: Simple Aggregation (2 minutes)**
+
+**Presenter:** "{COMPANY} wants to know: {SIMPLE_QUERY_QUESTION}"
+
+**Copy/paste into console:**
+
+```
+{SIMPLE_QUERY}
+```
+
+**Run and narrate results:** "This is basic ES|QL:
+- FROM: Source our data
+- STATS: Aggregate with grouping
+- SORT and LIMIT: Top results
+
+The syntax is intuitive - it reads like English."
+
+---
+
+### **Query 2: Add Calculations with EVAL (3 minutes)**
+
+**Presenter:** "Let's add calculations to get deeper insights."
+
+**Copy/paste:**
+
+```
+{EVAL_QUERY}
+```
+
+**Run and highlight:** "Key additions:
+- EVAL: Creates calculated fields on-the-fly
+- TO_DOUBLE: Critical for decimal division
+- Multiple STATS: Aggregating multiple metrics
+- Business-relevant calculations
+
+---
+
+### **Query 3: Join Datasets with LOOKUP JOIN (3 minutes)**
+
+**Presenter:** "Now let's combine data from multiple sources using ES|QL's JOIN capability."
+
+**Copy/paste:**
+
+```
+{JOIN_QUERY}
+```
+
+**Run and explain:** "Magic happening here:
+- LOOKUP JOIN: Combines datasets using a join key
+- Now we have access to fields from both datasets
+- This is a LEFT JOIN: All records kept, enriched with additional data
+- For LOOKUP JOIN to work, the joined index must have 'index.mode: lookup'"
+
+---
+
+### **Query 4: Complex Multi-Dataset Analytics (2 minutes)**
+
+**Presenter:** "For the grand finale - a sophisticated analytical query showing {COMPLEX_QUERY_PURPOSE}"
+
+**Copy/paste:**
+
+```
+{COMPLEX_QUERY}
+```
+
+**Run and break down:** {COMPLEX_QUERY_EXPLANATION}
+
+---
+
+## **Part 3: Agent & Tool Creation (5 minutes)**
+
+### **Creating the Agent**
+
+**Agent Configuration:**
+
+**Agent ID:** `{AGENT_ID}`
+
+**Display Name:** `{AGENT_NAME}`
+
+**Custom Instructions:** {AGENT_INSTRUCTIONS_SUMMARY}
+
+---
+
+### **Creating Tools**
+
+{TOOLS_SUMMARY}
+
+---
+
+## **Part 4: AI Agent Q&A Session (5-10 minutes)**
+
+### **Demo Question Set**
+
+**Warm-up:**
+{WARMUP_QUESTIONS}
+
+**Business-focused:**
+{BUSINESS_QUESTIONS}
+
+**Trend analysis:**
+{TREND_QUESTIONS}
+
+---
+
+## **🎯 Key Talking Points**
+
+### **On ES|QL:**
+- "Modern query language, built for analytics"
+- "Piped syntax is intuitive and readable"
+- "Operates on blocks, not rows - extremely performant"
+- "Supports complex operations: joins, window functions, time-series"
+
+### **On Agent Builder:**
+- "Bridges AI and enterprise data"
+- "No custom development - configure, don't code"
+- "Works with existing Elasticsearch indices"
+- "Agent automatically selects right tools"
+
+### **On Business Value:**
+- "Democratizes data access - anyone can ask questions"
+- "Real-time insights, always up-to-date"
+- "Reduces dependency on data teams"
+- "Faster decision-making"
+
+---
+
+## **🔧 Troubleshooting**
+
+**If a query fails:**
+- Check index names match exactly
+- Verify field names are case-sensitive correct
+- Ensure joined indices are in lookup mode
+
+**If agent gives wrong answer:**
+- Check tool descriptions - are they clear?
+- Review custom instructions
+
+**If join returns no results:**
+- Verify join key format is consistent across datasets
+- Check that lookup index has data
+
+---
+
+## **🎬 Closing**
+
+"What we've shown today:
+✅ Complex analytics on interconnected datasets
+✅ Natural language interface for non-technical users
+✅ Real-time insights without custom development
+✅ Queries that would take hours, answered in seconds
+
+Agent Builder can be deployed in days, not months.
+
+Questions?"
+"""
+
+        prompt = f"""Generate a comprehensive, detailed demo guide for an Elastic Agent Builder demonstration.
+
+**Customer Context:**
+- Company: {config['company_name']}
+- Department: {config['department']}
+- Industry: {config['industry']}
+- Demo Type: {config.get('demo_type', 'analytics')}
+
+**Pain Points:**
+{chr(10).join('- ' + p for p in config.get('pain_points', [])[:5])}
+
+**Use Cases:**
+{chr(10).join('- ' + uc for uc in config.get('use_cases', [])[:5])}
+
+**Available Datasets:**
+{chr(10).join(datasets_info)}
+
+**Key Queries:**
+{chr(10).join(queries_info)}
+
+**Your Task:**
+Using the template structure provided below, generate a COMPLETE, DETAILED demo guide with:
+
+1. **Real content** - Not placeholders. Use the actual company name, datasets, and query information provided above.
+
+2. **Dataset Architecture section** - Describe each dataset with record counts, primary keys, fields, relationships. Be specific using the dataset info above.
+
+3. **Demo Setup Instructions** - Specific steps for uploading CSVs and creating lookup mode indices for each dataset.
+
+4. **Part 1: AI Agent Teaser** - 5-7 example questions that showcase different capabilities (ROI analysis, trend detection, cross-dataset joins, etc.)
+
+5. **Part 2: ES|QL Query Building** - Create 3-4 progressive queries:
+   - Query 1: Simple aggregation (2-3 lines)
+   - Query 2: Add EVAL calculations (5-8 lines)
+   - Query 3: LOOKUP JOIN enrichment (8-12 lines)
+   - Query 4: Complex multi-dataset analytics (15-25 lines)
+
+   Use ACTUAL query concepts from the key queries listed above. Make them realistic and runnable.
+
+6. **Part 3: Agent & Tool Creation** - Summarize agent configuration with 3-4 key tool examples
+
+7. **Part 4: Q&A Questions** - 10-12 diverse questions organized by category (warmup, business, trends, optimization)
+
+8. **Talking Points** - Keep the standard ES|QL/Agent Builder/Business Value points from template
+
+**CRITICAL FORMATTING RULES:**
+- Output ONLY the markdown content (no code fences around the entire guide)
+- Use proper markdown syntax
+- Keep the emoji section headers (📋, 🗂️, 🚀, 🎯, etc.)
+- Queries should be in ```esql``` code blocks
+- Make it feel like a real internal demo script with specific, actionable content
+
+**Template Structure to Follow:**
+{template_guide}
+
+Generate the complete guide now:"""
+
+        try:
+            response = self.llm_client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=16000,
+                temperature=0.7,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            guide_content = response.content[0].text.strip()
+
+            # Clean up any potential code fence wrapping
+            if guide_content.startswith('```markdown'):
+                guide_content = guide_content[len('```markdown'):].strip()
+            if guide_content.startswith('```'):
+                guide_content = guide_content[3:].strip()
+            if guide_content.endswith('```'):
+                guide_content = guide_content[:-3].strip()
+
+            logger.info(f"Generated comprehensive demo guide ({len(guide_content)} characters)")
+            return guide_content
+
+        except Exception as e:
+            logger.error(f"Failed to generate demo guide with LLM: {e}", exc_info=True)
+            return self._generate_fallback_demo_guide(config, query_strategy, data_profile)
+
+    def _generate_fallback_demo_guide(self, config: Dict[str, Any],
+                                      query_strategy: Dict, data_profile: Dict) -> str:
+        """Generate basic fallback demo guide if LLM fails"""
+        pain_points = ', '.join(config.get('pain_points', [])[:2]) if config.get('pain_points') else 'operational challenges'
+
+        datasets = query_strategy.get('datasets', [])
+        queries = query_strategy.get('queries', [])
+
+        dataset_list = '\n'.join([f"- **{d['name']}** ({d.get('type', 'unknown')} - {d.get('row_count', 'unknown')} records)"
+                                  for d in datasets[:5]])
+
+        query_list = '\n'.join([f"{i+1}. **{q['name']}**" for i, q in enumerate(queries[:8])])
+
+        return f"""# Demo Guide: {config['company_name']} - {config['department']}
+
+## 📋 Demo Overview
+
+**Industry:** {config['industry']}
+**Focus Areas:** {pain_points}
+**Total Time:** 25-30 minutes
+
+**Demo Flow:**
+1. AI Agent Chat Teaser (5 min)
+2. ES|QL Query Building (10 min)
+3. Agent & Tool Creation (5 min)
+4. AI Agent Q&A Session (5-10 min)
+
+---
+
+## 🗂️ Datasets
+
+{dataset_list}
+
+---
+
+## 🚀 Key Queries
+
+{query_list}
+
+---
+
+## 🎯 Value Proposition
+
+- **Speed:** Insights in seconds vs hours/days
+- **Scalability:** Handles growing data volumes
+- **Self-Service:** Empowers teams with intuitive query language
+
+---
+
+## Closing Points
+
+- ES|QL provides SQL-like simplicity with Elasticsearch power
+- Queries run directly on indexed data (millisecond response times)
+- Agent Builder enables natural language access to data
+- Most teams productive within days, not weeks
+"""
+
+    def _generate_agent_instructions(self, config: Dict[str, Any], query_descriptions: List[str], datasets_info: List[str]) -> str:
+        """Generate agent instructions using LLM based on demo context"""
+
+        if not self.llm_client:
+            # Fallback instructions if no LLM available
+            return f"""You are an AI assistant specialized in {config.get('department', 'data analysis')} for {config['company_name']}.
+
+Your role is to help users analyze data, answer questions, and provide insights specific to their use cases.
+
+Key responsibilities:
+- Analyze data patterns and trends
+- Answer questions about the available datasets
+- Provide actionable insights and recommendations
+- Help users understand their data better
+
+Always be helpful, accurate, and focused on providing value through data-driven insights."""
+
+        # Build context for LLM
+        query_context = "\n".join([f"- {desc}" for desc in query_descriptions[:10]]) if query_descriptions else "No queries available yet"
+        dataset_context = ", ".join(datasets_info) if datasets_info else "No datasets available yet"
+
+        prompt = f"""Generate professional agent instructions for an Elastic Agent Builder agent.
+
+**Company Context:**
+- Company: {config['company_name']}
+- Department: {config.get('department', 'General')}
+- Industry: {config.get('industry', 'General')}
+- Pain Points: {', '.join(config.get('pain_points', []))}
+- Use Cases: {', '.join(config.get('use_cases', []))}
+
+**Available Capabilities:**
+Query Capabilities:
+{query_context}
+
+Available Datasets:
+{dataset_context}
+
+**Task:** Generate clear, professional instructions that:
+1. Define the agent's role and expertise
+2. Explain what types of questions it can answer
+3. Reference the specific pain points and use cases
+4. Set appropriate tone and communication style
+5. Include any industry-specific considerations
+
+The instructions should be 150-250 words, professional but approachable, and specific to this customer's context.
+
+Generate ONLY the instructions text, no additional formatting or explanation."""
+
+        try:
+            instructions = self._call_llm(prompt)
+            # Clean up any potential formatting
+            instructions = instructions.strip()
+            if instructions.startswith('"') and instructions.endswith('"'):
+                instructions = instructions[1:-1]
+            return instructions
+        except Exception as e:
+            logger.error(f"Failed to generate agent instructions via LLM: {e}")
+            # Return fallback instructions
+            return f"""You are an AI assistant specialized in {config.get('department', 'data analysis')} for {config['company_name']}.
+
+I help analyze data and provide insights specific to your {config.get('industry', 'business')} operations.
+
+Key areas of focus:
+{chr(10).join(['- ' + pp for pp in config.get('pain_points', ['Data analysis', 'Reporting', 'Insights'])[:3]])}
+
+I can assist with:
+{chr(10).join(['- ' + uc for uc in config.get('use_cases', ['Analyzing trends', 'Finding patterns', 'Generating reports'])[:3]])}
+
+Feel free to ask questions about your data, request specific analyses, or explore insights that can help optimize your operations."""
 
     def _get_esql_strict_rules(self) -> str:
         """Get strict ES|QL rules from the centralized rules module"""
@@ -1678,7 +2319,7 @@ WHERE MATCH(field, "query", {{"boost": 0.75}})
 
 **RERANK (ML Relevance):**
 ```
-| RERANK query_text ON field1, field2 WITH {{"inference_id": "{rerank_endpoint}"}}
+| RERANK query_text ON field1, field2 WITH {{"inference_id": """ + f'"{rerank_endpoint}"' + """}}
 ```
 
 **INLINE STATS (Preserve Fields):**
@@ -1688,7 +2329,7 @@ WHERE MATCH(field, "query", {{"boost": 0.75}})
 
 **COMPLETION (LLM Generation):**
 ```
-| COMPLETION answer = prompt WITH {{"inference_id": "{completion_endpoint}"}}
+| COMPLETION answer = prompt WITH {{"inference_id": """ + f'"{completion_endpoint}"' + """}}
 ```
 
 **METADATA (Score):**

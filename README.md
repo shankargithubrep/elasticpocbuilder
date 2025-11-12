@@ -102,6 +102,7 @@ See `docs/RAG_SEARCH_ARCHITECTURE.md` for technical details on the dual-track ar
 - Python 3.8+
 - Elasticsearch cluster (Cloud or local) with API key
 - Anthropic API key (for code generation)
+- Kibana instance with Agent Builder enabled (for tools & agents deployment)
 
 ### Installation
 
@@ -323,7 +324,87 @@ if len(results['values']) == 0:
 
 ---
 
-## Architecture
+## Elastic Agent Builder Integration
+
+### Overview
+
+Demo Builder now includes full integration with Elastic Agent Builder, allowing you to deploy validated ES|QL queries as reusable tools and create AI agents that can use these tools. This enables your demos to become production-ready AI assistants.
+
+### Tools Deployment
+
+Transform validated ES|QL queries into Agent Builder tools:
+
+**Workflow**:
+1. Navigate to Browse Demos → Select a demo → Agents & Tools tab
+2. Tools subtab shows:
+   - **Deployed Tools**: Module-specific tools already in Agent Builder
+   - **Tool Candidates**: Validated queries ready for deployment
+3. For each candidate query:
+   - Review auto-generated tool metadata (ID, description, tags)
+   - Preview the exact API payload
+   - Deploy with one click
+
+**Tool Metadata**:
+Each query includes pre-generated metadata during module creation:
+```json
+{
+  "tool_id": "jpmc_infra_cpu_performance",
+  "description": "Analyzes CPU performance metrics. Compares Intel vs AMD for infrastructure optimization.",
+  "tags": ["infrastructure", "performance", "cpu", "esql"]
+}
+```
+
+**Filtering**: Tools are filtered by `company_department` prefix to show only relevant tools for each demo.
+
+### Agent Management
+
+Create and deploy AI agents that use your demo's tools:
+
+**Agent Metadata Generation**:
+- Automatically generated during module creation
+- Includes context-aware instructions based on your use cases
+- Professional persona tailored to industry and department
+
+**Agent Configuration**:
+```json
+{
+  "id": "jpmc_infra_agent",
+  "name": "JP Morgan Infrastructure Assistant",
+  "description": "AI assistant specialized in infrastructure analytics",
+  "avatar_symbol": "JP",
+  "avatar_color": "#3B82F6",
+  "labels": ["jpmc", "infrastructure", "analytics"],
+  "configuration": {
+    "instructions": "You are an infrastructure optimization specialist...",
+    "tools": []
+  }
+}
+```
+
+**Agent Deployment**:
+1. Navigate to Agents subtab
+2. Review/edit pre-populated agent configuration
+3. Deploy agent to Elastic Agent Builder
+4. Assign tools to agent:
+   - Module-specific tools (e.g., `jpmc_infra_*`)
+   - Platform tools (e.g., `platform.core.search`)
+
+### Tool Assignment
+
+Manage which tools are available to your agents:
+
+**Features**:
+- View currently assigned tools
+- Multi-select interface for adding/removing tools
+- Separate sections for module tools vs platform tools
+- One-click update to reassign tools
+
+**API Integration**:
+- Full CRUD operations for agents and tools
+- Real-time synchronization with Elastic Agent Builder
+- Connection validation and error handling
+
+---
 
 ### Module Structure
 
@@ -334,6 +415,7 @@ demos/bass_pro_shops_product_mgmt_20251107/
 ├── config.json              # Customer context + metadata
 ├── query_strategy.json      # Query planning document
 ├── data_profile.json        # Field statistics + sample values
+├── agent_metadata.json      # Agent configuration for deployment
 ├── data_generator.py        # Generated: Data creation logic
 ├── query_generator.py       # Generated: ES|QL query definitions
 ├── demo_guide.py            # Generated: Demo narrative
@@ -341,6 +423,8 @@ demos/bass_pro_shops_product_mgmt_20251107/
 │   ├── product_catalog.csv
 │   └── sales_transactions.csv
 ├── queries.json             # Compiled query definitions
+├── tool_metadata.json       # Tool deployment metadata (when validated)
+├── validated_queries.json   # Query validation status
 └── query_testing_results.json  # Test execution report
 ```
 
@@ -349,10 +433,12 @@ demos/bass_pro_shops_product_mgmt_20251107/
 | Component | Purpose | Technology |
 |-----------|---------|------------|
 | `app.py` | User interface and orchestration | Streamlit |
-| `module_generator.py` | LLM-powered code generation | Claude (Anthropic) |
+| `module_generator.py` | LLM-powered code generation (includes agent metadata) | Claude (Anthropic) |
 | `module_loader.py` | Dynamic Python module execution | importlib |
 | `elasticsearch_indexer.py` | Data upload + query execution | Elasticsearch Python client |
 | `query_optimizer.py` | Constraint relaxation for failed queries | Claude (Anthropic) |
+| `agent_builder_service.py` | Agent Builder API integration | Kibana REST API |
+| `query_validation_service.py` | Query validation and tool metadata | Local storage |
 
 ### Generation Flow
 
