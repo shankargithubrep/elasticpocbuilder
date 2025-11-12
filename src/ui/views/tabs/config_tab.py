@@ -25,7 +25,7 @@ def render_config_tab(loader, assets_key: str):
     """
     # Use the new ModuleVisualizer for enhanced Config display
     try:
-        from ..module_visualizer import ModuleVisualizer
+        from src.ui.module_visualizer import ModuleVisualizer
 
         # Get LLM client if available
         llm_client = None
