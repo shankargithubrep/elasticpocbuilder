@@ -64,6 +64,74 @@ When an agent calls this query, `error_message`, `customer_id`, and `severity` w
 - **Users see incomplete data** if critical fields are beyond position 5
 - **Actions may fail** if required IDs are not in the visible fields
 
+---
+
+### ⚠️ CRITICAL: Never Parameterize @timestamp
+
+**ANTI-PATTERN**: Parameterizing `@timestamp` fields for time range filtering
+
+#### The Problem
+```esql
+// ❌ BAD: Parameterizing @timestamp
+FROM purchase_transactions
+| WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date
+```
+
+**Why this is wrong:**
+- `@timestamp` is a **system field** for time-series data indexing
+- Time ranges should be **relative** (last 7 days, last hour) not absolute
+- Agents should ask questions like "last week" not "Jan 1 to Jan 7"
+- Makes queries more flexible and less prone to timezone issues
+
+#### The Solution
+```esql
+// ✅ GOOD: Use relative time with NOW()
+FROM purchase_transactions
+| WHERE @timestamp >= NOW() - 7 days
+```
+
+**Common relative time patterns:**
+- `NOW() - 1 hour` - Last hour
+- `NOW() - 24 hours` - Last 24 hours
+- `NOW() - 7 days` - Last week
+- `NOW() - 30 days` - Last month
+- `NOW() - 90 days` - Last quarter
+
+#### When TO Parameterize Date Fields
+
+✅ **Parameterize business/application date fields** (NOT @timestamp):
+```esql
+// ✅ GOOD: Parameterizing business dates
+FROM customers
+| WHERE acquisition_date >= ?cohort_start AND acquisition_date <= ?cohort_end
+
+// ✅ GOOD: Parameterizing order dates
+FROM orders
+| WHERE order_date >= ?start_date
+```
+
+#### Decision Rule for Date Parameterization
+
+| Field Name | Parameterize? | Guidance |
+|------------|--------------|----------|
+| `@timestamp` | ❌ NEVER | IF filtering, use `NOW() - X days/hours` (Elasticsearch system field - never parameterize) |
+| `created_at` | ✅ CAN | For specific date ranges: `?date`. For recency: `NOW() - X days` |
+| `updated_at` | ✅ CAN | For specific date ranges: `?date`. For recency: `NOW() - X days` |
+| `acquisition_date` | ✅ YES | Business date - parameterize as `?start_date` |
+| `order_date` | ✅ YES | Business date - parameterize as `?order_date` |
+| `contract_start_date` | ✅ YES | Business date - parameterize as `?contract_start` |
+| `birth_date` | ✅ YES | Business date - parameterize as `?birth_date` |
+
+**Critical Rules**:
+- **`@timestamp` = NEVER parameterize** (it's the Elasticsearch system field for time-series indexing)
+- **Only add time filters when relevant to the use case** (e.g., "recent activity", "last quarter's data")
+- **Don't add @timestamp filters to every query** - generated data is static, so time-based filters become stale
+- **All other date fields = Can parameterize** based on the query purpose:
+  - Recency queries ("last week", "recent activity") → Use `NOW() - X days`
+  - Specific date ranges ("Q1 2023", "between dates") → Use `?parameters`
+
+---
+
 ### 1. Statistical Z-Score Anomaly Detection
 **Use Case**: Detect anomalies, outliers, and significant deviations from normal behavior
 

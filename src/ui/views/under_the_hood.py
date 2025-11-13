@@ -619,16 +619,18 @@ CRITICAL GUIDELINES:
 - Use INLINESTATS for rolling averages and anomaly detection
 - Use LOOKUP JOIN to enrich main dataset with reference data
 - Use DATE_TRUNC for time-series bucketing
-- Use EVAL for calculated fields before aggregation
-- Use CASE() for conditional logic
+- Use EVAL before OR after STATS (just don't reference aggregated-away fields)
+- Use CASE() for conditional logic and zero-division protection
 - Use MATCH for text search, RERANK for relevance
+- Use time filters ONLY when relevant to the use case (e.g., "recent activity", "last month's performance")
 
 ❌ DO NOT:
-- Use EVAL after STATS (unsupported)
-- Use STATS without BY clause for grouping
+- Use window functions (LAG, LEAD, OVER, ROW_NUMBER, RANK)
+- Reference fields not in BY clause after STATS (they're aggregated away)
 - Divide without checking for zero (causes errors)
 - Use fields not present in data profile
-- Create queries without WHERE clauses on time-series data
+- Add @timestamp filters to every query (data is static; use only when use-case requires it)
+- Parameterize @timestamp (use NOW() - X days when needed, or parameterize business dates)
 
 SEMANTIC SEARCH PATTERN:
 FROM index
@@ -801,11 +803,11 @@ def validate_query(self, query_text: str) -> Dict:
 
     | Anti-Pattern | Why It Fails | Correct Approach |
     |--------------|--------------|------------------|
-    | `EVAL` after `STATS` | EVAL can't reference aggregated fields | Use EVAL before STATS, or use calculated aggregations |
-    | Division without zero check | Crashes on zero denominator | Use `CASE(denom != 0, num/denom, 0)` |
-    | `DATE_EXTRACT` for bucketing | Wrong command for time-series | Use `DATE_TRUNC(1 hour, @timestamp)` |
-    | Missing `@timestamp` filter | Scans all historical data | Always add `WHERE @timestamp > NOW() - 7 days` |
-    | LOOKUP JOIN order | Right table must be lookup type | Verify index types in data profile |
+    | Window functions (`LAG`, `LEAD`, `OVER`) | ES\|QL doesn't support SQL window functions | Use `INLINESTATS` with statistical methods (z-scores, percentiles) |
+    | Referencing aggregated-away fields | Can't use fields not in `BY` clause after `STATS` | Include needed fields in `BY` clause, or use `INLINESTATS` |
+    | Division without zero check | Crashes on zero denominator | Use `CASE(denom != 0, num/denom, 0)` or `COALESCE(denom, 1)` |
+    | Parameterizing `@timestamp` | System field should use relative time | Use `NOW() - 7 days` for @timestamp; parameterize business dates only |
+    | `DATE_EXTRACT` for bucketing | Wrong command for time-series grouping | Use `DATE_TRUNC(1 hour, @timestamp)` for time buckets |
     """)
 
 

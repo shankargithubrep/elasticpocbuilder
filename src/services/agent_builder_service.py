@@ -114,6 +114,23 @@ class AgentBuilderService:
         try:
             # Construct the payload based on tool type
             if tool_config.get('type') == 'esql':
+                # Fix params: keep as dict but convert 'optional' → 'required' field names
+                params_dict = tool_config.get('params', {})
+                params_fixed = {}
+
+                for param_name, param_config in params_dict.items():
+                    # Only include type and description - API doesn't support required/optional
+                    param_obj = {
+                        'type': param_config.get('type', 'text'),
+                        'description': param_config.get('description', f'Parameter: {param_name}')
+                    }
+
+                    # Note: 'required' and 'optional' fields are not supported by the API
+                    # All parameters are effectively required when the tool is called
+                    # The 'optional' flag in our internal config is for UI/documentation only
+
+                    params_fixed[param_name] = param_obj
+
                 payload = {
                     'id': tool_config['id'],
                     'type': 'esql',
@@ -121,7 +138,7 @@ class AgentBuilderService:
                     'tags': tool_config.get('tags', []),
                     'configuration': {
                         'query': tool_config['query'],
-                        'params': tool_config.get('params', {})
+                        'params': params_fixed
                     }
                 }
             elif tool_config.get('type') == 'index_search':
@@ -138,20 +155,47 @@ class AgentBuilderService:
                     'success': False
                 }
 
+            # Debug: Log the payload being sent
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Sending payload to Agent Builder: {json.dumps(payload, indent=2)}")
+
             response = requests.post(
                 f"{self.kibana_url}/api/agent_builder/tools",
                 headers=self.write_headers,
                 json=payload,
                 timeout=30
             )
+
+            # If error, try to get more details
+            if response.status_code >= 400:
+                try:
+                    error_detail = response.json()
+                    logger.error(f"API Error Response: {json.dumps(error_detail, indent=2)}")
+                except:
+                    logger.error(f"API Error Response (text): {response.text}")
+
             response.raise_for_status()
             return {
                 'success': True,
                 'tool': response.json()
             }
         except requests.exceptions.RequestException as e:
+            error_msg = str(e)
+            error_detail = None
+
+            # Try to extract detailed error from response
+            try:
+                if hasattr(e, 'response') and e.response is not None:
+                    error_detail = e.response.json()
+                    error_msg = f"{error_msg}\nAPI Response: {json.dumps(error_detail, indent=2)}"
+            except:
+                if hasattr(e, 'response') and e.response is not None:
+                    error_msg = f"{error_msg}\nAPI Response: {e.response.text}"
+
             return {
-                'error': str(e),
+                'error': error_msg,
+                'error_detail': error_detail,
                 'success': False
             }
 
@@ -492,18 +536,17 @@ class AgentBuilderService:
         data_profile: Optional[Dict] = None
     ) -> Dict[str, Dict[str, str]]:
         """
-        Extract parameters from an ES|QL query with sophisticated detection
-        to distinguish business date fields from @timestamp filtering.
+        Extract ALL parameters from an ES|QL query using ?param_name syntax.
 
-        Business date fields (deployment_date, hire_date, etc.) get parameters.
-        @timestamp filtering does NOT get parameters (agents handle via execute_esql).
+        The Agent Builder API requires that all parameters referenced in the query
+        (using ?param_name) must have corresponding parameter definitions.
 
         Args:
             query: The ES|QL query string
             data_profile: Optional data profile to validate field types
 
         Returns:
-            Dict of parameters with their types
+            Dict of parameters with their types and descriptions
         """
         import re
 
@@ -514,11 +557,8 @@ class AgentBuilderService:
         # Create parameter definitions with inferred types
         param_definitions = {}
         for param in params:
-            # CRITICAL: Skip @timestamp parameters (agents handle via execute_esql)
-            if self._is_timestamp_parameter(query, param):
-                # Don't create parameter - agents will handle temporal filtering
-                continue
-
+            # NOTE: We include ALL parameters found in the query, including @timestamp filters
+            # The API validates that all ?param placeholders have corresponding definitions
             param_lower = param.lower()
 
             # Check if this is a business date parameter

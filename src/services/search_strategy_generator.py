@@ -210,6 +210,27 @@ FROM knowledge_base
 | KEEP created_date, author, tags, status, article_id, title, content
 ```
 
+**⚠️ CRITICAL: NEVER Parameterize @timestamp**
+❌ **DO NOT parameterize @timestamp or system timestamp fields!**
+
+**For search queries, use relative time:**
+```esql
+// ✅ GOOD: Relative time with NOW()
+FROM documents
+| WHERE @timestamp >= NOW() - 30 days
+| MATCH(content, "search term")
+
+// ❌ BAD: Parameterized @timestamp
+FROM documents
+| WHERE @timestamp >= ?start_date  ❌ DON'T DO THIS!
+```
+
+**Date Parameterization Rules:**
+- ❌ `@timestamp` → IF filtering on it, use `NOW() - X days/hours` (NEVER parameterize - it's an Elasticsearch system field)
+- ⚠️ Only add time filters when part of the use case (e.g., "recent documents", "published this month")
+- ⚠️ Don't add @timestamp filters to every query - data is static, so time-based filters become stale
+- ✅ Other date fields (e.g., `created_at`, `published_date`, `effective_date`) → Can parameterize based on query purpose
+
 **Output Format (MUST be valid JSON):**
 ```json
 {{

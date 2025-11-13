@@ -247,6 +247,37 @@ For each query, specify the EXACT data structure needed to make it work.
 | KEEP timestamp, session_id, trace_id, span_id, details, customer_id, severity
 ```
 
+**⚠️ CRITICAL: NEVER Parameterize @timestamp**
+❌ **DO NOT parameterize @timestamp or system timestamp fields!**
+
+**WRONG - Anti-pattern:**
+```esql
+FROM purchase_transactions
+| WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date  ❌ BAD!
+```
+
+**CORRECT - Use NOW() for @timestamp:**
+```esql
+FROM purchase_transactions
+| WHERE @timestamp >= NOW() - 7 days  ✅ GOOD!
+```
+
+**Date Parameterization Rules:**
+- ❌ `@timestamp` → IF filtering on it, use `NOW() - X days/hours` (NEVER parameterize - it's an Elasticsearch system field)
+- ✅ `created_at` → Can parameterize for specific dates, or use `NOW()` for recency
+- ✅ `updated_at` → Can parameterize for specific dates, or use `NOW()` for recency
+- ✅ `acquisition_date` → Parameterize as `?start_date` (business date)
+- ✅ `order_date` → Parameterize as `?order_date` (business date)
+- ✅ `contract_date` → Parameterize as `?contract_start` (business date)
+
+**Critical Rules**:
+- `@timestamp` is the ONLY field that should NEVER be parameterized
+- Only add time-based filters when they're part of the use case (e.g., "recent activity", "last quarter's sales")
+- Don't add @timestamp filters to every query - generated data is static, so "last 7 days" filters become stale
+- All other date fields CAN be parameterized based on query purpose:
+  - For recency ("last 7 days") → Use `NOW() - X days`
+  - For specific ranges ("Q1 2023") → Use `?parameters`
+
 **CRITICAL Index Mode Decision Rule:**
 For each dataset, determine index_mode based on how it will be used:
 1. **Will this dataset appear in LOOKUP JOIN?** → index_mode: "lookup"

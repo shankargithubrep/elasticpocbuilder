@@ -76,9 +76,101 @@ def render_tools_tab(loader):
 
                 st.divider()
 
-                # Tool definition section
-                st.markdown("##### 📋 Full Tool Definition")
-                st.json(tool)
+                # Tool definition section (collapsed by default)
+                with st.expander("📋 Full Tool Definition", expanded=False):
+                    st.json(tool)
+
+                st.divider()
+
+                # Test Tool section
+                st.markdown("##### 🧪 Test Tool")
+
+                # Get the ES|QL query from the tool configuration
+                tool_config = tool.get('configuration', {})
+                tool_query = tool_config.get('query', '')
+                tool_params = tool_config.get('params', {})
+
+                if tool_query:
+                    # Show the query
+                    with st.expander("📝 Query", expanded=False):
+                        st.code(tool_query, language='sql')
+
+                    # If the tool has parameters, show input fields
+                    param_values = {}
+                    if tool_params:
+                        st.markdown("**Parameters:**")
+                        for param_name, param_info in tool_params.items():
+                            param_type = param_info.get('type', 'string')
+                            param_desc = param_info.get('description', '')
+                            is_optional = param_info.get('optional', False)
+
+                            label = f"{param_name} {'(optional)' if is_optional else ''}"
+
+                            if param_type in ['integer', 'long']:
+                                param_values[param_name] = st.number_input(
+                                    label,
+                                    key=f"test_param_{tool_id}_{param_name}",
+                                    help=param_desc
+                                )
+                            elif param_type in ['float', 'double']:
+                                param_values[param_name] = st.number_input(
+                                    label,
+                                    key=f"test_param_{tool_id}_{param_name}",
+                                    format="%.2f",
+                                    help=param_desc
+                                )
+                            else:  # string, keyword, or default
+                                param_values[param_name] = st.text_input(
+                                    label,
+                                    key=f"test_param_{tool_id}_{param_name}",
+                                    help=param_desc
+                                )
+
+                    # Test button
+                    if st.button("▶️ Test Tool", key=f"test_tool_{tool_id}", use_container_width=True):
+                        from src.services.elasticsearch_indexer import ElasticsearchIndexer
+
+                        with st.spinner("Executing query..."):
+                            try:
+                                # Build the query with parameters if needed
+                                query_to_execute = tool_query
+                                if param_values:
+                                    # Replace ?parameter placeholders with actual values
+                                    for param_name, param_value in param_values.items():
+                                        if param_value:  # Only replace if value provided
+                                            # Handle different types
+                                            if isinstance(param_value, str):
+                                                query_to_execute = query_to_execute.replace(
+                                                    f"?{param_name}",
+                                                    f'"{param_value}"'
+                                                )
+                                            else:
+                                                query_to_execute = query_to_execute.replace(
+                                                    f"?{param_name}",
+                                                    str(param_value)
+                                                )
+
+                                # Execute the query
+                                indexer = ElasticsearchIndexer()
+                                success, result, error = indexer.execute_esql(query_to_execute)
+
+                                if success:
+                                    st.success(f"✅ Query executed successfully! Returned {len(result.get('values', []))} rows")
+
+                                    # Show results
+                                    if result.get('values'):
+                                        # Use QueryResultsDisplay (already imported at top of file)
+                                        results_display = QueryResultsDisplay()
+                                        results_display._render_query_results(result, unique_key=f"deployed_{tool_id}")
+                                    else:
+                                        st.info("Query executed successfully but returned no data")
+                                else:
+                                    st.error(f"❌ Query execution failed: {error}")
+                                    st.code(query_to_execute, language='sql')
+                            except Exception as e:
+                                st.error(f"❌ Error testing tool: {e}")
+                else:
+                    st.info("No query found in tool configuration")
 
                 st.divider()
 
