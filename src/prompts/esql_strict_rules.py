@@ -229,11 +229,174 @@ Note: COMPLETION may not be available in all Elasticsearch versions
 - Scripted queries: NO `@timestamp` filters (rely on Kibana time picker)
 - Parameterized queries: Use `?start_date` and `?end_date` parameters
 
-### 17. Experimental Features ⚠️
+### 17. EVAL Variable Reuse - CANNOT Use Newly Defined Variables in Same Command ⚠️⚠️ CRITICAL
+**Common Error**: "Unknown column [variable_name]" when using a variable defined in the same EVAL
+
+❌ WRONG - Using variable defined in same EVAL:
+```esql
+| EVAL
+    z_score = (count - avg) / stddev,
+    multi_host = CASE(hosts >= 2, 1, 0),
+    storm_prob = z_score * multi_host  -- ❌ ERROR: Unknown column [z_score]
+```
+
+✅ CORRECT - Use separate EVAL commands:
+```esql
+| EVAL
+    z_score = (count - avg) / stddev,
+    multi_host = CASE(hosts >= 2, 1, 0)
+| EVAL storm_prob = z_score * multi_host  -- ✅ Now z_score is available
+```
+
+**Rule**: Variables defined in an EVAL command are NOT available to other expressions in the SAME EVAL command.
+You must use a subsequent EVAL (or other command) to reference newly created variables.
+
+**Why This Fails**: ES|QL evaluates all expressions in an EVAL simultaneously, so variables aren't available to each other within the same command.
+
+**Common Patterns That Fail:**
+```esql
+| EVAL
+    total = a + b,
+    percentage = (total / max) * 100  -- ❌ total not available yet
+
+| EVAL
+    days_ago = (TO_LONG(NOW()) - TO_LONG(@timestamp)) / 86400000,
+    is_recent = CASE(days_ago <= 7, true, false)  -- ❌ days_ago not available yet
+```
+
+**Corrected Patterns:**
+```esql
+| EVAL total = a + b
+| EVAL percentage = (total / max) * 100  -- ✅ Separate command
+
+| EVAL days_ago = (TO_LONG(NOW()) - TO_LONG(@timestamp)) / 86400000
+| EVAL is_recent = CASE(days_ago <= 7, true, false)  -- ✅ Separate command
+```
+
+**Exception**: You CAN reference existing fields from previous commands or from the source data:
+```esql
+| EVAL
+    total = field_a + field_b,      -- ✅ field_a, field_b exist from source
+    avg = (field_a + field_b) / 2   -- ✅ field_a, field_b exist (but NOT total!)
+```
+
+### 18. @timestamp Parameterization - NEVER Parameterize System Timestamp ⚠️⚠️ CRITICAL
+**Common Error**: Creating parameterized queries that filter on @timestamp using ?parameters
+
+❌ WRONG - Parameterizing @timestamp:
+```esql
+FROM purchase_transactions
+| WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date  -- ❌ NEVER DO THIS!
+```
+
+❌ WRONG - Parameterizing system timestamp fields:
+```esql
+FROM events
+| WHERE event.ingested >= ?start_date  -- ❌ System field, don't parameterize
+```
+
+✅ CORRECT - Use NOW() for @timestamp filters:
+```esql
+FROM purchase_transactions
+| WHERE @timestamp >= NOW() - 7 days  -- ✅ Relative time with NOW()
+```
+
+✅ CORRECT - Use NOW() for recency queries:
+```esql
+FROM events
+| WHERE @timestamp >= NOW() - 24 hours  -- ✅ Last 24 hours
+| WHERE @timestamp >= NOW() - 90 days   -- ✅ Last 90 days
+```
+
+✅ CORRECT - Parameterize BUSINESS date fields (not system timestamp):
+```esql
+FROM orders
+| WHERE order_date >= ?start_date AND order_date <= ?end_date  -- ✅ Business date
+
+FROM contracts
+| WHERE contract_start_date >= ?acquisition_start  -- ✅ Business date
+
+FROM transactions
+| WHERE transaction_date == ?target_date  -- ✅ Business date
+```
+
+**Rule**: NEVER parameterize @timestamp or system timestamp fields (event.ingested, log.ingest_timestamp, etc.).
+Only parameterize BUSINESS date fields (order_date, created_at, updated_at, contract_date, etc.).
+
+**Why This Matters**:
+- @timestamp is an Elasticsearch system field that represents document ingestion time
+- Parameterizing it creates poor user experience (users must know index time ranges)
+- For recency, use NOW() - X days/hours instead
+- For historical analysis, use BUSINESS date fields that users understand
+
+**Date Field Classification:**
+- ❌ `@timestamp` → NEVER parameterize, use NOW() for recency
+- ❌ `event.ingested` → System field, use NOW() if needed
+- ✅ `created_at` → Business field, CAN parameterize OR use NOW()
+- ✅ `updated_at` → Business field, CAN parameterize OR use NOW()
+- ✅ `order_date` → Business field, parameterize as ?start_date/?end_date
+- ✅ `contract_date` → Business field, parameterize as ?contract_start
+- ✅ `acquisition_date` → Business field, parameterize as ?start_date
+
+**IMPORTANT**: Only add time-based filters when they're part of the use case.
+Don't add @timestamp filters to every query - generated data is static, so "last 7 days" filters become stale.
+
+### 19. Experimental Features ⚠️
 These may fail depending on ES version:
 - CHANGE_POINT - Use INLINESTATS with z-score calculation instead
 - LAG/LEAD - Window functions may not be supported
 - SEMANTIC - Use MATCH with semantic_text fields instead
+
+### 20. NULL Handling with Negative Filters ⚠️⚠️ CRITICAL - SILENT DATA LOSS
+**Problem**: ES|QL EXCLUDES documents with NULL/missing fields from negative filters (!=, NOT, NOT LIKE), causing silent data loss.
+
+✅ CORRECT - Include NULL values explicitly:
+```esql
+FROM logs
+| WHERE status != "success" OR status IS NULL    -- Includes docs where status is missing
+```
+
+✅ CORRECT - Exclude specific pattern but keep nulls:
+```esql
+FROM events
+| WHERE NOT(error_message LIKE "*timeout*") OR error_message IS NULL
+```
+
+❌ WRONG - Silent data loss:
+```esql
+FROM logs
+| WHERE status != "success"                       -- ❌ Silently excludes docs with status=NULL
+```
+
+❌ WRONG - Missing threats in security queries:
+```esql
+FROM security_events
+| WHERE NOT(user_action == "approved")            -- ❌ Misses events where user_action is NULL
+```
+
+**When to include `OR field IS NULL`:**
+- ✅ ALWAYS include when using !=, NOT, NOT LIKE unless you explicitly want to exclude nulls
+- ✅ ESPECIALLY CRITICAL for security/SIEM queries (missing data = missed threats)
+- ✅ For analytics where "not X" should include "unknown" or "missing" values
+- ❌ Skip ONLY when null/missing values should genuinely be excluded (rare)
+- ❌ Skip for guaranteed fields like @timestamp
+
+**Warning Template**: "Note: Including NULL values. Remove `OR {field} IS NULL` to exclude documents where {field} is missing."
+
+**Common Patterns:**
+```esql
+-- Security: Find non-successful authentications
+| WHERE auth_result != "success" OR auth_result IS NULL
+
+-- Analytics: Find non-active users
+| WHERE user_status != "active" OR user_status IS NULL
+
+-- Compliance: Find non-compliant records
+| WHERE NOT(compliance_status == "passed") OR compliance_status IS NULL
+
+-- Pattern matching: Find unusual errors
+| WHERE NOT(error_code LIKE "E-200*") OR error_code IS NULL
+```
 """
 
 # ============================================================================

@@ -29,10 +29,13 @@ class QueryTestResult:
     fix_history: List[Dict] = None
     original_esql: Optional[str] = None
     final_esql: Optional[str] = None
+    warnings: List[Dict] = None  # Pattern warnings (e.g., integer division)
 
     def __post_init__(self):
         if self.fix_history is None:
             self.fix_history = []
+        if self.warnings is None:
+            self.warnings = []
 
 
 class QueryTestRunner:
@@ -171,6 +174,21 @@ class QueryTestRunner:
                     'result_count': result_count
                 })
                 logger.info(f"Query '{query['name']}' succeeded on attempt {attempt + 1} with {result_count} results")
+
+                # Detect potential integer division patterns (no error, but may produce wrong results)
+                division_warnings = self._detect_integer_division_patterns(current_esql)
+                if division_warnings:
+                    result.warnings.extend(division_warnings)
+                    for warning in division_warnings:
+                        logger.warning(f"⚠️ Query '{query['name']}': {warning['message']}")
+
+                # Detect missing NULL handling in negative filters (silent data loss)
+                null_warnings = self._detect_null_handling_issues(current_esql, query.get('name', ''), query.get('description', ''))
+                if null_warnings:
+                    result.warnings.extend(null_warnings)
+                    for warning in null_warnings:
+                        logger.warning(f"⚠️ Query '{query['name']}': {warning['message']}")
+
                 break
 
             # Capture first error
@@ -437,3 +455,203 @@ class QueryTestRunner:
 
         total_attempts = sum(q.get('fix_attempts', 0) for q in query_results)
         return round(total_attempts / len(query_results), 1)
+
+    def _detect_integer_division_patterns(self, esql: str) -> List[Dict]:
+        """Detect potential integer division patterns that may produce incorrect results
+
+        Integer division in ES|QL truncates results:
+        - (5 - 1) / 5 = 0 (wrong - integer division)
+        - (5 - 1) / TO_DOUBLE(5) = 0.8 (correct - float division)
+
+        This is particularly problematic for percentage calculations where results
+        appear plausible (0 or 100) but are actually truncated.
+
+        Args:
+            esql: ES|QL query string
+
+        Returns:
+            List of warning dictionaries with message, pattern, and suggested_fix
+        """
+        warnings = []
+
+        # Pattern: EVAL statements with division
+        # Match: | EVAL field = expression / expression
+        eval_division_pattern = r'\|\s*EVAL\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+)'
+
+        for match in re.finditer(eval_division_pattern, esql, re.IGNORECASE):
+            field_name = match.group(1)
+            expression = match.group(2).strip()
+
+            # Check if expression contains division
+            if '/' not in expression:
+                continue
+
+            # Skip if already using TO_DOUBLE() or TO_LONG()
+            if 'TO_DOUBLE(' in expression.upper() or 'TO_LONG(' in expression.upper():
+                continue
+
+            # Skip if using float literals (100.0, 1.0, etc.)
+            if re.search(r'/\s*\d+\.\d+', expression):
+                continue
+
+            # Skip if multiplying by float first (field * 100.0 / ...)
+            if re.search(r'\*\s*\d+\.\d+\s*/', expression):
+                continue
+
+            # Detect common integer division patterns
+            # Pattern 1: (expr) / field
+            # Pattern 2: field / field
+            # Pattern 3: agg_result / agg_result (e.g., failures / attempts)
+            division_match = re.search(r'(.+?)\s*/\s*([a-zA-Z_][a-zA-Z0-9_]*|\([^)]+\))', expression)
+
+            if division_match:
+                numerator = division_match.group(1).strip()
+                denominator = division_match.group(2).strip()
+
+                # Extract the exact division operation
+                original_pattern = f"{numerator} / {denominator}"
+
+                # Generate suggested fix
+                # If denominator is a simple field, wrap it in TO_DOUBLE()
+                if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', denominator):
+                    suggested_fix = f"{numerator} / TO_DOUBLE({denominator})"
+                else:
+                    # For complex expressions, suggest wrapping whole division or numerator
+                    suggested_fix = f"TO_DOUBLE({numerator}) / {denominator}"
+
+                # Check if this looks like a percentage calculation (common pattern)
+                is_percentage = '*' in expression and ('100' in expression or 'pct' in field_name.lower() or 'rate' in field_name.lower())
+
+                warning_msg = f"Potential integer division in EVAL {field_name}: '{original_pattern}'"
+                if is_percentage:
+                    warning_msg += " (percentage calculation - integer division will truncate to 0 or 100)"
+
+                warnings.append({
+                    'type': 'integer_division',
+                    'field': field_name,
+                    'message': warning_msg,
+                    'pattern': original_pattern,
+                    'suggested_fix': f"| EVAL {field_name} = {suggested_fix}",
+                    'full_expression': expression,
+                    'is_percentage': is_percentage
+                })
+
+        return warnings
+
+    def _detect_null_handling_issues(self, esql: str, query_name: str = '', query_description: str = '') -> List[Dict]:
+        """Detect negative filters missing NULL checks (silent data loss)
+
+        ES|QL excludes documents with NULL/missing fields from negative filters:
+        - WHERE field != "value" excludes docs where field is NULL
+        - WHERE NOT(field LIKE "pattern") excludes docs where field is NULL
+
+        This causes silent data loss, especially critical in security/SIEM queries
+        where missing data could mean missed threats.
+
+        Args:
+            esql: ES|QL query string
+            query_name: Query name for context
+            query_description: Query description for security classification
+
+        Returns:
+            List of warning dictionaries with message, pattern, and suggested_fix
+        """
+        warnings = []
+
+        # Check if this is a security/SIEM query (extra critical)
+        security_keywords = ['security', 'auth', 'threat', 'compliance', 'audit',
+                           'siem', 'detection', 'alert', 'incident', 'vulnerability']
+        is_security_query = any(keyword in query_name.lower() or keyword in query_description.lower()
+                               for keyword in security_keywords)
+
+        # Pattern 1: field != "value" (most common)
+        # Matches: | WHERE field != "value"
+        inequality_pattern = r'\|\s*WHERE\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s*!=\s*([^\s|]+)'
+
+        for match in re.finditer(inequality_pattern, esql, re.IGNORECASE):
+            field_name = match.group(1).strip()
+            value = match.group(2).strip()
+
+            # Skip guaranteed fields
+            if field_name == '@timestamp':
+                continue
+
+            # Check if this field already has NULL handling
+            null_check_pattern = rf'OR\s+{re.escape(field_name)}\s+IS\s+NULL'
+            if re.search(null_check_pattern, esql, re.IGNORECASE):
+                continue  # Already has NULL handling
+
+            warning_msg = f"Negative filter on '{field_name}' missing NULL check (silently excludes docs where field is NULL)"
+            if is_security_query:
+                warning_msg += " - CRITICAL for security queries (missing data = missed threats)"
+
+            warnings.append({
+                'type': 'missing_null_check',
+                'field': field_name,
+                'message': warning_msg,
+                'pattern': f"{field_name} != {value}",
+                'suggested_fix': f"| WHERE {field_name} != {value} OR {field_name} IS NULL",
+                'is_security_query': is_security_query
+            })
+
+        # Pattern 2: NOT(field LIKE "pattern")
+        # Matches: | WHERE NOT(field LIKE "pattern")
+        not_like_pattern = r'\|\s*WHERE\s+NOT\s*\(\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s+LIKE\s+([^\)]+)\)'
+
+        for match in re.finditer(not_like_pattern, esql, re.IGNORECASE):
+            field_name = match.group(1).strip()
+            pattern_value = match.group(2).strip()
+
+            # Skip guaranteed fields
+            if field_name == '@timestamp':
+                continue
+
+            # Check if this field already has NULL handling
+            null_check_pattern = rf'OR\s+{re.escape(field_name)}\s+IS\s+NULL'
+            if re.search(null_check_pattern, esql, re.IGNORECASE):
+                continue
+
+            warning_msg = f"NOT LIKE filter on '{field_name}' missing NULL check (silently excludes docs where field is NULL)"
+            if is_security_query:
+                warning_msg += " - CRITICAL for security queries"
+
+            warnings.append({
+                'type': 'missing_null_check',
+                'field': field_name,
+                'message': warning_msg,
+                'pattern': f"NOT({field_name} LIKE {pattern_value})",
+                'suggested_fix': f"| WHERE NOT({field_name} LIKE {pattern_value}) OR {field_name} IS NULL",
+                'is_security_query': is_security_query
+            })
+
+        # Pattern 3: NOT(field == "value")
+        # Matches: | WHERE NOT(field == "value")
+        not_equals_pattern = r'\|\s*WHERE\s+NOT\s*\(\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s*==\s*([^\)]+)\)'
+
+        for match in re.finditer(not_equals_pattern, esql, re.IGNORECASE):
+            field_name = match.group(1).strip()
+            value = match.group(2).strip()
+
+            # Skip guaranteed fields
+            if field_name == '@timestamp':
+                continue
+
+            # Check if this field already has NULL handling
+            null_check_pattern = rf'OR\s+{re.escape(field_name)}\s+IS\s+NULL'
+            if re.search(null_check_pattern, esql, re.IGNORECASE):
+                continue
+
+            warning_msg = f"NOT filter on '{field_name}' missing NULL check (silently excludes docs where field is NULL)"
+            if is_security_query:
+                warning_msg += " - CRITICAL for security queries"
+
+            warnings.append({
+                'type': 'missing_null_check',
+                'field': field_name,
+                'message': warning_msg,
+                'pattern': f"NOT({field_name} == {value})",
+                'suggested_fix': f"| WHERE NOT({field_name} == {value}) OR {field_name} IS NULL",
+                'is_security_query': is_security_query
+            })
+
+        return warnings

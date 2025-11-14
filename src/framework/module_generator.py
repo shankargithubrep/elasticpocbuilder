@@ -508,6 +508,51 @@ queries.append({{
 
 {esql_rules}
 
+🚨🚨🚨 CRITICAL - INTEGER DIVISION ANTI-PATTERN 🚨🚨🚨
+ALWAYS use TO_DOUBLE() when dividing aggregated fields! Integer division truncates to 0!
+
+❌ WRONG (produces 0 or 100 only):
+```esql
+| EVAL success_rate = ((total - failures) / total) * 100
+```
+
+✅ CORRECT (produces accurate percentages like 95.7):
+```esql
+| EVAL success_rate = ((total - failures) / TO_DOUBLE(total)) * 100
+```
+
+**WHY**: In ES|QL, dividing two integers performs integer division and truncates the result.
+- (95 / 100) = 0 (WRONG - integer division)
+- (95 / TO_DOUBLE(100)) = 0.95 (CORRECT - float division)
+
+**RULE**: If you see division (/) in an EVAL, wrap the denominator in TO_DOUBLE() UNLESS:
+- You already use TO_DOUBLE(): ✓ `field / TO_DOUBLE(total)`
+- You multiply by float first: ✓ `field * 100.0 / total`
+- You divide by float literal: ✓ `milliseconds / 1000.0`
+
+🚨🚨🚨 CRITICAL - NULL HANDLING ANTI-PATTERN 🚨🚨🚨
+ALWAYS include NULL checks with negative filters! ES|QL silently excludes NULL values!
+
+❌ WRONG (silently excludes docs where field is NULL - DATA LOSS):
+```esql
+| WHERE status != "success"
+| WHERE NOT(error_type LIKE "*timeout*")
+```
+
+✅ CORRECT (includes NULL values - complete data):
+```esql
+| WHERE status != "success" OR status IS NULL
+| WHERE NOT(error_type LIKE "*timeout*") OR error_type IS NULL
+```
+
+**WHY**: ES|QL excludes NULL/missing fields from negative filters (!=, NOT, NOT LIKE).
+- Documents where the field is NULL are SILENTLY EXCLUDED even though they match "not X"
+- ESPECIALLY CRITICAL for security queries - missing data = missed threats!
+
+**RULE**: When using negative filters (!=, NOT, NOT LIKE, NOT IN), append `OR field IS NULL` UNLESS:
+- Field is guaranteed to exist (e.g., @timestamp)
+- You explicitly want to exclude nulls (rare - document this in description)
+
 Generate ONLY the generate_queries() method with the EXACT signature above (no datasets parameter!).
 Access data via self.datasets. Use EXACT field names from the schema. ALWAYS use "type": "scripted" for ALL queries."""
 
@@ -565,6 +610,67 @@ queries.append({{
 ```
 
 {esql_rules}
+
+🚨🚨🚨 CRITICAL - @timestamp ANTI-PATTERN 🚨🚨🚨
+NEVER EVER parameterize @timestamp! This is the #1 most common mistake!
+
+❌ WRONG (DO NOT GENERATE THIS):
+```esql
+| WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date
+```
+
+✅ CORRECT (USE THIS INSTEAD):
+```esql
+| WHERE @timestamp >= NOW() - 7 days  # Relative time with NOW()
+```
+
+If you see @timestamp in the query plan, IGNORE any parameter suggestions and use NOW() instead!
+The ONLY time-based parameters allowed are for BUSINESS date fields (order_date, created_at, etc.) - NEVER @timestamp!
+
+🚨🚨🚨 CRITICAL - INTEGER DIVISION ANTI-PATTERN 🚨🚨🚨
+ALWAYS use TO_DOUBLE() when dividing aggregated fields! Integer division truncates to 0!
+
+❌ WRONG (produces 0 or 100 only):
+```esql
+| EVAL success_rate = ((total - failures) / total) * 100
+```
+
+✅ CORRECT (produces accurate percentages like 95.7):
+```esql
+| EVAL success_rate = ((total - failures) / TO_DOUBLE(total)) * 100
+```
+
+**WHY**: In ES|QL, dividing two integers performs integer division and truncates the result.
+- (95 / 100) = 0 (WRONG - integer division)
+- (95 / TO_DOUBLE(100)) = 0.95 (CORRECT - float division)
+
+**RULE**: If you see division (/) in an EVAL, wrap the denominator in TO_DOUBLE() UNLESS:
+- You already use TO_DOUBLE(): ✓ `field / TO_DOUBLE(total)`
+- You multiply by float first: ✓ `field * 100.0 / total`
+- You divide by float literal: ✓ `milliseconds / 1000.0`
+
+🚨🚨🚨 CRITICAL - NULL HANDLING ANTI-PATTERN 🚨🚨🚨
+ALWAYS include NULL checks with negative filters! ES|QL silently excludes NULL values!
+
+❌ WRONG (silently excludes docs where field is NULL - DATA LOSS):
+```esql
+| WHERE status != "success"
+| WHERE NOT(error_type LIKE "*timeout*")
+```
+
+✅ CORRECT (includes NULL values - complete data):
+```esql
+| WHERE status != "success" OR status IS NULL
+| WHERE NOT(error_type LIKE "*timeout*") OR error_type IS NULL
+```
+
+**WHY**: ES|QL excludes NULL/missing fields from negative filters (!=, NOT, NOT LIKE).
+- Documents where the field is NULL are SILENTLY EXCLUDED even though they match "not X"
+- ESPECIALLY CRITICAL for security queries - missing data = missed threats!
+
+**RULE**: When using negative filters (!=, NOT, NOT LIKE, NOT IN), append `OR field IS NULL` UNLESS:
+- Field is guaranteed to exist (e.g., @timestamp)
+- You explicitly want to exclude nulls (rare - document this in description)
 
 Generate ONLY the generate_parameterized_queries() method with the EXACT signature above (no datasets parameter!).
 Access data via self.datasets. Use ?parameter syntax for Agent Builder tools. Use EXACT field names from schema. ALWAYS use "type": "parameterized" for ALL queries."""
@@ -811,6 +917,51 @@ def generate_queries(self) -> List[Dict[str, Any]]:
     return queries
 ```
 
+🚨🚨🚨 CRITICAL - INTEGER DIVISION ANTI-PATTERN 🚨🚨🚨
+ALWAYS use TO_DOUBLE() when dividing aggregated fields! Integer division truncates to 0!
+
+❌ WRONG (produces 0 or 100 only):
+```esql
+| EVAL success_rate = ((total - failures) / total) * 100
+```
+
+✅ CORRECT (produces accurate percentages like 95.7):
+```esql
+| EVAL success_rate = ((total - failures) / TO_DOUBLE(total)) * 100
+```
+
+**WHY**: In ES|QL, dividing two integers performs integer division and truncates the result.
+- (95 / 100) = 0 (WRONG - integer division)
+- (95 / TO_DOUBLE(100)) = 0.95 (CORRECT - float division)
+
+**RULE**: If you see division (/) in an EVAL, wrap the denominator in TO_DOUBLE() UNLESS:
+- You already use TO_DOUBLE(): ✓ `field / TO_DOUBLE(total)`
+- You multiply by float first: ✓ `field * 100.0 / total`
+- You divide by float literal: ✓ `milliseconds / 1000.0`
+
+🚨🚨🚨 CRITICAL - NULL HANDLING ANTI-PATTERN 🚨🚨🚨
+ALWAYS include NULL checks with negative filters! ES|QL silently excludes NULL values!
+
+❌ WRONG (silently excludes docs where field is NULL - DATA LOSS):
+```esql
+| WHERE status != "success"
+| WHERE NOT(error_type LIKE "*timeout*")
+```
+
+✅ CORRECT (includes NULL values - complete data):
+```esql
+| WHERE status != "success" OR status IS NULL
+| WHERE NOT(error_type LIKE "*timeout*") OR error_type IS NULL
+```
+
+**WHY**: ES|QL excludes NULL/missing fields from negative filters (!=, NOT, NOT LIKE).
+- Documents where the field is NULL are SILENTLY EXCLUDED even though they match "not X"
+- ESPECIALLY CRITICAL for security queries - missing data = missed threats!
+
+**RULE**: When using negative filters (!=, NOT, NOT LIKE, NOT IN), append `OR field IS NULL` UNLESS:
+- Field is guaranteed to exist (e.g., @timestamp)
+- You explicitly want to exclude nulls (rare - document this in description)
+
 Generate ONLY the method implementation (including the def line and all queries). Do NOT include class definition or imports."""
 
         if self.llm_client:
@@ -932,6 +1083,66 @@ def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
 
     return param_queries
 ```
+
+🚨🚨🚨 CRITICAL - @timestamp ANTI-PATTERN 🚨🚨🚨
+NEVER EVER parameterize @timestamp! This is the #1 most common mistake!
+
+❌ WRONG (DO NOT GENERATE THIS):
+```esql
+| WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date
+```
+
+✅ CORRECT (USE THIS INSTEAD):
+```esql
+| WHERE @timestamp >= NOW() - 7 days  # Relative time with NOW()
+```
+
+The ONLY time-based parameters allowed are for BUSINESS date fields (order_date, created_at, etc.) - NEVER @timestamp!
+
+🚨🚨🚨 CRITICAL - INTEGER DIVISION ANTI-PATTERN 🚨🚨🚨
+ALWAYS use TO_DOUBLE() when dividing aggregated fields! Integer division truncates to 0!
+
+❌ WRONG (produces 0 or 100 only):
+```esql
+| EVAL success_rate = ((total - failures) / total) * 100
+```
+
+✅ CORRECT (produces accurate percentages like 95.7):
+```esql
+| EVAL success_rate = ((total - failures) / TO_DOUBLE(total)) * 100
+```
+
+**WHY**: In ES|QL, dividing two integers performs integer division and truncates the result.
+- (95 / 100) = 0 (WRONG - integer division)
+- (95 / TO_DOUBLE(100)) = 0.95 (CORRECT - float division)
+
+**RULE**: If you see division (/) in an EVAL, wrap the denominator in TO_DOUBLE() UNLESS:
+- You already use TO_DOUBLE(): ✓ `field / TO_DOUBLE(total)`
+- You multiply by float first: ✓ `field * 100.0 / total`
+- You divide by float literal: ✓ `milliseconds / 1000.0`
+
+🚨🚨🚨 CRITICAL - NULL HANDLING ANTI-PATTERN 🚨🚨🚨
+ALWAYS include NULL checks with negative filters! ES|QL silently excludes NULL values!
+
+❌ WRONG (silently excludes docs where field is NULL - DATA LOSS):
+```esql
+| WHERE status != "success"
+| WHERE NOT(error_type LIKE "*timeout*")
+```
+
+✅ CORRECT (includes NULL values - complete data):
+```esql
+| WHERE status != "success" OR status IS NULL
+| WHERE NOT(error_type LIKE "*timeout*") OR error_type IS NULL
+```
+
+**WHY**: ES|QL excludes NULL/missing fields from negative filters (!=, NOT, NOT LIKE).
+- Documents where the field is NULL are SILENTLY EXCLUDED even though they match "not X"
+- ESPECIALLY CRITICAL for security queries - missing data = missed threats!
+
+**RULE**: When using negative filters (!=, NOT, NOT LIKE, NOT IN), append `OR field IS NULL` UNLESS:
+- Field is guaranteed to exist (e.g., @timestamp)
+- You explicitly want to exclude nulls (rare - document this in description)
 
 Generate ONLY the method implementation. Do NOT include class definition or imports."""
 
@@ -1393,13 +1604,201 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
         }}
 ```
 
+**⚠️⚠️ CRITICAL: DataFrame Array Length Validation ⚠️⚠️**
+
+**RULE**: ALL arrays in a pd.DataFrame() constructor MUST have EXACTLY the same length!
+
+**❌ WRONG - Mismatched lengths (WILL CRASH):**
+```python
+# n = 1000, but some arrays are shorter
+df = pd.DataFrame({{
+    'id': [f'ID-{{i}}' for i in range(n)],           # 1000 elements ✓
+    'name': [f'Name {{i}}' for i in range(n)],       # 1000 elements ✓
+    'status': ['active', 'pending', 'failed'],       # 3 elements ❌ WRONG!
+    'category': np.random.choice(categories, 100)    # 100 elements ❌ WRONG!
+}})
+# ERROR: All arrays must be of the same length
+```
+
+**✅ CORRECT - All arrays same length:**
+```python
+# ALL arrays must be length n
+df = pd.DataFrame({{
+    'id': [f'ID-{{i}}' for i in range(n)],                    # n elements ✓
+    'name': [f'Name {{i}}' for i in range(n)],                # n elements ✓
+    'status': np.random.choice(statuses, n),                  # n elements ✓
+    'category': np.random.choice(categories, n),              # n elements ✓
+    'amount': np.random.lognormal(5, 1, n),                   # n elements ✓
+    'timestamp': pd.date_range(end=datetime.now(), periods=n) # n elements ✓
+}})
+```
+
+**Common Mistakes to Avoid:**
+1. ❌ Using static list without size parameter: `['a', 'b', 'c']` → Use `np.random.choice(['a', 'b', 'c'], n)`
+2. ❌ Wrong size parameter: `np.random.choice(items, 100)` when n=1000
+3. ❌ List comprehension with wrong range: `[x for x in range(100)]` when n=1000
+4. ❌ Reusing array from different dataset: `df1['id']` when df1 has different length
+5. ❌ **SLICING PRE-DEFINED REFERENCE POOLS** (MOST COMMON ERROR):
+   ```python
+   # WRONG: Define small pool, then slice more items than exist
+   hss_nodes = ['hss-01', 'hss-02', 'hss-03']  # Only 3 items
+   n_hss = 10
+   df = pd.DataFrame({{'node_id': hss_nodes[:n_hss]}})  # ❌ CRASH! Slices only return 3, need 10
+
+   # CORRECT Option 1: Generate exact count inline
+   n_hss = 10
+   df = pd.DataFrame({{'node_id': [f'hss-{{i:02d}}' for i in range(1, n_hss+1)]}})  # ✓ 10 items
+
+   # CORRECT Option 2: Use np.random.choice with replacement to sample from pool
+   hss_pool = ['hss-east-01', 'hss-east-02', 'hss-west-01']  # Pool of 3
+   n_hss = 10
+   df = pd.DataFrame({{'node_id': np.random.choice(hss_pool, n_hss)}})  # ✓ Samples 10 with replacement
+   ```
+   **NEVER slice a reference pool expecting more items than it contains!**
+
+**Validation Pattern:**
+```python
+# Before creating DataFrame, ensure all arrays have same length
+n = 5000  # Number of records
+
+# Create all arrays with size n
+ids = [f'ID-{{i:06d}}' for i in range(n)]        # n elements
+names = [f'Name {{i}}' for i in range(n)]        # n elements
+statuses = np.random.choice(['a', 'b'], n)       # n elements
+amounts = np.random.lognormal(5, 1, n)           # n elements
+
+# NOW safe to create DataFrame
+df = pd.DataFrame({{'id': ids, 'name': names, 'status': statuses, 'amount': amounts}})
+```
+
+**NEVER VIOLATE THIS RULE - IT WILL CRASH THE ENTIRE DEMO GENERATION!**
+
 **CODE EFFICIENCY GUIDELINES:**
 - Keep inline lists SHORT (max 10-15 items), use variables for long lists
 - Minimize comments - let code be self-documenting
 - Use loops and list comprehensions instead of repetitive code
 - Avoid overly verbose variable names
 - Focus on correctness and brevity
+"""
 
+        # Add enhanced data generation guidance if enabled
+        if config.get('use_enhanced_generation', False):
+            prompt += """
+🔥 ENHANCED DATA GENERATION MODE ENABLED 🔥
+
+CRITICAL: Generate data with REALISTIC CLUSTERING for meaningful analytics queries!
+
+1. **NUMERIC FIELDS** - Use SKEWED distributions (NOT uniform random):
+   ```python
+   # Risk scores (0-1): concentrate low, few high
+   risk_score = np.random.beta(2, 5, size=n)  # p90 ≈ 0.82, p95 ≈ 0.90
+
+   # Amounts: realistic right-skew
+   amount = np.random.lognormal(mean=4, sigma=1, size=n)
+
+   # Counts: realistic clustering
+   count = np.random.poisson(lam=3, size=n)
+   ```
+
+2. **CATEGORICAL FIELDS** - CONCENTRATE values (NOT equal distribution):
+   ```python
+   # 80% active, 15% pending, 5% failed
+   status = safe_choice(['active', 'pending', 'failed'], size=n, weights=[80, 15, 5])
+   ```
+
+3. **TIME-SERIES CLUSTERING** - Create incident periods:
+   ```python
+   # 30% baseline (random), 70% clustered in incidents
+   baseline_count = int(total_failures * 0.3)
+   incident_count = total_failures - baseline_count
+
+   # Create 10-15 incident periods
+   for incident in range(10):
+       incident_start = random_timedelta(start_time, end_time)
+       affected_resources = random.sample(all_resources, k=15)  # SAME resources
+       for _ in range(incident_count // 10):
+           timestamp = random_timedelta(incident_start, incident_start + timedelta(hours=2))
+           resource = random.choice(affected_resources)  # Cluster by resource
+           # Add failure event...
+   ```
+
+4. **MULTI-DIMENSIONAL CLUSTERING** - For COUNT_DISTINCT aggregations:
+
+   When queries use COUNT_DISTINCT(field) with GROUP BY multiple dimensions, ensure variety WITHIN group boundaries!
+
+   **CRITICAL Anti-Pattern (WILL FAIL):**
+   ```python
+   # 1:1 mapping - each host in unique datacenter
+   mme_hosts = [
+       ('mme-01', 'cluster-1', 'DC-Seattle'),   # unique combination
+       ('mme-02', 'cluster-2', 'DC-Dallas'),    # unique combination
+       ('mme-03', 'cluster-1', 'DC-Atlanta'),   # unique combination
+   ]
+   # Query: GROUP BY cluster_id, datacenter → Each group has max 1 host!
+   # Query: WHERE unique_hosts >= 2 → RETURNS 0 RESULTS ❌
+   ```
+
+   **CORRECT Pattern (MANY:1 relationships):**
+   ```python
+   # Multiple hosts share the same (cluster, datacenter) combination
+   mme_hosts = [
+       ('mme-01', 'cluster-1', 'DC-Seattle'),
+       ('mme-02', 'cluster-1', 'DC-Seattle'),   # SAME cluster AND datacenter
+       ('mme-03', 'cluster-1', 'DC-Seattle'),   # SAME cluster AND datacenter
+       ('mme-04', 'cluster-2', 'DC-Dallas'),
+       ('mme-05', 'cluster-2', 'DC-Dallas'),    # SAME cluster AND datacenter
+   ]
+   # Query: GROUP BY cluster_id, datacenter → Each group has multiple hosts ✅
+   # Query: WHERE unique_hosts >= 2 → RETURNS RESULTS ✅
+   ```
+
+   **Implementation Strategy:**
+   ```python
+   # Step 1: Define dimension hierarchies
+   datacenters = ['DC-Seattle', 'DC-Dallas', 'DC-Atlanta']
+   clusters = ['cluster-1', 'cluster-2']
+
+   # Step 2: Create combinations (NOT 1:1, use repetition for MANY:1)
+   cluster_dc_combos = [
+       ('cluster-1', 'DC-Seattle'),   # Will have multiple hosts
+       ('cluster-1', 'DC-Dallas'),    # Will have multiple hosts
+       ('cluster-2', 'DC-Dallas'),    # Will have multiple hosts
+       ('cluster-2', 'DC-Atlanta'),   # Will have multiple hosts
+   ]
+
+   # Step 3: Assign multiple resources per combination
+   for i, (cluster, dc) in enumerate(cluster_dc_combos):
+       # Create 2-4 hosts per (cluster, datacenter) combination
+       num_hosts = random.randint(2, 4)
+       for j in range(num_hosts):
+           mme_hosts.append({
+               'mme_host': f'mme-{cluster[-1]}{dc[-7:]}-{j:02d}',
+               'cluster_id': cluster,
+               'datacenter': dc,
+               'region': get_region_for_dc(dc)
+           })
+
+   # Step 4: During incidents, assign failures to SAME (cluster, datacenter)
+   for incident in incidents:
+       # Pick a specific (cluster, datacenter) combination
+       target_cluster, target_dc = random.choice(cluster_dc_combos)
+
+       # Get ALL hosts in that combination
+       affected_hosts = [
+           h for h in mme_hosts
+           if h['cluster_id'] == target_cluster and h['datacenter'] == target_dc
+       ]
+
+       # Assign failures across these hosts during incident
+       for _ in range(failures_per_incident):
+           host = random.choice(affected_hosts)
+           # This ensures COUNT_DISTINCT(mme_host) BY cluster_id, datacenter >= 2
+   ```
+
+Goal: Percentile-based thresholds (p75, p90, p95) return meaningful result counts (not 0, not all).
+"""
+
+        prompt += """
 Generate the complete implementation with ALL required fields:"""
 
         if self.llm_client:
@@ -1462,6 +1861,98 @@ CRITICAL - FILTER VALUE REQUIREMENTS:
    - Verify field types match operations (text for MATCH, numeric for math)
 
 ⚠️  WARNING: Queries with invented filter values will return 0 results and fail testing!
+"""
+
+            # Add enhanced mode numeric threshold guidance
+            if config.get('use_enhanced_generation', False):
+                data_profile_section += """
+**🔥 ENHANCED MODE - NUMERIC THRESHOLD REQUIREMENTS:**
+
+The data has been generated with realistic clustering. Use percentile-based thresholds from profile above.
+
+CRITICAL - FOR WHERE CLAUSES WITH NUMERIC COMPARISONS (>, <, >=, <=):
+1. ⚡ **USE THRESHOLD SUGGESTIONS**: The profile shows "NUMERIC THRESHOLD SUGGESTIONS" for each numeric field
+   - These are percentile-based thresholds (p75, p90, p95, p99)
+   - Each suggestion shows expected result count
+   - Example: `WHERE risk_score > 0.82` → 1000 results (Top 10%)
+
+2. **DO NOT use arbitrary thresholds** - They will likely return 0 results!
+   - ❌ BAD: `WHERE failure_count >= 200` (arbitrary number)
+   - ✅ GOOD: `WHERE failure_count >= {p90_value}` (from threshold suggestions)
+
+3. **For aggregations with WHERE filters**:
+   - Check data profile for actual value distributions
+   - Use threshold suggestions for meaningful result counts
+   - Aim for 5-25% of data (not 0%, not 100%)
+
+4. **Example using profile data**:
+   ```
+   If profile shows:
+   - risk_score: p90 = 0.82 (returns ~1000 results)
+   - risk_score: p95 = 0.90 (returns ~500 results)
+
+   Then use:
+   WHERE risk_score > 0.82  # High risk (top 10%)
+   WHERE risk_score > 0.90  # Critical risk (top 5%)
+   ```
+
+REMEMBER: Enhanced mode data has clustering - percentile thresholds are your friend!
+
+**🔥 ENHANCED MODE - ADAPTIVE TIME BUCKETING AND THRESHOLDS:**
+
+When using DATE_TRUNC with GROUP BY and WHERE clause thresholds, you MUST ensure alignment:
+
+CRITICAL - TIME BUCKETING LOGIC:
+1. **Check data volume and time range** from the data profile:
+   - Total records in dataset
+   - Time range (earliest to latest @timestamp)
+
+2. **Calculate expected events per bucket**:
+   - Formula: expected_per_bucket = total_records / (num_days × intervals_per_day)
+   - Example: 10,000 records / (90 days × 288 five-minute intervals) = 0.38 events/bucket
+
+3. **Choose appropriate bucket size** based on expected density:
+   - **5-minute buckets**: Only for LARGE datasets (>100K records) with high-frequency events
+   - **15-minute buckets**: Medium datasets (10K-100K records)
+   - **30-minute buckets**: Small-medium datasets (5K-50K records)
+   - **1-hour buckets**: Small datasets (<10K records)
+   - **Daily/weekly buckets**: For long-term trend analysis or very sparse data
+
+4. **Align thresholds with bucket size**:
+
+   ❌ **ANTI-PATTERN (WILL FAIL)**:
+   ```esql
+   | EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)
+   | STATS failure_count = COUNT(*) BY time_bucket, cluster_id, datacenter
+   | WHERE failure_count > 50  ← IMPOSSIBLE! Max 2-3 per 5-min bucket
+   ```
+
+   ✅ **CORRECT - Wider buckets OR lower thresholds**:
+   ```esql
+   Option A: Wider time buckets
+   | EVAL time_bucket = DATE_TRUNC(1 hour, @timestamp)
+   | STATS failure_count = COUNT(*) BY time_bucket, cluster_id, datacenter
+   | WHERE failure_count > 50  ← Now achievable with hourly aggregation
+
+   Option B: Percentile-based thresholds
+   | EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)
+   | STATS failure_count = COUNT(*) BY time_bucket, cluster_id, datacenter
+   | WHERE failure_count > {p90_value}  ← Use actual p90 from profile (e.g., 3)
+   ```
+
+5. **Multi-dimensional aggregations reduce density further**:
+   - GROUP BY (time_bucket, dim1, dim2, dim3) splits data N ways
+   - Each additional dimension divides expected_per_bucket by cardinality
+   - Example: GROUP BY (time_bucket, 100 cells, 3 datacenters) = 300 groups per time bucket
+   - If you have 1000 events/hour → only 3.3 events per (time_bucket, cell, datacenter) group
+
+6. **Use data profile to inform decisions**:
+   - Check "Total Records" in dataset profile
+   - Check numeric field percentiles (p50, p75, p90, p95, p99)
+   - Use threshold suggestions that show expected result counts
+   - Don't guess thresholds - use profile data!
+
+REMEMBER: More dimensions in GROUP BY = fewer events per group = need wider time buckets OR lower thresholds!
 """
 
             # Add JOIN-specific guidance if relationships detected

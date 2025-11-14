@@ -796,18 +796,466 @@ def validate_query(self, query_text: str) -> Dict:
         ```
         """)
 
-    st.markdown("### Anti-Pattern Awareness")
+    st.markdown("### Anti-Pattern Detection & Prevention")
+
+    with st.expander("**Common ES|QL Anti-Patterns**", expanded=True):
+        st.markdown("""
+        The query generator uses aggressive warnings and post-generation detection to prevent common ES|QL errors:
+
+        | Anti-Pattern | Why It Fails | Correct Approach | Detection |
+        |--------------|--------------|------------------|-----------|
+        | Window functions (`LAG`, `LEAD`, `OVER`) | ES\|QL doesn't support SQL window functions | Use `INLINESTATS` with statistical methods | Syntax error |
+        | Referencing aggregated-away fields | Can't use fields not in `BY` clause after `STATS` | Include in `BY` clause or use `INLINESTATS` | Syntax error |
+        | Division without zero check | Crashes on zero denominator | Use `CASE(denom != 0, num/denom, 0)` | Runtime error |
+        | **Integer division** | Truncates to 0, produces wrong results | Wrap denominator in `TO_DOUBLE()` | **Post-gen scanner** ⚡ |
+        | Parameterizing `@timestamp` | System field should use relative time | Use `NOW() - 7 days`; parameterize business dates | Strategy validation |
+        | **Missing NULL checks** | Silently excludes NULL values in negative filters | Append `OR field IS NULL` to `!=`, `NOT` filters | **Post-gen scanner** ⚡ |
+        | `DATE_EXTRACT` for bucketing | Wrong command for time-series grouping | Use `DATE_TRUNC(1 hour, @timestamp)` | Syntax error |
+        """)
+
+        st.markdown("""
+        **⚡ Automated Detection** - Two anti-patterns are detected even when queries succeed:
+
+        **1. Integer Division** (Silent Wrong Results)
+        ```sql
+        -- ❌ WRONG: Returns 0 or 100 only
+        | EVAL success_rate = ((total - failures) / total) * 100
+        -- Result: (95 / 100) = 0 (integer division truncates)
+
+        -- ✅ CORRECT: Returns accurate percentages
+        | EVAL success_rate = ((total - failures) / TO_DOUBLE(total)) * 100
+        -- Result: (95 / 100.0) = 0.95, then 0.95 * 100 = 95.0
+        ```
+
+        **Why Critical**: Produces plausible but wrong results (0 or 100 for percentages)
+        - No error thrown
+        - Affects ALL division of aggregated fields
+        - Detected by scanning EVAL statements
+
+        **2. NULL Handling** (Silent Data Loss)
+        ```sql
+        -- ❌ WRONG: Silently excludes docs where status is NULL
+        | WHERE status != "success"
+
+        -- ✅ CORRECT: Includes ALL non-success (including NULL)
+        | WHERE status != "success" OR status IS NULL
+        ```
+
+        **Why Critical**: Missing data = missed threats in security queries
+        - No error thrown
+        - Documents with NULL values silently excluded
+        - Especially dangerous for security/SIEM use cases
+        - Detected by scanning negative filters (`!=`, `NOT`, `NOT LIKE`)
+
+        Both patterns are automatically detected during query testing and flagged with warnings + suggested fixes.
+        """)
+
+    with st.expander("**Query Strategy Validation**"):
+        st.markdown("""
+        Before data/query generation, the system creates a `query_strategy.json` file that's
+        validated for anti-patterns:
+
+        **Saved to**: `demos/[demo_name]/query_strategy.json`
+
+        **Purpose**:
+        - Captures PLANNED query strategy before execution
+        - Enables debugging (compare planned vs generated)
+        - Allows early detection of anti-patterns
+        - Provides triaging capability
+
+        **Validation Checks**:
+        - ✅ @timestamp parameterization hints (detects queries planning to use `?start_date`)
+        - ✅ Reference dataset usage (array length validation reminders)
+        - ✅ Field consistency (across datasets, queries, relationships)
+        - ✅ Query complexity progression (simple → advanced)
+
+        **Example Warning**:
+        ```
+        ⚠️ Query 'Revenue Analysis' may parameterize @timestamp
+           (mentions: start_date, end_date).
+           Remember: @timestamp should NEVER be parameterized - use NOW() instead!
+        ```
+
+        See `docs/QUERY_STRATEGY_INTROSPECTION.md` for details.
+        """)
+
+    with st.expander("**Query Testing with Pattern Detection**"):
+        st.markdown("""
+        During the query testing phase (after generation), all queries are automatically
+        scanned for patterns that don't produce errors but may cause issues:
+
+        **Automated Scans**:
+
+        1. **Integer Division Scanner**
+           - Detects EVAL statements with division (`/`)
+           - Checks for missing `TO_DOUBLE()` wrappers
+           - Special flagging for percentage calculations
+           - Provides specific fix suggestions
+
+        2. **NULL Handling Scanner**
+           - Detects negative filters (`!=`, `NOT`, `NOT LIKE`)
+           - Checks for missing `OR field IS NULL` clauses
+           - **Security query flagging**: Warns if query contains security keywords
+           - Keywords: `security`, `auth`, `threat`, `compliance`, `audit`, `siem`
+
+        **Warning Output** (saved to `query_testing_results.json`):
+        ```json
+        {
+          "warnings": [
+            {
+              "type": "integer_division",
+              "field": "success_rate_pct",
+              "message": "Potential integer division (will truncate to 0)",
+              "suggested_fix": "| EVAL success_rate_pct = ... / TO_DOUBLE(total)"
+            },
+            {
+              "type": "missing_null_check",
+              "field": "auth_result",
+              "message": "Missing NULL check - CRITICAL for security queries",
+              "is_security_query": true,
+              "suggested_fix": "| WHERE auth_result != 'success' OR auth_result IS NULL"
+            }
+          ]
+        }
+        ```
+
+        **Docs**:
+        - `docs/INTEGER_DIVISION_ANTI_PATTERN.md`
+        - `docs/NULL_HANDLING_ANTI_PATTERN.md`
+        """)
+
+    st.divider()
+
+    st.markdown("### Complete ES|QL Guidance Inventory")
 
     st.markdown("""
-    The query generator is trained on common ES|QL anti-patterns and actively avoids them:
+    To demonstrate to the ES|QL team the breadth of guidance needed for agentic LLM tools,
+    below is a comprehensive inventory of all ES|QL rules, patterns, and anti-patterns provided
+    to the query generation system.
+    """)
 
-    | Anti-Pattern | Why It Fails | Correct Approach |
-    |--------------|--------------|------------------|
-    | Window functions (`LAG`, `LEAD`, `OVER`) | ES\|QL doesn't support SQL window functions | Use `INLINESTATS` with statistical methods (z-scores, percentiles) |
-    | Referencing aggregated-away fields | Can't use fields not in `BY` clause after `STATS` | Include needed fields in `BY` clause, or use `INLINESTATS` |
-    | Division without zero check | Crashes on zero denominator | Use `CASE(denom != 0, num/denom, 0)` or `COALESCE(denom, 1)` |
-    | Parameterizing `@timestamp` | System field should use relative time | Use `NOW() - 7 days` for @timestamp; parameterize business dates only |
-    | `DATE_EXTRACT` for bucketing | Wrong command for time-series grouping | Use `DATE_TRUNC(1 hour, @timestamp)` for time buckets |
+    with st.expander("**📚 Critical Syntax Rules (20 Rules)**"):
+        st.markdown("""
+        These rules are enforced through `src/prompts/esql_strict_rules.py` and prevent
+        common syntax errors and anti-patterns:
+
+        **1. LOOKUP JOIN - NO SUFFIX, NO PREFIX** ⚠️⚠️ CRITICAL
+        - Never use `_lookup` suffix on index names
+        - Reference joined fields WITHOUT prefix after JOIN
+        - Example: `FROM events | LOOKUP JOIN providers ON id` → use `provider_name` not `providers.provider_name`
+
+        **2. MATCH Syntax - ALWAYS WITHIN WHERE** ⚠️
+        - MATCH is a function called within WHERE clause
+        - Pattern: `WHERE MATCH(field, "term")` or `WHERE MATCH(field, ?param)`
+
+        **3. FORK Syntax - NO NAMED BRANCHES** ⚠️
+        - FORK branches are unnamed
+        - Cannot assign branches to variables
+
+        **4. Query Parameters - CANNOT CHECK NULL** ⚠️
+        - Cannot check if parameter is NULL
+        - Parameters are ALWAYS required when used
+
+        **5. RERANK Syntax - Pipe Operation** ⚠️
+        - Syntax: `| RERANK "query" ON field`
+        - Not a function: `WHERE RERANK(...)` is invalid
+
+        **6. COUNT_DISTINCT Syntax** ⚠️⚠️ VERY COMMON ERROR
+        - Function doesn't exist in ES|QL
+        - Use `STATS unique_count = COUNT(DISTINCT field)`
+
+        **7. INLINESTATS Syntax - Single BY Clause** ⚠️⚠️ VERY COMMON ERROR
+        - ONE BY clause at end applies to ALL aggregations
+        - Not per-aggregation BY clauses
+
+        **8. STATS Conditional Aggregation** ⚠️
+        - Use `COUNT(*) WHERE condition` syntax
+        - Example: `failures = COUNT(*) WHERE status == "failed"`
+
+        **9. DATE Functions - Parameter Order** ⚠️
+        - DATE_TRUNC: `DATE_TRUNC(interval, field)` not `DATE_TRUNC(field, interval)`
+        - Interval first, field second
+
+        **10. Index Modes for LOOKUP JOIN** ⚠️ CRITICAL
+        - Lookup tables must be created in `lookup` mode
+        - Cannot use standard indices in LOOKUP JOIN
+
+        **11. Field Names - Case Sensitive** ⚠️
+        - ES|QL is case-sensitive for field names
+        - `Region` ≠ `region`
+
+        **12. Date Arithmetic - ALWAYS Use TO_LONG()** ⚠️⚠️ CRITICAL
+        - Cannot subtract datetime values directly
+        - Must wrap both in TO_LONG() first
+
+        **13. Division and Type Casting** ⚠️
+        - Use TO_DOUBLE() for precision
+        - Pattern: `TO_DOUBLE(numerator) / denominator`
+
+        **14. LOOKUP JOIN Schema Validation** ⚠️⚠️⚠️ CRITICAL
+        - Join key MUST exist in both datasets
+        - Cannot be auto-fixed if missing
+
+        **15. COMPLETION Syntax (RAG Queries)** ⚠️
+        - Syntax: `| COMPLETION context = CONCAT(...) question = $question`
+        - Requires context and question parameters
+
+        **16. Time Filtering - Different Patterns** ⚠️⚠️ CRITICAL
+        - Scripted: `@timestamp > NOW() - 7 days`
+        - Parameterized: `business_date >= ?start_date` (NOT @timestamp)
+
+        **17. EVAL Variable Reuse** ⚠️⚠️ CRITICAL
+        - Cannot use newly defined variables in same EVAL command
+        - Must use separate EVAL commands
+
+        **18. @timestamp Parameterization** ⚠️⚠️ CRITICAL
+        - NEVER parameterize @timestamp with `?start_date`
+        - Use `NOW() - X days` for relative time
+        - Parameterize business dates only (order_date, created_at)
+
+        **19. Experimental Features** ⚠️
+        - CHANGE_POINT, LAG/LEAD may not be supported
+        - Use INLINESTATS with z-score calculation instead
+
+        **20. NULL Handling with Negative Filters** ⚠️⚠️ CRITICAL
+        - ES|QL EXCLUDES NULL values from `!=`, `NOT`, `NOT LIKE`
+        - Always append `OR field IS NULL` unless intentional
+        - ESPECIALLY critical for security/SIEM queries
+        """)
+
+    with st.expander("**✨ Advanced ES|QL Patterns (6 Patterns)**"):
+        st.markdown("""
+        Sophisticated query patterns taught to the generation system:
+
+        **1. LOOKUP JOIN for Data Enrichment**
+        - Enrich streaming data with dimensional data
+        - Pattern: `FROM events | LOOKUP JOIN dimension ON key | WHERE enriched_field ...`
+
+        **2. INLINESTATS for Anomaly Detection**
+        - Keep all rows while adding aggregate calculations
+        - Pattern: `| INLINESTATS avg = AVG(value) BY category | EVAL deviation = value - avg`
+
+        **3. FORK for Parallel Analysis**
+        - Split pipeline for multiple analyses
+        - Pattern: `| FORK (WHERE type == "A" | STATS ...) (WHERE type == "B" | STATS ...)`
+
+        **4. Multi-Field Search Pattern**
+        - Search across multiple fields with different boosts
+        - Pattern: `WHERE MATCH(title, ?query, {"boost": 2.0}) OR MATCH(content, ?query)`
+
+        **5. Time Series Anomaly Detection**
+        - Detect anomalies using z-scores
+        - Pattern: `| INLINESTATS mean = AVG(value), stddev = STDDEV(value) | EVAL z_score = (value - mean) / stddev | WHERE z_score > 3`
+
+        **6. Semantic Search Pipeline (MATCH → RERANK → COMPLETION)**
+        - Full RAG pipeline
+        - Pattern: `FROM index | MATCH field WITH "term" | RERANK top = 10 | COMPLETION context = CONCAT(...)`
+        """)
+
+    with st.expander("**🚨 Aggressive Anti-Pattern Warnings (4 Warnings)**"):
+        st.markdown("""
+        Warnings placed at END of ALL query generation prompts (recency bias strategy):
+
+        **1. @timestamp Parameterization Warning**
+        - Location: All 4 query generation methods
+        - Visual: 🚨🚨🚨 CRITICAL with emoji and CAPS
+        - Shows exact wrong pattern vs correct pattern
+        - Repeated in both parameterized and scripted query methods
+
+        **2. Integer Division Warning** (NEW)
+        - Location: All 4 query generation methods
+        - Shows `(total - failures) / total` → returns 0
+        - Correct: `(total - failures) / TO_DOUBLE(total)` → returns 0.95
+        - Includes WHY explanation and multiple valid patterns
+
+        **3. NULL Handling Warning** (NEW)
+        - Location: All 4 query generation methods
+        - Shows `WHERE status != "success"` → silently excludes NULL
+        - Correct: `WHERE status != "success" OR status IS NULL`
+        - Emphasizes security impact: "missing data = missed threats"
+
+        **4. Array Length Anti-Pattern Warning**
+        - Location: Data generation prompts
+        - Prevents slicing pre-defined pools beyond their length
+        - Shows wrong: `pool[:n]` when pool has fewer than n items
+        - Correct: Generate exact count or use `np.random.choice` with replacement
+        """)
+
+    with st.expander("**🔍 Post-Generation Detection (2 Scanners)**"):
+        st.markdown("""
+        Automated pattern detection during query testing phase:
+
+        **1. Integer Division Scanner**
+        - Scans: All EVAL statements with division (`/`)
+        - Checks: Missing TO_DOUBLE(), float literals, multiply-by-float-first
+        - Flags: Percentage calculations specifically (field names with 'rate' or 'pct')
+        - Output: Warning with suggested fix in `query_testing_results.json`
+
+        **2. NULL Handling Scanner**
+        - Scans: All WHERE clauses with `!=`, `NOT(...)`, `NOT LIKE`
+        - Checks: Missing `OR field IS NULL` clauses
+        - Flags: Security queries (keywords: security, auth, threat, compliance, audit, siem)
+        - Output: CRITICAL warning for security queries
+        """)
+
+    with st.expander("**📋 Safe Query Patterns by Type (4 Templates)**"):
+        st.markdown("""
+        Template patterns provided for different query types:
+
+        **1. Scripted Query (No Parameters, Testable)**
+        - Fixed logic, hard-coded values
+        - Pattern: `FROM index | WHERE field == "value" | STATS agg BY group | SORT field`
+
+        **2. Parameterized Query (Required Parameters Only)**
+        - User-provided parameters using `?param` syntax
+        - Pattern: `FROM index | WHERE field == ?param | STATS agg BY group`
+        - NO optional parameters or NULL checks
+
+        **3. RAG Query (Semantic Search + LLM)**
+        - Full pipeline: MATCH → RERANK → COMPLETION
+        - Pattern: `FROM index | MATCH field WITH ?query | RERANK top = 10 | COMPLETION ...`
+
+        **4. Complex Aggregation with Enrichment (Scripted)**
+        - Combines LOOKUP JOIN + INLINESTATS + time-series
+        - Multi-stage query with data enrichment and anomaly detection
+        """)
+
+    with st.expander("**✅ DO's and ❌ DON'Ts (30+ Guidelines)**"):
+        st.markdown("""
+        Comprehensive list of best practices and anti-patterns:
+
+        **DO's:**
+        - Use INLINESTATS for rolling averages and anomaly detection
+        - Use LOOKUP JOIN to enrich main dataset with reference data
+        - Use DATE_TRUNC for time-series bucketing
+        - Use EVAL before OR after STATS (just don't reference aggregated-away fields)
+        - Use CASE() for conditional logic and zero-division protection
+        - Use MATCH for text search, RERANK for relevance
+        - Use TO_DOUBLE() when dividing aggregated fields
+        - Include `OR field IS NULL` with negative filters
+        - Use time filters ONLY when relevant to use case
+
+        **DON'Ts:**
+        - Use window functions (LAG, LEAD, OVER, ROW_NUMBER, RANK)
+        - Reference fields not in BY clause after STATS
+        - Divide without checking for zero or using TO_DOUBLE()
+        - Use fields not present in data profile
+        - Add @timestamp filters to every query (data is static)
+        - Parameterize @timestamp (use NOW() - X days or parameterize business dates)
+        - Use COUNT_DISTINCT (doesn't exist)
+        - Use DATE_EXTRACT for bucketing (use DATE_TRUNC instead)
+        - Forget NULL handling in negative filters
+        """)
+
+    with st.expander("**📊 Example-Based Learning (10+ Examples)**"):
+        st.markdown("""
+        Concrete examples provided in prompts:
+
+        **1. INLINESTATS for Anomaly Detection Example**
+        - Complete working query with z-score calculation
+        - Shows baseline calculation, deviation, and filtering
+
+        **2. LOOKUP JOIN Enrichment Example**
+        - Shows joining events with reference data
+        - Demonstrates field usage after JOIN
+
+        **3. Multi-Lag Analysis Example**
+        - Detects sustained patterns vs transient spikes
+        - Uses LAG with INLINESTATS
+
+        **4. Semantic Search Pipeline Example**
+        - Full MATCH → RERANK → COMPLETION flow
+        - Shows parameter substitution
+
+        **5. Zero Division Protection Example**
+        - Shows CASE() pattern for safe division
+        - Alternative using COALESCE
+
+        **6. Time Bucketing Example**
+        - DATE_TRUNC with STATS BY pattern
+        - Shows hourly/daily aggregation
+
+        **7. Conditional Aggregation Example**
+        - COUNT(*) WHERE pattern
+        - Shows multiple conditions
+
+        **8. Integer Division Fix Example**
+        - Wrong: `(total - failures) / total`
+        - Correct: `(total - failures) / TO_DOUBLE(total)`
+
+        **9. NULL Handling Example**
+        - Wrong: `WHERE status != "success"`
+        - Correct: `WHERE status != "success" OR status IS NULL`
+
+        **10. Business Date Parameterization Example**
+        - Shows parameterizing order_date, created_at
+        - Contrasts with @timestamp (use NOW() instead)
+        """)
+
+    with st.expander("**🎯 Query Strategy Generation Guidance**"):
+        st.markdown("""
+        Guidance specific to the query strategy generation phase:
+
+        **Pain Point Mapping**
+        - Maps customer pain points to specific ES|QL patterns
+        - Identifies which commands solve which problems
+        - Example: "proactive detection" → INLINESTATS for anomaly detection
+
+        **Parameter Identification**
+        - Determines which queries need user parameters
+        - Distinguishes required vs optional (optional not supported)
+        - Identifies business date fields for parameterization
+
+        **Semantic Text Detection**
+        - Identifies fields needing vector search
+        - Maps to MATCH, RERANK, COMPLETION usage
+        - Determines semantic_text mapping requirements
+
+        **Index Type Selection**
+        - data_stream for time-series with @timestamp
+        - lookup for reference data in LOOKUP JOIN
+        - Based on use case and query patterns
+
+        **Complexity Progression**
+        - Simple queries first (basic STATS)
+        - Progressive sophistication (INLINESTATS, LOOKUP JOIN)
+        - Culminates in advanced patterns (multi-lag, anomaly detection)
+        """)
+
+    with st.expander("**📖 Documentation & Debugging Resources**"):
+        st.markdown("""
+        Comprehensive documentation for debugging and understanding:
+
+        **Anti-Pattern Docs:**
+        - `docs/INTEGER_DIVISION_ANTI_PATTERN.md` - Why integer division fails, detection logic
+        - `docs/NULL_HANDLING_ANTI_PATTERN.md` - Silent data loss, security impact
+        - `docs/TIMESTAMP_PARAMETER_ANTI_PATTERN_FIX.md` - Why @timestamp params fail
+        - `docs/ARRAY_LENGTH_ANTI_PATTERN_FIX.md` - Data generation slicing errors
+
+        **Strategy & Introspection:**
+        - `docs/QUERY_STRATEGY_INTROSPECTION.md` - Using query_strategy.json for debugging
+        - Explains validation, anti-pattern detection, and triaging workflow
+
+        **Architecture:**
+        - `docs/RAG_SEARCH_ARCHITECTURE.md` - Search vs analytics demo types
+        - `docs/MODULAR_ARCHITECTURE.md` - Framework design principles
+        """)
+
+    st.markdown("""
+    ---
+    **Summary Statistics:**
+    - **20** Critical syntax rules
+    - **6** Advanced query patterns
+    - **4** Aggressive end-of-prompt warnings (recency bias strategy)
+    - **2** Post-generation pattern scanners (integer division, NULL handling)
+    - **4** Safe query templates
+    - **30+** DO's and DON'Ts
+    - **10+** Concrete examples
+    - **Multi-stage** guidance (strategy → generation → validation)
+    - **Comprehensive** documentation for debugging
+
+    **Key Innovation**: Not just preventing errors, but detecting silent failures (integer division,
+    NULL exclusion) that produce plausible but wrong results.
     """)
 
 
