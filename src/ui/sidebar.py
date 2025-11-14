@@ -48,7 +48,7 @@ def render_sidebar():
 
         # Initialize dataset_size_preference if not exists
         if "dataset_size_preference" not in st.session_state:
-            st.session_state.dataset_size_preference = "small"
+            st.session_state.dataset_size_preference = "medium"  # Default to medium (best for enhanced mode)
 
         # Slider with options
         size_options = ["small", "medium", "large"]
@@ -73,6 +73,38 @@ def render_sidebar():
         }
 
         st.caption(size_legends[st.session_state.dataset_size_preference])
+
+        st.markdown("---")
+
+        # Enhanced Data Generation toggle (beta feature)
+        st.markdown("#### Advanced Options")
+
+        # Initialize use_enhanced_generation if not exists
+        if "use_enhanced_generation" not in st.session_state:
+            st.session_state.use_enhanced_generation = False
+
+        use_enhanced = st.checkbox(
+            "Enhanced Data Generation (Beta)",
+            value=st.session_state.use_enhanced_generation,
+            key="enhanced_generation_checkbox",
+            help="Enable advanced data generation with realistic clustering and percentile-based query thresholds. Best for analytics demos with aggregations."
+        )
+
+        st.session_state.use_enhanced_generation = use_enhanced
+
+        if use_enhanced:
+            st.caption("⚡ **Enhanced mode:** Data will cluster realistically, queries will use percentile-based thresholds")
+
+            # Show helpful guidance based on dataset size
+            current_size = st.session_state.dataset_size_preference
+            if current_size == "small":
+                st.info("💡 **Tip:** Enhanced mode works best with **Medium** or **Large** dataset sizes for more stable percentile calculations.", icon="ℹ️")
+            elif current_size == "medium":
+                st.success("✅ **Optimal:** Medium size is perfect for enhanced mode!", icon="✅")
+            else:  # large
+                st.success("✅ **Excellent:** Large datasets provide the most stable percentile-based queries!", icon="✅")
+        else:
+            st.caption("📊 **Standard mode:** Traditional random data generation")
 
         st.markdown("---")
 

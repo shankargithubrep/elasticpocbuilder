@@ -98,19 +98,42 @@ class SearchQueryStrategyGenerator:
     def _build_strategy_prompt(self, context: Dict, esql_skill: str) -> str:
         """Build the LLM prompt for search strategy generation"""
 
-        prompt = f"""You are an ES|QL search expert designing a SEARCH/RAG demo for Elastic Agent Builder.
+        # Check if we have rich technical context for high-fidelity generation
+        full_context = context.get('full_technical_context')
 
-**Customer Context:**
+        if full_context:
+            # Use rich technical document for detailed field names and implementation guidance
+            context_section = f"""**Customer Context (Full Technical Document):**
+
+{full_context}
+
+**Summary Fields (for tracking):**
+- Company: {context.get('company_name')}
+- Department: {context.get('department')}
+- Industry: {context.get('industry')}
+- Demo Type: search/RAG"""
+        else:
+            # Fallback to basic fields
+            context_section = f"""**Customer Context:**
 - Company: {context.get('company_name')}
 - Department: {context.get('department')}
 - Industry: {context.get('industry')}
 - Pain Points: {json.dumps(context.get('pain_points', []), indent=2)}
 - Use Cases: {json.dumps(context.get('use_cases', []), indent=2)}
-- Scale: {context.get('scale')}
+- Scale: {context.get('scale')}"""
+
+        prompt = f"""You are an ES|QL search expert designing a SEARCH/RAG demo for Elastic Agent Builder.
+
+{context_section}
 
 **Your Task:**
 Design 5-7 ES|QL SEARCH queries that help users FIND and RETRIEVE relevant information.
 This is a SEARCH/RAG demo, NOT analytics. Focus on document retrieval, not aggregations.
+
+**CRITICAL - If Full Technical Document Provided:**
+- Extract EXACT field names from the technical document for semantic_text fields
+- Reference specific document types and search use cases mentioned
+- Design document collections that match the described content types
 
 **CRITICAL - Always Demonstrate Advanced Capabilities:**
 While addressing the customer's pain points, ALWAYS include at least 2-3 sophisticated queries that showcase Elasticsearch's advanced search features:

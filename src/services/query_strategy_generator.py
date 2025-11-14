@@ -156,20 +156,44 @@ class QueryStrategyGenerator:
             Prompt string
         """
 
-        prompt = f"""You are an ES|QL expert designing a demo for Elastic Agent Builder.
+        # Check if we have rich technical context for high-fidelity generation
+        full_context = context.get('full_technical_context')
 
-**Customer Context:**
+        if full_context:
+            # Use rich technical document for detailed field names, metrics, and implementation guidance
+            context_section = f"""**Customer Context (Full Technical Document):**
+
+{full_context}
+
+**Summary Fields (for tracking):**
+- Company: {context.get('company_name')}
+- Department: {context.get('department')}
+- Industry: {context.get('industry')}
+- Demo Type: {context.get('demo_type', 'analytics')}"""
+        else:
+            # Fallback to basic fields
+            context_section = f"""**Customer Context:**
 - Company: {context.get('company_name')}
 - Department: {context.get('department')}
 - Industry: {context.get('industry')}
 - Pain Points: {json.dumps(context.get('pain_points', []), indent=2)}
 - Use Cases: {json.dumps(context.get('use_cases', []), indent=2)}
 - Scale: {context.get('scale')}
-- Metrics: {json.dumps(context.get('metrics', []), indent=2)}
+- Metrics: {json.dumps(context.get('metrics', []), indent=2)}"""
+
+        prompt = f"""You are an ES|QL expert designing a demo for Elastic Agent Builder.
+
+{context_section}
 
 **Your Task:**
 Design EXACTLY {num_queries} ES|QL queries that directly address their pain points and use cases.
 For each query, specify the EXACT data structure needed to make it work.
+
+**CRITICAL - If Full Technical Document Provided:**
+- Extract EXACT field names from the technical document (e.g., mobile.procedure.type, system.cpu.pct)
+- Reference specific metric categories and data sources mentioned
+- Use pain point business impacts and use case implementations as guidance
+- Design datasets that match the described data collection methods
 
 **ES|QL Capabilities Reference:**
 {esql_skill}
@@ -288,6 +312,103 @@ Examples:
 - products (used in "LOOKUP JOIN products") → index_mode: "lookup"
 - sales_transactions (FROM only, has @timestamp) → index_mode: "data_stream"
 - knowledge_base (FROM only, no timestamp) → index_mode: "lookup"
+
+**🎯 CRITICAL: Multi-Dimensional Cardinality Requirements**
+
+When designing queries that use COUNT_DISTINCT with multi-field GROUP BY:
+
+**Anti-Pattern Example (WILL RETURN 0 RESULTS):**
+```esql
+| STATS unique_hosts = COUNT_DISTINCT(mme_host) BY cluster_id, datacenter
+| WHERE unique_hosts >= 2
+```
+
+If data has 1:1 relationships (each host in unique datacenter), this FAILS!
+
+**Required Data Structure:**
+For COUNT_DISTINCT(field) >= N with GROUP BY (dimension1, dimension2):
+- Ensure ≥N distinct values of field exist within SAME (dimension1, dimension2) combination
+- Use MANY:1 relationships, NOT 1:1
+
+**Correct Pattern:**
+- Multiple mme_host per (cluster_id, datacenter) combination
+- Multiple servers per (region, availability_zone) combination
+- Multiple products per (category, brand) combination
+
+**How to Specify in Dataset Requirements:**
+Add to dataset description or create explicit cardinality note:
+```
+"required_fields": {{
+  "mme_host": "keyword",  // Multiple per (cluster_id, datacenter)
+  "cluster_id": "keyword",
+  "datacenter": "keyword"
+}},
+"cardinality_requirements": "Ensure 2-5 mme_host values share the same (cluster_id, datacenter) combination for split-brain detection"
+```
+
+**🎯 CRITICAL: Time Bucketing and Threshold Alignment**
+
+When designing queries with DATE_TRUNC + threshold filters:
+
+**Problem Pattern:**
+```esql
+| EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)
+| STATS failure_count = COUNT(*) BY time_bucket, cluster_id
+| WHERE failure_count > 50
+```
+
+**Issue**: If dataset has 10K records over 90 days with high cardinality GROUP BY:
+- 90 days × 288 (5-min intervals) × num_clusters = MANY buckets
+- 10K / MANY = sparse data (~1-2 per bucket)
+- Threshold of 50 is IMPOSSIBLE to achieve!
+
+**❌ THIS PATTERN WILL RETURN 0 RESULTS - DO NOT USE!**
+
+**✅ MANDATORY Solution - Must Follow One of These Patterns:**
+
+1. **CORRECT: Use Wider Time Buckets Based on Data Volume (REQUIRED)**
+```esql
+| EVAL time_bucket = DATE_TRUNC(15 minutes, @timestamp)  // Wider buckets
+| WHERE failure_count > 20  // Lower proportional threshold
+```
+
+2. **CORRECT: Use Percentile-Based Thresholds (RECOMMENDED)**
+```esql
+| INLINESTATS p90_count = PERCENTILE(failure_count, 90)
+| WHERE failure_count >= p90_count  // Adaptive threshold
+```
+
+**⚠️⚠️ MANDATORY TIME BUCKET SELECTION RULES:**
+
+You MUST calculate data density and choose appropriate bucket size:
+
+**STEP 1: Calculate Expected Events Per Bucket**
+Formula: expected_per_bucket = row_count / (90 days × intervals_per_day × num_group_dimensions)
+
+Example for 10K records with 10 clusters:
+- 5-min buckets: 10,000 / (90 × 288 × 10) = 0.4 events/bucket → TOO SPARSE!
+- 15-min buckets: 10,000 / (90 × 96 × 10) = 1.2 events/bucket → STILL TOO SPARSE!
+- 1-hour buckets: 10,000 / (90 × 24 × 10) = 4.6 events/bucket → VIABLE!
+
+**STEP 2: Choose Bucket Size Based on Row Count (MANDATORY)**
+- **<10K records**: MUST use 1-hour or 4-hour buckets (NOT 5-min!)
+- **10K-50K records**: MUST use 30-minute or 1-hour buckets
+- **50K-100K records**: Can use 15-minute buckets
+- **100K-500K records**: Can use 10-minute buckets
+- **500K+ records**: Can use 5-minute buckets
+
+**STEP 3: Adjust Thresholds to Match Reality**
+- If expected_per_bucket < 5, use percentile thresholds (p75, p90, p95)
+- NEVER use arbitrary thresholds like 50, 100, 200 for sparse data
+- Check: threshold should be achievable by 5-15% of buckets
+
+**CRITICAL: Multi-Dimensional GROUP BY Divides Density Further!**
+Each dimension in GROUP BY reduces density by its cardinality:
+- GROUP BY (time_bucket) → full density
+- GROUP BY (time_bucket, 10 clusters) → density ÷ 10
+- GROUP BY (time_bucket, 10 clusters, 3 datacenters) → density ÷ 30
+
+**NEVER VIOLATE THESE RULES OR QUERIES WILL RETURN 0 RESULTS!**
 
 **Output Format (MUST be valid JSON):**
 ```json
@@ -614,7 +735,7 @@ ES|QL Key Features:
         return data_requirements
 
     def validate_strategy(self, strategy: Dict) -> bool:
-        """Validate that strategy has required structure
+        """Validate that strategy has required structure and check for anti-patterns
 
         Args:
             strategy: Query strategy dictionary
@@ -633,6 +754,51 @@ ES|QL Key Features:
 
         if not strategy['queries']:
             raise ValueError("Strategy must have at least one query")
+
+        # Check for anti-patterns in query strategy
+        warnings = []
+        errors = []
+
+        for query in strategy.get('queries', []):
+            query_name = query.get('name', 'Unnamed query')
+
+            # Check for @timestamp parameterization anti-pattern
+            required_fields_all = query.get('required_fields', {})
+            for dataset, fields in required_fields_all.items():
+                if '@timestamp' in fields:
+                    # This is OK - using @timestamp is fine
+                    # But check if description mentions parameters for timestamp
+                    desc = query.get('description', '').lower()
+                    pain_point = query.get('pain_point', '').lower()
+
+                    if any(phrase in desc or phrase in pain_point for phrase in
+                           ['start_date', 'end_date', 'date range', 'time range parameter',
+                            'parameterized time', 'user-specified date']):
+                        warnings.append(
+                            f"⚠️ Query '{query_name}' may parameterize @timestamp "
+                            f"(mentions: {', '.join([p for p in ['start_date', 'end_date', 'date range'] if p in desc or p in pain_point])}). "
+                            f"Remember: @timestamp should NEVER be parameterized - use NOW() instead!"
+                        )
+
+            # Check for array slicing anti-pattern hints
+            if 'reference' in str(query.get('required_datasets', [])).lower():
+                # Query uses reference data - remind about array lengths
+                logger.debug(f"Query '{query_name}' uses reference datasets - ensure data generation creates correct array lengths")
+
+        # Log warnings
+        if warnings:
+            logger.warning("Query strategy validation warnings:")
+            for warning in warnings:
+                logger.warning(f"  {warning}")
+            print("\n🚨 QUERY STRATEGY VALIDATION WARNINGS:")
+            for warning in warnings:
+                print(f"  {warning}")
+            print()
+
+        # Raise errors if critical issues found
+        if errors:
+            error_msg = "Query strategy validation failed:\n" + "\n".join(f"  ❌ {e}" for e in errors)
+            raise ValueError(error_msg)
 
         # Validate dataset structure
         for dataset in strategy['datasets']:

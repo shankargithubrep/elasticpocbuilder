@@ -109,6 +109,11 @@ if "view_mode" not in st.session_state:
 if "show_under_the_hood" not in st.session_state:
     st.session_state.show_under_the_hood = False
 
+if "ai_expansion_enabled" not in st.session_state:
+    st.session_state.ai_expansion_enabled = False
+
+if "ai_expansion_used" not in st.session_state:
+    st.session_state.ai_expansion_used = False
 
 
 def main():

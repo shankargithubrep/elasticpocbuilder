@@ -6,7 +6,7 @@ import streamlit as st
 import logging
 
 from src.framework import ModularDemoOrchestrator
-from ..message_processor import process_smart_message
+from ..message_processor import process_smart_message, expand_brief_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +244,15 @@ def render_create_demo_view():
                     st.session_state.messages.append({"role": "assistant", "content": response})
                     st.rerun()
 
+    # AI expansion checkbox (only show if conversation hasn't started yet)
+    if not st.session_state.messages:
+        st.session_state.ai_expansion_enabled = st.checkbox(
+            "🤖 Generate detailed context with AI",
+            value=st.session_state.ai_expansion_enabled,
+            disabled=st.session_state.ai_expansion_used,
+            help="Automatically expand your brief prompt into a detailed customer context using the guided template. This feature works on your first message only."
+        )
+
     # Chat input
     if prompt := st.chat_input("Paste your customer description or type your response..."):
         # Add user message
@@ -251,6 +260,36 @@ def render_create_demo_view():
 
         with st.chat_message("user"):
             st.markdown(prompt)
+
+        # Handle AI expansion if enabled (only for first message)
+        if (st.session_state.ai_expansion_enabled and
+            not st.session_state.ai_expansion_used and
+            len(st.session_state.messages) == 1):  # First message only
+
+            # STEP 1: Extract basic context from ORIGINAL prompt (JSON or brief text)
+            with st.chat_message("assistant"):
+                with st.spinner("📊 Extracting basic context..."):
+                    response = process_smart_message(prompt)
+                    st.markdown(response)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+
+            # STEP 2: Expand the original prompt into rich technical document
+            with st.chat_message("assistant"):
+                with st.spinner("🤖 Expanding into detailed customer context..."):
+                    expanded_content = expand_brief_prompt(prompt)
+                    st.markdown(expanded_content)
+                    st.session_state.messages.append({"role": "assistant", "content": expanded_content})
+                    st.session_state.ai_expansion_used = True  # Lock the feature
+
+                    # STEP 3: Store expanded content as full_technical_context (don't re-extract)
+                    st.session_state.demo_context['full_technical_context'] = expanded_content
+
+                    # Mark as rich document for high-fidelity generation
+                    completion_msg = f"✅ **Rich technical context preserved** ({len(expanded_content):,} characters)"
+                    st.caption(completion_msg)
+
+            st.rerun()
+            return
 
         # Check if this is a generate command
         if prompt.lower().strip() == "generate" and st.session_state.conversation_phase == "ready_to_generate":
@@ -268,7 +307,9 @@ def render_create_demo_view():
                             "scale": context.get("scale", "10000 records"),
                             "metrics": context.get("metrics", []),
                             "demo_type": context.get("demo_type", "analytics"),
-                            "dataset_size_preference": st.session_state.get("dataset_size_preference", "medium")
+                            "dataset_size_preference": st.session_state.get("dataset_size_preference", "medium"),
+                            "use_enhanced_generation": st.session_state.get("use_enhanced_generation", False),
+                            "full_technical_context": context.get("full_technical_context")  # Pass rich context for high-fidelity generation
                         }
 
                         # Create enhanced progress display with phase tracking using empty placeholders

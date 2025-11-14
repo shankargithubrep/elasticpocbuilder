@@ -12,6 +12,7 @@ import os
 from typing import Dict
 
 from .context_extractor import SmartContextExtractor
+from .prompt_templates import GUIDED_HELP_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,60 @@ JSON:"""
         return f"❌ Error generating suggestions: {e}\n\nPlease provide the missing information manually."
 
 
+def expand_brief_prompt(brief_prompt: str) -> str:
+    """Expand a brief user prompt into detailed customer context using the guided help template"""
+    import anthropic
+
+    try:
+        # Simple character limit check - block expansion for large inputs
+        MAX_EXPANSION_SIZE = 3000
+
+        if len(brief_prompt) >= MAX_EXPANSION_SIZE:
+            logger.info(f"Input too large for expansion ({len(brief_prompt)} chars), blocking")
+            return f"""❌ **Input too large for AI expansion** ({len(brief_prompt):,} characters)
+
+Your input exceeds the {MAX_EXPANSION_SIZE:,} character limit for AI expansion.
+
+**This feature is designed for brief prompts** (like JSON configs or short descriptions) that need to be expanded into detailed technical documents.
+
+**Your input appears to already be detailed.** To use it:
+
+1. Click **"🔄 Start Fresh"** in the sidebar
+2. **Uncheck** "🤖 Generate detailed context with AI"
+3. **Paste your content directly**
+
+The system will extract context from your detailed document without expansion."""
+
+        # Get API key
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            return "❌ Cannot expand prompt: ANTHROPIC_API_KEY not set. Please use the detailed prompt format or set your API key."
+
+        client = anthropic.Anthropic(api_key=api_key)
+
+        # Combine user prompt with guided template
+        full_prompt = GUIDED_HELP_TEMPLATE.format(user_prompt=brief_prompt)
+
+        logger.info(f"Expanding brief prompt: {brief_prompt[:100]}...")
+
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=16000,  # Increased to handle large technical documents
+            temperature=0.7,  # Balanced creativity and consistency
+            messages=[{"role": "user", "content": full_prompt}]
+        )
+
+        expanded_content = response.content[0].text.strip()
+
+        logger.info(f"Expansion complete. Length: {len(expanded_content)} characters")
+
+        return expanded_content
+
+    except Exception as e:
+        logger.error(f"Prompt expansion failed: {e}", exc_info=True)
+        return f"❌ Error expanding prompt: {e}\n\nPlease use the detailed prompt format or try again."
+
+
 def process_smart_message(message: str) -> str:
     """Process message with intelligent context extraction and progress tracking using LLM"""
     from src.services.context_tracker import ContextTracker
@@ -174,6 +229,8 @@ You MUST return valid JSON in this EXACT format. No other text before or after t
     "metrics": [],
     "demo_type": null
   }},
+  "is_rich_technical_document": false,
+  "full_technical_context": null,
   "compound_request_detected": false,
   "suggested_analytics_prompt": null,
   "suggested_search_prompt": null,
@@ -183,7 +240,16 @@ You MUST return valid JSON in this EXACT format. No other text before or after t
 **Guidelines:**
 1. Extract ALL new information from the user's message into extracted_context
 2. For pain_points and use_cases, extract specific items from lists or paragraphs
-3. **Detect Compound Requests** (MOST IMPORTANT - READ CAREFULLY):
+3. **CRITICAL - Detect Rich Technical Documents:**
+   - Set is_rich_technical_document to TRUE if the message contains:
+     * Detailed use case sections with "Objective:", "Implementation:", "Key Metrics:", "Output/Benefits:"
+     * Specific field names in dot.notation (e.g., "mobile.procedure.type", "system.cpu.pct")
+     * Multiple metric categories with data sources (e.g., "via Metricbeat", "via APM")
+     * Detailed pain point sections with business impact explanations
+     * Technical documentation structure (headings, subheadings, bullet points)
+   - If TRUE, set full_technical_context to the ENTIRE user message verbatim (preserve all formatting, field names, sections)
+   - This rich context will be used for high-fidelity demo generation while extracted_context is for progress tracking
+4. **Detect Compound Requests** (MOST IMPORTANT - READ CAREFULLY):
 
    **Detection Criteria:** Set compound_request_detected to true if BOTH conditions are met:
 
@@ -208,11 +274,11 @@ You MUST return valid JSON in this EXACT format. No other text before or after t
    - Set suggested_search_prompt to a SHORT summary (1-2 sentences) of search use cases only
    - Keep these summaries BRIEF - just enough to show the split, NOT full prompts
 
-4. **Classify demo_type** (CRITICAL):
+5. **Classify demo_type** (CRITICAL):
    - Set to "search" if use case involves: finding/retrieving documents, RAG, knowledge bases, patient records, policy lookup, semantic search, relevance
    - Set to "analytics" if use case involves: analyzing trends, metrics, aggregations, dashboards, BI, time-series, forecasting
    - If compound_request_detected is true, pick the type that appears FIRST or most prominently in the user's message
-5. For user_response:
+6. For user_response:
    - **SPECIAL CASE - Compound Request:** If compound_request_detected is true, INSTEAD of normal response:
       - Explain that you detected BOTH search and analytics use cases
       - Briefly mention the analytics use cases
@@ -292,6 +358,14 @@ RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
                     context[key] = list(set(existing + value))
                 elif not isinstance(value, list):  # String value
                     context[key] = value
+
+        # Store full technical context if detected (for high-fidelity generation)
+        if result.get('is_rich_technical_document', False):
+            full_context = result.get('full_technical_context')
+            if full_context:
+                context['full_technical_context'] = full_context
+                logger.info(f"Stored rich technical document ({len(full_context)} chars)")
+                print(f"✅ Rich technical document detected and stored ({len(full_context)} characters)")
 
         # Calculate progress for phase tracking
         progress, missing = tracker.calculate_progress(context)

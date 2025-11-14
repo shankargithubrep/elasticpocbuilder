@@ -161,6 +161,24 @@ class DataProfiler:
         except Exception as e:
             logger.warning(f"Could not generate suggested filters for {dataset_name}: {e}")
 
+        # Generate threshold suggestions for numeric fields
+        try:
+            threshold_suggestions = {}
+            for field_name, field_profile in profile["fields"].items():
+                if "percentiles" in field_profile:
+                    suggestions = self._generate_threshold_suggestions(
+                        field_name,
+                        field_profile,
+                        profile["total_records"]
+                    )
+                    if suggestions:
+                        threshold_suggestions[field_name] = suggestions
+
+            if threshold_suggestions:
+                profile["threshold_suggestions"] = threshold_suggestions
+        except Exception as e:
+            logger.warning(f"Could not generate threshold suggestions for {dataset_name}: {e}")
+
         return profile
 
     def _profile_field(
@@ -203,22 +221,34 @@ FROM {dataset_name}
             except Exception as e:
                 logger.debug(f"Could not get unique values for {field_name}: {e}")
 
-        # For numeric fields, get min/max/avg
+        # For numeric fields, get min/max/avg and percentiles
         elif 'int' in field_type or 'float' in field_type:
             query = f"""
 FROM {dataset_name}
 | STATS
     min_val = MIN({field_name}),
     max_val = MAX({field_name}),
-    avg_val = AVG({field_name})
+    avg_val = AVG({field_name}),
+    p50 = PERCENTILE({field_name}, 50),
+    p75 = PERCENTILE({field_name}, 75),
+    p90 = PERCENTILE({field_name}, 90),
+    p95 = PERCENTILE({field_name}, 95),
+    p99 = PERCENTILE({field_name}, 99)
 """
             try:
                 result = self._execute_esql(query)
                 if result and 'values' in result and result['values']:
-                    min_val, max_val, avg_val = result['values'][0]
+                    min_val, max_val, avg_val, p50, p75, p90, p95, p99 = result['values'][0]
                     field_profile["min"] = min_val
                     field_profile["max"] = max_val
                     field_profile["avg"] = avg_val
+                    field_profile["percentiles"] = {
+                        "p50": p50,
+                        "p75": p75,
+                        "p90": p90,
+                        "p95": p95,
+                        "p99": p99
+                    }
             except Exception as e:
                 logger.debug(f"Could not get stats for {field_name}: {e}")
 
@@ -240,6 +270,53 @@ FROM {dataset_name}
                 logger.debug(f"Could not get date range for {field_name}: {e}")
 
         return field_profile if len(field_profile) > 1 else None
+
+    def _generate_threshold_suggestions(
+        self,
+        field_name: str,
+        field_profile: Dict[str, Any],
+        total_records: int
+    ) -> List[Dict[str, Any]]:
+        """Generate threshold suggestions for numeric fields
+
+        Args:
+            field_name: Name of the field
+            field_profile: Field profiling info with percentiles
+            total_records: Total number of records in dataset
+
+        Returns:
+            List of threshold suggestions with expected result counts
+        """
+        suggestions = []
+
+        if "percentiles" not in field_profile:
+            return suggestions
+
+        percentiles = field_profile["percentiles"]
+
+        # Generate suggestions for common thresholds
+        threshold_configs = [
+            ("p75", 25, "Top 25% (Moderate threshold)"),
+            ("p90", 10, "Top 10% (High threshold)"),
+            ("p95", 5, "Top 5% (Very high threshold)"),
+            ("p99", 1, "Top 1% (Critical threshold)")
+        ]
+
+        for percentile_key, expected_pct, description in threshold_configs:
+            if percentile_key in percentiles:
+                threshold_value = percentiles[percentile_key]
+                expected_count = int(total_records * (expected_pct / 100))
+
+                suggestions.append({
+                    "filter": f"WHERE {field_name} > {threshold_value}",
+                    "threshold": threshold_value,
+                    "percentile": percentile_key,
+                    "expected_pct": expected_pct,
+                    "expected_count": expected_count,
+                    "description": description
+                })
+
+        return suggestions
 
     def _get_sample_combinations(
         self,
@@ -327,6 +404,14 @@ FROM {dataset_name}
 
         for i, left_dataset in enumerate(dataset_names):
             for right_dataset in dataset_names[i+1:]:
+                # Safety check: Ensure both datasets exist before accessing
+                if left_dataset not in datasets:
+                    logger.warning(f"Skipping relationship detection: dataset '{left_dataset}' not found in generated data")
+                    continue
+                if right_dataset not in datasets:
+                    logger.warning(f"Skipping relationship detection: dataset '{right_dataset}' not found in generated data")
+                    continue
+
                 # Try to find relationships between these two datasets
                 left_df = datasets[left_dataset]
                 right_df = datasets[right_dataset]
@@ -748,6 +833,29 @@ FROM {dataset_name}
 
                 lines.append("")  # Blank line after suggested filters
 
+            # Threshold suggestions for numeric fields (enhanced mode)
+            if dataset_info.get("threshold_suggestions"):
+                lines.append("\n### 📊 NUMERIC THRESHOLD SUGGESTIONS")
+                lines.append("\n**For WHERE clauses with >, <, >=, <=**: Use these percentile-based thresholds.\n")
+
+                threshold_suggestions = dataset_info["threshold_suggestions"]
+
+                for field_name, suggestions in threshold_suggestions.items():
+                    lines.append(f"\n**{field_name}**:")
+
+                    # Show top 3 suggestions in compact mode
+                    display_limit = 3 if compact else len(suggestions)
+
+                    for i, suggestion in enumerate(suggestions[:display_limit], 1):
+                        threshold = suggestion['threshold']
+                        percentile = suggestion['percentile']
+                        expected_count = suggestion['expected_count']
+                        description = suggestion['description']
+
+                        lines.append(f"  {i}. `WHERE {field_name} > {threshold}` → {expected_count} results ({description})")
+
+                lines.append("")  # Blank line after threshold suggestions
+
             # Field values with smart sampling
             if "fields" in dataset_info:
                 lines.append("### Fields:")
@@ -778,8 +886,14 @@ FROM {dataset_name}
                             lines.append(f"- **{field_name}**: {values_str}, ... ({cardinality} total)")
 
                     elif "min" in field_info and "max" in field_info:
-                        # Numeric ranges - always compact
-                        lines.append(f"- **{field_name}**: {field_info['min']}-{field_info['max']}")
+                        # Numeric ranges with percentiles if available
+                        range_str = f"{field_info['min']}-{field_info['max']}"
+
+                        if "percentiles" in field_info and not compact:
+                            percs = field_info['percentiles']
+                            range_str += f" (p50: {percs.get('p50')}, p90: {percs.get('p90')}, p95: {percs.get('p95')})"
+
+                        lines.append(f"- **{field_name}**: {range_str}")
 
                     elif "min_date" in field_info:
                         # Date ranges - always compact
