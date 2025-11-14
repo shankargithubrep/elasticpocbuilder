@@ -1820,16 +1820,44 @@ Generate the complete implementation with ALL required fields:"""
                                              data_profile: Optional[Dict[str, Any]] = None):
         """Generate query module using pre-planned query strategy
 
+        NEW APPROACH: Saves queries to all_queries.json and generates simple loader methods.
+        No LLM call needed - uses query_strategy directly.
+
         Args:
             config: Demo configuration
             module_path: Path to module directory
             query_strategy: Complete query strategy with planned queries
             data_profile: Optional profiled data from Elasticsearch (field names, values, combinations)
         """
-        logger.info("→ Entering _generate_query_module_with_strategy")
+        logger.info("→ Generating query module with JSON loader approach")
         logger.info(f"  Config keys: {list(config.keys())}")
         logger.info(f"  Query strategy has {len(query_strategy.get('queries', []))} queries")
-        logger.info(f"  Data profile available: {data_profile is not None}")
+
+        # Extract and categorize queries from strategy
+        all_queries = query_strategy.get('queries', [])
+
+        # Categorize by query_type
+        scripted_queries = [q for q in all_queries if q.get('query_type') == 'scripted']
+        parameterized_queries = [q for q in all_queries if q.get('query_type') == 'parameterized']
+        rag_queries = [q for q in all_queries if q.get('query_type') == 'rag']
+
+        logger.info(f"  Categorized: {len(scripted_queries)} scripted, "
+                   f"{len(parameterized_queries)} parameterized, {len(rag_queries)} rag")
+
+        # Save all queries to all_queries.json BEFORE generating Python module
+        all_queries_data = {
+            'scripted': scripted_queries,
+            'parameterized': parameterized_queries,
+            'rag': rag_queries,
+            'all': all_queries
+        }
+
+        all_queries_file = module_path / 'all_queries.json'
+        all_queries_file.write_text(json.dumps(all_queries_data, indent=2))
+        logger.info(f"  Saved all_queries.json")
+
+        # Generate simple query_generator.py with JSON loader methods
+        self._generate_json_loader_query_module(config, module_path)
 
         # Format data profile for prompt if available
         data_profile_section = ""
@@ -2176,6 +2204,72 @@ This may result in field name mismatches or typos. Use extreme care with field n
 
         logger.info("Generated query_generator.py with strategy")
 
+    def _generate_json_loader_query_module(self, config: Dict[str, Any], module_path: Path):
+        """Generate simple query_generator.py that loads from all_queries.json
+
+        This replaces the complex LLM-generated code with a simple loader template.
+        The queries are already in all_queries.json, so we just need methods to read them.
+        """
+        logger.info("Generating JSON loader query module...")
+
+        company_class_name = config['company_name'].replace(" ", "").replace("-", "")
+        company_name = config['company_name']
+        department = config['department']
+
+        code = f'''
+from src.framework.base import QueryGeneratorModule, DemoConfig
+from typing import Dict, List, Any
+import json
+from pathlib import Path
+
+class {company_class_name}QueryGenerator(QueryGeneratorModule):
+    """Query generator for {company_name} - {department}
+
+    Loads queries from all_queries.json instead of hardcoding them.
+    This makes queries easier to edit and maintain.
+    """
+
+    def __init__(self, config: DemoConfig, datasets: Dict[str, Any]):
+        super().__init__(config, datasets)
+        self._queries_cache = None
+
+    def _load_queries(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Load all queries from all_queries.json (cached)"""
+        if self._queries_cache is None:
+            queries_file = Path(__file__).parent / 'all_queries.json'
+            with open(queries_file, 'r') as f:
+                self._queries_cache = json.load(f)
+        return self._queries_cache
+
+    def generate_queries(self) -> List[Dict[str, Any]]:
+        """Generate scripted queries (no user parameters)
+
+        Returns queries that can be run immediately without customization.
+        """
+        return self._load_queries().get('scripted', [])
+
+    def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
+        """Generate parameterized queries that accept user input
+
+        Returns queries with parameters that users can customize.
+        These become Agent Builder tools that accept input.
+        """
+        return self._load_queries().get('parameterized', [])
+
+    def generate_rag_queries(self) -> List[Dict[str, Any]]:
+        """Generate RAG queries using COMPLETION command
+
+        Returns queries that use the MATCH -> RERANK -> COMPLETION pipeline
+        for semantic search and generative AI responses.
+        """
+        return self._load_queries().get('rag', [])
+'''
+
+        # Write the generated code
+        module_file = module_path / 'query_generator.py'
+        module_file.write_text(code)
+        logger.info(f"  Generated query_generator.py ({len(code)} bytes) - JSON loader approach")
+
     def _generate_config_file(self, config: Dict[str, Any], module_path: Path):
         """Generate module configuration file"""
         # Extract demo_type to top level for visibility
@@ -2222,12 +2316,14 @@ This may result in field name mismatches or typos. Use extreme care with field n
 
         # Prepare context for LLM to generate instructions
         try:
-            # Load queries to understand what the agent can do
-            queries_file = module_path / 'queries.json'
-            if queries_file.exists():
-                with open(queries_file, 'r') as f:
-                    queries = json.load(f)
-                query_descriptions = [q.get('description', q.get('name', '')) for q in queries[:10]]  # First 10 queries
+            # Load ALL queries to understand what the agent can do
+            all_queries_file = module_path / 'all_queries.json'
+            if all_queries_file.exists():
+                with open(all_queries_file, 'r') as f:
+                    all_queries_data = json.load(f)
+                # Get all queries (scripted + parameterized + rag)
+                all_queries = all_queries_data.get('all', [])
+                query_descriptions = [q.get('description', q.get('name', '')) for q in all_queries[:10]]  # First 10 queries
             else:
                 query_descriptions = []
 
@@ -3078,7 +3174,7 @@ class {company}DemoGuide(DemoGuideModule):
 
         Creates:
         - CSV files for each dataset
-        - queries.json for query list
+        - all_queries.json for all query types (scripted, parameterized, rag)
         - demo_guide.md for guide text
         """
         try:
@@ -3105,18 +3201,43 @@ class {company}DemoGuide(DemoGuideModule):
                 df_copy.to_csv(csv_path, index=False)
                 logger.info(f"  Saved {name}.csv ({len(df)} rows)")
 
-            # Generate and save queries as JSON
-            logger.info("Generating static queries file...")
-            query_gen = loader.load_query_generator(datasets)
-            queries = query_gen.generate_queries()
+            # Generate and save ALL queries as structured JSON
+            # (Skip if already created by _generate_query_module_with_strategy)
+            all_queries_file = module_path / 'all_queries.json'
 
-            queries_file = module_path / 'queries.json'
-            queries_file.write_text(json.dumps(queries, indent=2))
-            logger.info(f"  Saved queries.json ({len(queries)} queries)")
+            if not all_queries_file.exists():
+                logger.info("Generating all_queries.json with all query types...")
+                query_gen = loader.load_query_generator(datasets)
 
-            # Generate and save demo guide as Markdown
+                # Load all three query types
+                scripted_queries = query_gen.generate_queries()
+                parameterized_queries = query_gen.generate_parameterized_queries()
+                rag_queries = query_gen.generate_rag_queries()
+
+                # Create structured format
+                all_queries = {
+                    'scripted': scripted_queries,
+                    'parameterized': parameterized_queries,
+                    'rag': rag_queries,
+                    'all': scripted_queries + parameterized_queries + rag_queries
+                }
+
+                all_queries_file.write_text(json.dumps(all_queries, indent=2))
+                logger.info(f"  Saved all_queries.json ({len(scripted_queries)} scripted, "
+                           f"{len(parameterized_queries)} parameterized, {len(rag_queries)} rag)")
+            else:
+                logger.info("  all_queries.json already exists, loading it...")
+                # Load existing all_queries.json
+                with open(all_queries_file, 'r') as f:
+                    all_queries = json.load(f)
+                scripted_queries = all_queries.get('scripted', [])
+                parameterized_queries = all_queries.get('parameterized', [])
+                rag_queries = all_queries.get('rag', [])
+
+            # Generate and save demo guide as Markdown (using all queries)
             logger.info("Generating static guide file...")
-            guide_gen = loader.load_demo_guide(datasets, queries)
+            all_queries_combined = scripted_queries + parameterized_queries + rag_queries
+            guide_gen = loader.load_demo_guide(datasets, all_queries_combined)
             guide = guide_gen.generate_guide()
 
             guide_file = module_path / 'demo_guide.md'

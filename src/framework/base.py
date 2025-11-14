@@ -70,13 +70,15 @@ class QueryGeneratorModule(ABC):
         self.config = config
         self.datasets = datasets
 
-    @abstractmethod
     def generate_queries(self) -> List[Dict[str, Any]]:
         """Generate scripted (non-parameterized) ES|QL queries for the demo
 
         These are fully tested queries with hard-coded values that address
         specific customer pain points. They serve as the foundation for
         parameterized versions.
+
+        Default implementation loads from all_queries.json if available.
+        Generated modules override this with custom loaders.
 
         Returns:
             List of query definitions with:
@@ -87,7 +89,9 @@ class QueryGeneratorModule(ABC):
             - expected_insight: What the customer will learn
             - tested: True (indicates validation status)
         """
-        pass
+        # Default: return empty list
+        # Generated modules will override this
+        return []
 
     def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
         """Generate parameterized versions of scripted queries
@@ -150,14 +154,17 @@ class QueryGeneratorModule(ABC):
         # LLM-generated modules will override this with actual RAG queries
         return []
 
-    @abstractmethod
     def get_query_progression(self) -> List[str]:
         """Define the order to present queries
 
         Returns:
             List of query names in presentation order
         """
-        pass
+        # Default: return queries in the order they appear
+        all_queries = (self.generate_queries() +
+                      self.generate_parameterized_queries() +
+                      self.generate_rag_queries())
+        return [q.get('name', f'Query {i+1}') for i, q in enumerate(all_queries)]
 
 
 class AhaMomentModule(ABC):

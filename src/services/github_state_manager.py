@@ -165,10 +165,10 @@ class GitHubStateManager:
                                  f"Save dataset {name} for {demo_id}")
 
             if "queries" in state:
-                queries_path = f"demos/{demo_id}/queries.json"
+                all_queries_path = f"demos/{demo_id}/all_queries.json"
                 queries_content = json.dumps(state["queries"], indent=2)
-                self.save_file(queries_path, queries_content,
-                             f"Save queries for {demo_id}")
+                self.save_file(all_queries_path, queries_content,
+                             f"Save all queries for {demo_id}")
 
             if "demo_guide" in state:
                 guide_path = f"demos/{demo_id}/demo_guide.md"
@@ -203,8 +203,8 @@ class GitHubStateManager:
             state = json.loads(state_content)
 
             # Load additional artifacts
-            queries_path = f"demos/{demo_id}/queries.json"
-            queries_content = self.load_file(queries_path)
+            all_queries_path = f"demos/{demo_id}/all_queries.json"
+            queries_content = self.load_file(all_queries_path)
             if queries_content:
                 state["queries"] = json.loads(queries_content)
 
