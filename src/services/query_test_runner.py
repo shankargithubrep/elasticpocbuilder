@@ -152,11 +152,14 @@ class QueryTestRunner:
             result_count = 0
             if success and response:
                 # Extract result count from response
-                if isinstance(response, dict):
+                # Note: Elasticsearch client returns ObjectApiResponse which supports dict-like access
+                # but isinstance(response, dict) returns False. Use duck typing instead.
+                if isinstance(response, list):
+                    result_count = len(response)
+                elif hasattr(response, 'get'):
+                    # ObjectApiResponse and dict both have 'get' method
                     values = response.get('values', [])
                     result_count = len(values) if values else 0
-                elif isinstance(response, list):
-                    result_count = len(response)
 
             # Treat zero results as needing a fix (constraint relaxation)
             if success and result_count == 0:
