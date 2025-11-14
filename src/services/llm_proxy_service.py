@@ -7,6 +7,11 @@ import os
 import logging
 from typing import Optional
 from openai import OpenAI
+from openai import APITimeoutError, APIError, APIConnectionError, AuthenticationError
+
+from src.exceptions import (
+    LLMTimeoutError, LLMAPIError, LLMModelNotFoundError, ConfigurationError
+)
 
 logger = logging.getLogger(__name__)
 
@@ -207,9 +212,32 @@ class LLMProxyClient:
                     **kwargs
                 )
                 return response.choices[0].message.content
+            except APITimeoutError as e:
+                # Calculate prompt length for better error reporting
+                prompt_length = sum(len(str(msg.get("content", ""))) for msg in messages)
+                logger.error(f"LLM request timed out. Prompt length: {prompt_length}")
+                raise LLMTimeoutError(timeout_seconds=300, prompt_length=prompt_length) from e
+            except AuthenticationError as e:
+                logger.error(f"LLM authentication failed: {e}")
+                raise LLMAPIError(status_code=401, error_message=str(e), provider=self.provider) from e
+            except APIError as e:
+                # Extract status code if available
+                status_code = getattr(e, 'status_code', None)
+                error_msg = str(e)
+                
+                # Check for model not found errors
+                if "model" in error_msg.lower() and ("not found" in error_msg.lower() or "invalid" in error_msg.lower()):
+                    logger.error(f"Model '{model}' not found in provider '{self.provider}'")
+                    raise LLMModelNotFoundError(model_name=model, provider=self.provider) from e
+                
+                logger.error(f"LLM API error (status {status_code}): {error_msg}")
+                raise LLMAPIError(status_code=status_code, error_message=error_msg, provider=self.provider) from e
+            except APIConnectionError as e:
+                logger.error(f"Could not connect to LLM service: {e}")
+                raise LLMAPIError(status_code=503, error_message=f"Connection failed: {str(e)}", provider=self.provider) from e
             except Exception as e:
-                logger.error(f"LLM API call failed: {e}")
-                raise
+                logger.error(f"Unexpected LLM error: {e}", exc_info=True)
+                raise LLMAPIError(error_message=str(e), provider=self.provider) from e
         
         elif self.provider == "anthropic":
             # Anthropic API has different format
@@ -241,8 +269,22 @@ class LLMProxyClient:
                 response = self.client.messages.create(**response_args)
                 return response.content[0].text
             except Exception as e:
-                logger.error(f"Anthropic API call failed: {e}")
-                raise
+                # Anthropic uses its own exception types, but we'll wrap them generically
+                error_msg = str(e)
+                prompt_length = sum(len(str(msg.get("content", ""))) for msg in messages)
+                
+                if "timeout" in error_msg.lower():
+                    logger.error(f"Anthropic request timed out. Prompt length: {prompt_length}")
+                    raise LLMTimeoutError(timeout_seconds=300, prompt_length=prompt_length) from e
+                elif "401" in error_msg or "authentication" in error_msg.lower():
+                    logger.error(f"Anthropic authentication failed: {e}")
+                    raise LLMAPIError(status_code=401, error_message=error_msg, provider="anthropic") from e
+                elif "model" in error_msg.lower() and "not found" in error_msg.lower():
+                    logger.error(f"Model '{model}' not found in Anthropic")
+                    raise LLMModelNotFoundError(model_name=model, provider="anthropic") from e
+                else:
+                    logger.error(f"Anthropic API call failed: {e}", exc_info=True)
+                    raise LLMAPIError(error_message=error_msg, provider="anthropic") from e
     
     def _mock_completion(self, messages: list) -> str:
         """Generate mock response for testing"""

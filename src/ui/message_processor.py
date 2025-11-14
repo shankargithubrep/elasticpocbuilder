@@ -240,6 +240,8 @@ RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
 
     try:
         from src.services.llm_proxy_service import UnifiedLLMClient
+        from src.exceptions import VulcanException
+        from src.ui.error_display import display_error
         
         # Use unified client
         client = UnifiedLLMClient()
@@ -306,9 +308,18 @@ RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
         # Return the user-facing response from LLM
         return result.get('user_response', 'Processing your request...')
 
+    except VulcanException as e:
+        # For custom exceptions, show user-friendly error and fall back
+        logger.error(f"LLM processing failed: {e.user_message}", exc_info=True)
+        display_error(e, title="Message Processing Issue", show_technical_details=False)
+        st.info("💡 Falling back to basic text extraction...")
+        return _fallback_processing(message)
     except Exception as e:
-        logger.error(f"LLM processing failed: {e}", exc_info=True)
-        st.warning(f"⚠️ Using fallback processing due to error: {e}")
+        # For unexpected errors, log and fall back
+        logger.error(f"Unexpected error in message processing: {e}", exc_info=True)
+        st.warning(f"⚠️ Using fallback processing due to error. Check technical details below if the issue persists.")
+        with st.expander("Technical Details"):
+            st.code(str(e))
         return _fallback_processing(message)
 
 

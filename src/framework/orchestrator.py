@@ -12,6 +12,9 @@ from datetime import datetime
 from .module_generator import ModuleGenerator
 from .module_loader import ModuleLoader, DemoModuleManager
 from .base import DemoConfig
+from src.exceptions import (
+    QueryGenerationError, DataGenerationError, IndexingError, VulcanException
+)
 
 logger = logging.getLogger(__name__)
 
@@ -439,14 +442,13 @@ class ModularDemoOrchestrator:
                        f"{len(parameterized_queries)} parameterized, "
                        f"{len(rag_queries)} RAG")
 
+        except VulcanException:
+            # Re-raise our custom exceptions as-is
+            raise
         except Exception as e:
             logger.error(f"Query module generation failed: {e}", exc_info=True)
-            results['phases']['query_generation'] = {'status': 'failed', 'error': str(e)}
-            # Don't fail the entire generation if query generation fails
-            all_queries = []
-            scripted_queries = []
-            parameterized_queries = []
-            rag_queries = []
+            # Wrap in custom exception for better UI display
+            raise QueryGenerationError(error_message=str(e), phase="query_generation") from e
             # Initialize results keys even when query generation fails
             results['queries'] = []
             results['scripted_queries'] = []
