@@ -18,6 +18,20 @@ logger = logging.getLogger(__name__)
 
 
 @st.cache_data(ttl=3600)
+def load_data_generator_module(module_name: str):
+    """Load the data generator class from a demo module
+
+    Returns:
+        DataGenerator class (not instance) or None
+    """
+    manager = DemoModuleManager()
+    loader = manager.get_module(module_name)
+    if loader:
+        # Return the class itself, not an instance
+        return loader.load_data_generator().__class__
+    return None
+
+@st.cache_data(ttl=3600)
 def load_demo_datasets(module_name: str):
     """Cache dataset generation for faster loading"""
     manager = DemoModuleManager()

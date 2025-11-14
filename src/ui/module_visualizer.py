@@ -56,13 +56,36 @@ class ModuleVisualizer:
         self.datasets = self.query_strategy.get('datasets', [])
         self.dataset_map = {d['name']: d for d in self.datasets}
 
-        # Build relationships map from dataset relationships arrays
+        # Build relationships map from data generator module's get_relationships() method
         self.relationships = []
-        for dataset in self.datasets:
-            source_name = dataset['name']
-            for target_name in dataset.get('relationships', []):
-                # Store as tuple (source, target)
-                self.relationships.append((source_name, target_name))
+        try:
+            # Load the data generator instance directly
+            from src.framework import DemoModuleManager
+            manager = DemoModuleManager()
+            loader = manager.get_module(self.module_name)
+            if loader:
+                data_gen = loader.load_data_generator()
+                if hasattr(data_gen, 'get_relationships'):
+                    relationships = data_gen.get_relationships()
+                    # Parse tuples: (source_table, foreign_key, target_table) -> (source_table, target_table)
+                    for rel in relationships:
+                        if len(rel) >= 3:
+                            source_table, foreign_key, target_table = rel[0], rel[1], rel[2]
+                            self.relationships.append((source_table, target_table))
+                        elif len(rel) == 2:
+                            # Handle simple (source, target) format
+                            self.relationships.append((rel[0], rel[1]))
+                    logger.info(f"Loaded {len(self.relationships)} relationships from data generator")
+                else:
+                    logger.warning(f"Data generator has no get_relationships method")
+        except Exception as e:
+            logger.warning(f"Could not load relationships from data generator: {e}", exc_info=True)
+            # Fallback to query_strategy.json (old behavior)
+            for dataset in self.datasets:
+                source_name = dataset['name']
+                for target_name in dataset.get('relationships', []):
+                    # Store as tuple (source, target)
+                    self.relationships.append((source_name, target_name))
 
         # Load actual queries from the module using the same method as the UI
         try:
@@ -202,14 +225,23 @@ Write a business-focused summary highlighting the demo's purpose and value. Focu
             node_labels.append(dataset['name'])
             node_colors.append(type_colors.get(dataset.get('type', 'reference'), '#95a5a6'))
 
-            # Size based on row count (log scale)
-            row_count = self._parse_row_count(dataset.get('row_count', '1000'))
+            # Size based on actual row count (log scale)
+            dataset_name = dataset['name']
+            actual_count = self.actual_row_counts.get(dataset_name)
+            if actual_count is not None:
+                row_count = actual_count
+                count_display = f"{actual_count:,}"
+            else:
+                # Fallback to estimated count if actual data not available
+                row_count = self._parse_row_count(dataset.get('row_count', '1000'))
+                count_display = f"{dataset.get('row_count', 'unknown')} (est)"
+
             node_sizes.append(20 + math.log10(max(row_count, 1)) * 5)
 
-            # Hover text
-            hover_text = f"""<b>{dataset['name']}</b><br>
+            # Hover text with actual row count
+            hover_text = f"""<b>{dataset_name}</b><br>
 Type: {dataset.get('type', 'unknown')}<br>
-Rows: {dataset.get('row_count', 'unknown')}<br>
+Rows: {count_display}<br>
 Index Mode: {dataset.get('index_mode', 'standard')}<br>
 Fields: {len(dataset.get('required_fields', {}))}"""
             node_hover.append(hover_text)
