@@ -372,13 +372,13 @@ def render_queries_tab(loader):
                                             try:
                                                 # Import optimizer
                                                 from src.services.query_optimizer import relax_query_constraints
-                                                import anthropic
                                                 import os
                                                 import json
                                                 from pathlib import Path
+                                                from src.services.llm_proxy_service import UnifiedLLMClient
 
                                                 # Get LLM client
-                                                llm_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+                                                llm_client = UnifiedLLMClient()
 
                                                 # Load data profile from demo directory if available
                                                 data_profile = None

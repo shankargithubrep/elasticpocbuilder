@@ -671,11 +671,11 @@ def render_queries_with_execution(
                         try:
                             # Import optimizer
                             from src.services.query_optimizer import relax_query_constraints, load_data_profile
-                            import anthropic
+                            from src.services.llm_proxy_service import UnifiedLLMClient
                             import os
 
                             # Get LLM client
-                            llm_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+                            llm_client = UnifiedLLMClient()
 
                             # Get data profile (extract module name from somewhere - for now use first demo)
                             # TODO: Pass module_name as parameter to this function

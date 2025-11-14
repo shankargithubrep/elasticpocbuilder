@@ -82,8 +82,8 @@ class LLMProxyClient:
             client = OpenAI(
                 base_url=proxy_url,
                 api_key=proxy_api_key,
-                timeout=60.0,  # Increase timeout for proxy
-                max_retries=2
+                timeout=300.0,  # 5 minutes for large prompts
+                max_retries=1  # Reduce retries to fail faster if there's an issue
             )
             
             logger.info(f"Initialized LLM Proxy client: {proxy_url}")

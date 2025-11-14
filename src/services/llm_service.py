@@ -57,25 +57,25 @@ class LLMService:
 
     def _initialize_client(self):
         """Initialize the appropriate LLM client"""
-        if self.provider == "anthropic":
-            try:
-                from anthropic import Anthropic
-                return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-            except ImportError:
-                logger.error("Anthropic library not installed")
+        from src.services.llm_proxy_service import UnifiedLLMClient
+        
+        try:
+            # Use unified client that auto-detects proxy/anthropic/openai
+            client = UnifiedLLMClient()
+            
+            if not client._proxy_client.is_available():
+                logger.warning("No LLM configured, using mock mode")
                 self.provider = "mock"
                 return None
-
-        elif self.provider == "openai":
-            try:
-                from openai import OpenAI
-                return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            except ImportError:
-                logger.error("OpenAI library not installed")
-                self.provider = "mock"
-                return None
-
-        return None  # Mock mode
+            
+            # Update provider to match what was actually selected
+            self.provider = client._proxy_client.provider
+            return client
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM client: {e}")
+            self.provider = "mock"
+            return None
 
     def process_message(
         self,

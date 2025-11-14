@@ -36,15 +36,16 @@ class ModularDemoOrchestrator:
 
     def _create_default_client(self):
         """Create default LLM client"""
-        import os
-        from anthropic import Anthropic
-
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if api_key:
-            return Anthropic(api_key=api_key)
-        else:
-            logger.warning("No ANTHROPIC_API_KEY found, using None")
+        from src.services.llm_proxy_service import UnifiedLLMClient
+        
+        # Use unified client that auto-detects proxy/anthropic/openai
+        client = UnifiedLLMClient()
+        
+        if not client._proxy_client.is_available():
+            logger.warning("No LLM configured, some features may not work")
             return None
+        
+        return client
 
     def generate_new_demo(
         self,
