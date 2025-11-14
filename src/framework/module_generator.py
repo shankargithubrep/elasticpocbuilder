@@ -3169,6 +3169,75 @@ class {company}DemoGuide(DemoGuideModule):
             'What about data security?': 'Enterprise-grade security with full encryption and RBAC...'
         }}
 """
+    def _remove_timestamp_parameters(self, parameterized_queries: List[Dict]) -> List[Dict]:
+        """Remove @timestamp-related parameters from parameterized queries
+
+        Despite LLM guidance, timestamp parameters (start_date, end_date, etc.) still get generated.
+        This scanner removes them post-generation.
+
+        Args:
+            parameterized_queries: List of parameterized query dicts
+
+        Returns:
+            List of queries with timestamp parameters removed
+        """
+        # Parameter names that should be removed
+        timestamp_param_names = {
+            'start_date', 'end_date', 'start_time', 'end_time',
+            'timestamp', 'from_date', 'to_date', 'date_from', 'date_to',
+            'time_from', 'time_to', 'start_timestamp', 'end_timestamp'
+        }
+
+        cleaned_queries = []
+        removed_count = 0
+
+        for query in parameterized_queries:
+            # Get parameters (could be dict or list format)
+            parameters = query.get('parameters', {})
+
+            if not parameters:
+                cleaned_queries.append(query)
+                continue
+
+            # Make a copy to avoid modifying original
+            query_copy = query.copy()
+
+            # Handle dict format: {"param_name": {"type": "date", ...}}
+            if isinstance(parameters, dict):
+                original_param_count = len(parameters)
+                cleaned_params = {
+                    name: spec for name, spec in parameters.items()
+                    if name.lower() not in timestamp_param_names
+                }
+
+                if len(cleaned_params) < original_param_count:
+                    removed_params = set(parameters.keys()) - set(cleaned_params.keys())
+                    removed_count += len(removed_params)
+                    logger.info(f"Removed timestamp parameters from '{query.get('name', 'unknown')}': {removed_params}")
+                    query_copy['parameters'] = cleaned_params
+
+            # Handle list format: [{"name": "start_date", "type": "date", ...}, ...]
+            elif isinstance(parameters, list):
+                original_param_count = len(parameters)
+                cleaned_params = [
+                    param for param in parameters
+                    if param.get('name', '').lower() not in timestamp_param_names
+                ]
+
+                if len(cleaned_params) < original_param_count:
+                    removed_params = [p.get('name') for p in parameters if p.get('name', '').lower() in timestamp_param_names]
+                    removed_count += len(removed_params)
+                    logger.info(f"Removed timestamp parameters from '{query.get('name', 'unknown')}': {removed_params}")
+                    query_copy['parameters'] = cleaned_params
+
+            cleaned_queries.append(query_copy)
+
+        if removed_count > 0:
+            logger.warning(f"⚠️ Removed {removed_count} timestamp parameters from parameterized queries "
+                          f"(LLM ignored guidance). Agents should handle time ranges via platform.core.execute_esql.")
+
+        return cleaned_queries
+
     def _generate_static_files(self, module_path: Path):
         """Generate static files for quick loading in Browse mode
 
@@ -3213,6 +3282,9 @@ class {company}DemoGuide(DemoGuideModule):
                 scripted_queries = query_gen.generate_queries()
                 parameterized_queries = query_gen.generate_parameterized_queries()
                 rag_queries = query_gen.generate_rag_queries()
+
+                # Remove @timestamp parameters (LLM often ignores guidance)
+                parameterized_queries = self._remove_timestamp_parameters(parameterized_queries)
 
                 # Create structured format
                 all_queries = {
