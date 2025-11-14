@@ -229,7 +229,16 @@ class ModularDemoOrchestrator:
         demo_type = config.get('demo_type', 'analytics')  # Default to analytics
         logger.info(f"Generating demo with type: {demo_type}")
 
-        if demo_type == 'search':
+        # Determine whether to use two-phase strategy based on complexity
+        use_two_phase = config.get('use_two_phase', False)
+        num_pain_points = len(config.get('pain_points', []))
+
+        # Auto-enable two-phase for complex demos (>= 5 pain points or explicit flag)
+        if num_pain_points >= 5 or use_two_phase:
+            logger.info(f"Using two-phase strategy generator (pain_points={num_pain_points}, flag={use_two_phase})")
+            from src.services.two_phase_query_strategy import TwoPhaseQueryStrategyGenerator
+            strategy_generator = TwoPhaseQueryStrategyGenerator(self.llm_client)
+        elif demo_type == 'search':
             from src.services.search_strategy_generator import SearchQueryStrategyGenerator
             strategy_generator = SearchQueryStrategyGenerator(self.llm_client)
         else:  # analytics
@@ -238,7 +247,10 @@ class ModularDemoOrchestrator:
 
         try:
             query_strategy = strategy_generator.generate_strategy(config)
-            strategy_generator.validate_strategy(query_strategy)
+
+            # Validate strategy if the generator has a validate method
+            if hasattr(strategy_generator, 'validate_strategy'):
+                strategy_generator.validate_strategy(query_strategy)
             results['phases']['strategy'] = {
                 'status': 'completed',
                 'queries_planned': len(query_strategy.get('queries', [])),

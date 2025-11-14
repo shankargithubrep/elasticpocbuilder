@@ -382,3 +382,49 @@ FROM main_data
             json_text = text.strip()
 
         return json.loads(json_text)
+
+    def extract_data_requirements(self, strategy: Dict) -> Dict[str, Dict]:
+        """Extract data generation requirements from query strategy
+
+        Args:
+            strategy: Query strategy dictionary
+
+        Returns:
+            Dict mapping dataset names to their requirements
+        """
+        data_requirements = {}
+
+        for dataset in strategy.get('datasets', []):
+            data_requirements[dataset['name']] = {
+                'fields': dataset['required_fields'],
+                'relationships': dataset.get('relationships', []),
+                'semantic_fields': dataset.get('semantic_fields', []),
+                'type': dataset['type'],
+                'row_count': dataset.get('row_count', 'moderate')
+            }
+
+        return data_requirements
+
+    def validate_strategy(self, strategy: Dict) -> None:
+        """Validate the generated strategy
+
+        Args:
+            strategy: Query strategy dictionary
+
+        Raises:
+            ValueError: If strategy is invalid
+        """
+        # Basic validation
+        if not strategy.get('datasets'):
+            raise ValueError("Strategy must include datasets")
+        if not strategy.get('queries'):
+            raise ValueError("Strategy must include queries")
+
+        # Ensure all required datasets exist
+        dataset_names = {d['name'] for d in strategy['datasets']}
+        for query in strategy['queries']:
+            for dataset in query.get('required_datasets', []):
+                if dataset not in dataset_names:
+                    raise ValueError(f"Query references unknown dataset: {dataset}")
+
+        logger.info(f"Strategy validated: {len(strategy['queries'])} queries, {len(strategy['datasets'])} datasets")
