@@ -259,15 +259,9 @@ RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
 
         content = response.content[0].text.strip()
 
-        # Debug logging
-        logger.info(f"LLM raw response length: {len(content)}")
+        # Debug logging (only to logger, not console)
+        logger.debug(f"LLM raw response length: {len(content)}")
         logger.debug(f"LLM response preview: {content[:500]}")
-        print(f"\n{'='*70}")
-        print(f"LLM RESPONSE DEBUG")
-        print(f"{'='*70}")
-        print(f"Length: {len(content)}")
-        print(f"First 500 chars:\n{content[:500]}")
-        print(f"{'='*70}\n")
 
         # Extract JSON from response
         if "```json" in content:
