@@ -68,15 +68,15 @@ Only include fields that are actually missing. Be specific and relevant to their
 JSON:"""
 
     try:
-        # Get API key
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            return "❌ Cannot generate suggestions: ANTHROPIC_API_KEY not set. Please provide the missing information manually."
-
-        client = anthropic.Anthropic(api_key=api_key)
+        from src.services.llm_proxy_service import UnifiedLLMClient
+        
+        # Use unified client
+        client = UnifiedLLMClient()
+        if not client._proxy_client.is_available():
+            return "❌ Cannot generate suggestions: No LLM configured. Please provide the missing information manually."
 
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4",
             max_tokens=1000,
             temperature=0.7,  # Higher temperature for creative suggestions
             messages=[{"role": "user", "content": suggestion_prompt}]
@@ -239,16 +239,17 @@ You MUST return valid JSON in this EXACT format. No other text before or after t
 RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
 
     try:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            # Fallback to basic extraction if no API key
-            st.warning("⚠️ API key not found, using basic extraction")
+        from src.services.llm_proxy_service import UnifiedLLMClient
+        
+        # Use unified client
+        client = UnifiedLLMClient()
+        if not client._proxy_client.is_available():
+            # Fallback to basic extraction if no LLM
+            st.warning("⚠️ No LLM configured, using basic extraction")
             return _fallback_processing(message)
 
-        client = anthropic.Anthropic(api_key=api_key)
-
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4",
             max_tokens=16000,  # Increased for compound requests - need room for two full high-fidelity prompts
             temperature=0.3,
             messages=[{"role": "user", "content": prompt}]
