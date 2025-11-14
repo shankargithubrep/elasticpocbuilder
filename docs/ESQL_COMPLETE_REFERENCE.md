@@ -603,6 +603,49 @@ FROM logs
 
 ---
 
+### 21. Standard Deviation Function - STD_DEV not STDEV ⚠️⚠️ COMMON ERROR
+
+**Problem**: ES|QL uses `STD_DEV()` for standard deviation, NOT `STDEV()` or `STDDEV()`.
+
+✅ **CORRECT**:
+```esql
+FROM metrics
+| STATS avg_value = AVG(metric), stddev_value = STD_DEV(metric) BY category
+| EVAL z_score = (metric - avg_value) / COALESCE(stddev_value, 1)
+```
+
+✅ **CORRECT - In INLINESTATS**:
+```esql
+FROM events
+| INLINESTATS avg_count = AVG(count), stddev_count = STD_DEV(count) BY region
+| EVAL anomaly_score = (count - avg_count) / COALESCE(stddev_count, 1)
+```
+
+❌ **WRONG - STDEV does not exist**:
+```esql
+| STATS stddev_value = STDEV(metric) BY category    -- ❌ ERROR: Unknown function [STDEV]
+```
+
+❌ **WRONG - STDDEV also does not exist**:
+```esql
+| STATS stddev_value = STDDEV(metric) BY category   -- ❌ ERROR: Unknown function [STDDEV]
+```
+
+**The ONLY correct function name is `STD_DEV()`** with underscore.
+
+**Common Use Cases**:
+- **Z-score anomaly detection**: `(value - avg) / stddev > 3`
+- **Statistical analysis** with INLINESTATS for per-group statistics
+- **Outlier identification** beyond N standard deviations
+- **Variability measurement** in time-series data
+
+**Related Functions**:
+- `STD_VAR()` - Standard variance (also uses underscore!)
+- `AVG()` - Average/mean
+- `PERCENTILE()` - For percentile-based thresholds
+
+---
+
 ## Advanced Query Patterns
 
 ### LOOKUP JOIN - Data Enrichment

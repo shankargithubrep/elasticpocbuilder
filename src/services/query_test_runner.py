@@ -189,6 +189,13 @@ class QueryTestRunner:
                     for warning in null_warnings:
                         logger.warning(f"⚠️ Query '{query['name']}': {warning['message']}")
 
+                # Detect incorrect STDEV function (should be STD_DEV)
+                stdev_warnings = self._detect_stdev_errors(current_esql)
+                if stdev_warnings:
+                    result.warnings.extend(stdev_warnings)
+                    for warning in stdev_warnings:
+                        logger.warning(f"⚠️ Query '{query['name']}': {warning['message']}")
+
                 break
 
             # Capture first error
@@ -652,6 +659,33 @@ class QueryTestRunner:
                 'pattern': f"NOT({field_name} == {value})",
                 'suggested_fix': f"| WHERE NOT({field_name} == {value}) OR {field_name} IS NULL",
                 'is_security_query': is_security_query
+            })
+
+        return warnings
+
+    def _detect_stdev_errors(self, esql: str) -> List[Dict]:
+        """Detect incorrect STDEV function usage (should be STD_DEV)
+
+        ES|QL uses STD_DEV() not STDEV() or STDDEV(). This is a syntax error that will
+        cause query execution to fail with "Unknown function [STDEV]".
+
+        Returns:
+            List of warning dictionaries with type, message, and suggested fix
+        """
+        warnings = []
+
+        # Check for STDEV( - case insensitive
+        import re
+        stdev_pattern = re.compile(r'\bSTDEV\s*\(', re.IGNORECASE)
+        matches = stdev_pattern.findall(esql)
+
+        if matches:
+            warnings.append({
+                'type': 'incorrect_function_name',
+                'function': 'STDEV',
+                'message': f"Query uses STDEV() which does not exist. Use STD_DEV() instead. Found {len(matches)} occurrence(s).",
+                'suggested_fix': "Replace STDEV( with STD_DEV( in all aggregations",
+                'severity': 'error'  # This will cause query execution to fail
             })
 
         return warnings

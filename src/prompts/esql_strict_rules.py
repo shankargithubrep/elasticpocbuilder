@@ -397,6 +397,49 @@ FROM security_events
 -- Pattern matching: Find unusual errors
 | WHERE NOT(error_code LIKE "E-200*") OR error_code IS NULL
 ```
+
+### 21. Standard Deviation Function - STD_DEV not STDEV ⚠️⚠️ COMMON ERROR
+**Problem**: ES|QL uses `STD_DEV()` for standard deviation, NOT `STDEV()`. The incorrect function name causes syntax errors.
+
+✅ CORRECT - Use STD_DEV():
+```esql
+FROM metrics
+| STATS avg_value = AVG(metric), stddev_value = STD_DEV(metric) BY category
+| EVAL z_score = (metric - avg_value) / COALESCE(stddev_value, 1)
+```
+
+✅ CORRECT - In INLINESTATS:
+```esql
+FROM events
+| INLINESTATS avg_count = AVG(count), stddev_count = STD_DEV(count) BY region
+| EVAL anomaly_score = (count - avg_count) / COALESCE(stddev_count, 1)
+```
+
+❌ WRONG - STDEV does not exist:
+```esql
+FROM metrics
+| STATS stddev_value = STDEV(metric) BY category              -- ❌ ERROR: Unknown function [STDEV]
+```
+
+❌ WRONG - STDDEV also does not exist:
+```esql
+FROM metrics
+| STATS stddev_value = STDDEV(metric) BY category             -- ❌ ERROR: Unknown function [STDDEV]
+```
+
+**The ONLY correct function name is `STD_DEV()`** with underscore.
+
+**Common Context**: Standard deviation is typically used for:
+- Z-score anomaly detection: `(value - avg) / stddev`
+- Statistical analysis with INLINESTATS
+- Identifying outliers beyond N standard deviations
+- Measuring variability in time-series data
+
+**Related Functions**:
+- `STD_VAR()` - Standard variance (also uses underscore)
+- `AVG()` - Average/mean
+- `PERCENTILE()` - For percentile-based thresholds
+```
 """
 
 # ============================================================================
