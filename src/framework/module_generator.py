@@ -86,7 +86,9 @@ class ModuleGenerator:
         self._generate_static_files(module_path)
 
         # Generate agent metadata AFTER static files (needs queries.json)
+        logger.info(">>> About to call _generate_agent_metadata() from generate_demo_module()")
         self._generate_agent_metadata(config, module_path)
+        logger.info(">>> Returned from _generate_agent_metadata()")
 
         logger.info(f"Generated demo module at: {module_path}")
         return str(module_path)
@@ -131,7 +133,9 @@ class ModuleGenerator:
         self._generate_static_files(module_path)
 
         # Generate agent metadata AFTER static files (needs queries.json)
+        logger.info(">>> About to call _generate_agent_metadata() from generate_demo_module_with_strategy()")
         self._generate_agent_metadata(config, module_path)
+        logger.info(">>> Returned from _generate_agent_metadata()")
 
         logger.info(f"Generated demo module with strategy at: {module_path}")
         return str(module_path)
@@ -2296,12 +2300,18 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
 
         Creates agent_metadata.json with all required fields for the Kibana API.
         """
-        logger.info("Generating agent metadata...")
+        logger.info("=" * 60)
+        logger.info("AGENT METADATA GENERATION START")
+        logger.info(f"Module path: {module_path}")
+        logger.info(f"Module path exists: {module_path.exists()}")
+        logger.info(f"Config: company_name={config.get('company_name')}, department={config.get('department')}")
+        logger.info("=" * 60)
 
         # Generate agent ID and basic info
         company_slug = config['company_name'].lower().replace(' ', '_')[:20]
         dept_slug = config.get('department', 'general').lower().replace(' ', '_')[:15]
         agent_id = f"{company_slug}_{dept_slug}_agent"
+        logger.info(f"Generated agent_id: {agent_id}")
 
         # Generate avatar symbol from company initials
         company_words = config['company_name'].split()
@@ -2309,41 +2319,62 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
             avatar_symbol = (company_words[0][0] + company_words[1][0]).upper()[:2]
         else:
             avatar_symbol = config['company_name'][:2].upper()
+        logger.info(f"Generated avatar_symbol: {avatar_symbol}")
 
         # Select color based on demo type
         demo_type = config.get('demo_type', 'analytics')
         avatar_color = "#3B82F6" if demo_type == 'analytics' else "#10B981"  # Blue for analytics, green for search
+        logger.info(f"Demo type: {demo_type}, Avatar color: {avatar_color}")
 
         # Prepare context for LLM to generate instructions
         try:
             # Load ALL queries to understand what the agent can do
             all_queries_file = module_path / 'all_queries.json'
+            logger.info(f"Looking for queries at: {all_queries_file}")
+            logger.info(f"all_queries.json exists: {all_queries_file.exists()}")
+
             if all_queries_file.exists():
+                logger.info("Loading all_queries.json...")
                 with open(all_queries_file, 'r') as f:
                     all_queries_data = json.load(f)
                 # Get all queries (scripted + parameterized + rag)
                 all_queries = all_queries_data.get('all', [])
                 query_descriptions = [q.get('description', q.get('name', '')) for q in all_queries[:10]]  # First 10 queries
+                logger.info(f"Successfully loaded {len(all_queries)} queries, extracted {len(query_descriptions)} descriptions")
             else:
+                logger.warning("all_queries.json NOT FOUND - using empty query descriptions")
                 query_descriptions = []
 
             # Load datasets to understand what data is available
             datasets_info = []
             data_dir = module_path / 'data'
+            logger.info(f"Looking for data directory at: {data_dir}")
+            logger.info(f"Data directory exists: {data_dir.exists()}")
+
             if data_dir.exists():
-                for csv_file in data_dir.glob('*.csv'):
+                csv_files = list(data_dir.glob('*.csv'))
+                logger.info(f"Found {len(csv_files)} CSV files in data directory")
+                for csv_file in csv_files:
                     dataset_name = csv_file.stem
                     datasets_info.append(dataset_name)
+                    logger.info(f"  - Dataset: {dataset_name}")
+            else:
+                logger.warning("Data directory NOT FOUND - using empty dataset info")
 
         except Exception as e:
-            logger.warning(f"Could not load context for agent instructions: {e}")
+            logger.error(f"ERROR loading context for agent instructions: {e}", exc_info=True)
             query_descriptions = []
             datasets_info = []
 
         # Generate agent instructions using LLM
+        logger.info("Calling _generate_agent_instructions()...")
+        logger.info(f"  - {len(query_descriptions)} query descriptions")
+        logger.info(f"  - {len(datasets_info)} datasets")
         instructions = self._generate_agent_instructions(config, query_descriptions, datasets_info)
+        logger.info(f"Generated instructions ({len(instructions)} chars)")
 
         # Create agent metadata structure
+        logger.info("Building agent metadata structure...")
         agent_metadata = {
             "id": agent_id,
             "name": f"{config['company_name']} {config.get('department', 'Analytics')} Assistant",
@@ -2362,11 +2393,22 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
                 "tools": []  # Initially empty, tools will be added separately
             }
         }
+        logger.info("Agent metadata structure created successfully")
 
         # Save agent metadata
         agent_file = module_path / 'agent_metadata.json'
-        agent_file.write_text(json.dumps(agent_metadata, indent=2))
-        logger.info(f"Generated agent_metadata.json with ID: {agent_id}")
+        logger.info(f"Writing agent metadata to: {agent_file}")
+        try:
+            agent_file.write_text(json.dumps(agent_metadata, indent=2))
+            logger.info(f"✓ Successfully wrote agent_metadata.json")
+            logger.info(f"✓ File size: {agent_file.stat().st_size} bytes")
+        except Exception as e:
+            logger.error(f"✗ FAILED to write agent_metadata.json: {e}", exc_info=True)
+            raise
+
+        logger.info("=" * 60)
+        logger.info(f"AGENT METADATA GENERATION COMPLETE - ID: {agent_id}")
+        logger.info("=" * 60)
 
     def _generate_demo_guide_content(self, config: Dict[str, Any], module_path: Path) -> str:
         """Generate comprehensive demo guide content using LLM
