@@ -404,13 +404,41 @@ class QueryResultsDisplay:
             # Unknown format - display as JSON
             st.json(results)
 
+    def _normalize_array_values(self, values: List[List[Any]]) -> List[List[Any]]:
+        """Convert array-type values to comma-separated strings for DataFrame compatibility
+
+        ES|QL's VALUES() aggregation returns arrays which Pandas can't handle in DataFrames.
+        This function converts any list values to comma-separated strings.
+
+        Args:
+            values: List of rows from ES|QL query results
+
+        Returns:
+            Normalized list with arrays converted to strings
+        """
+        normalized = []
+        for row in values:
+            normalized_row = []
+            for val in row:
+                if isinstance(val, list):
+                    # Convert array to comma-separated string
+                    normalized_row.append(', '.join(str(v) for v in val))
+                else:
+                    normalized_row.append(val)
+            normalized.append(normalized_row)
+        return normalized
+
     def _render_esql_results(self, results: Dict, unique_key: str = ""):
         """Render ES|QL format results (columns + values)"""
         columns = [col['name'] for col in results['columns']]
         values = results['values']
 
+        # Normalize array values to strings before creating DataFrame
+        # This handles ES|QL's VALUES() aggregation which returns arrays
+        normalized_values = self._normalize_array_values(values)
+
         # Create DataFrame
-        df = pd.DataFrame(values, columns=columns)
+        df = pd.DataFrame(normalized_values, columns=columns)
 
         # Display metadata
         col1, col2, col3 = st.columns(3)
