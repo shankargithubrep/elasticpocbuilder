@@ -15,9 +15,39 @@ def get_module_prefix(module_name: str) -> str:
     """Extract company_department prefix from module name or metadata.
 
     For example: 'jp_morgan_chase_(jpmc)_cto group - infrastructure...' -> 'jpmc_cto'
+
+    Priority order:
+    1. tool_metadata.json (most accurate - reflects actual deployed tool IDs)
+    2. agent_metadata.json (may not match tool IDs due to naming differences)
+    3. Module name parsing (fallback)
     """
     try:
-        # Try to load agent metadata to get the proper prefix
+        # PRIORITY 1: Try to load tool metadata to get ACTUAL prefix pattern from deployed tools
+        tool_metadata_path = os.path.join("demos", module_name, "tool_metadata.json")
+        if os.path.exists(tool_metadata_path):
+            with open(tool_metadata_path, 'r') as f:
+                metadata = json.load(f)
+                # Look at any tool ID to extract the prefix
+                for key, value in metadata.items():
+                    if isinstance(value, dict) and 'tool_id' in value:
+                        tool_id = value['tool_id']
+                        # Tool ID format: company_department_purpose or company_department_sub_purpose
+                        # Find common prefix by looking at multiple tools if available
+                        # Extract up to the last descriptive part (before the unique suffix)
+                        parts = tool_id.split('_')
+                        # Try to find the common prefix across tools
+                        # Typically: company_department or company_department_sub
+                        # For t_mobile_network_op_*, we want t_mobile_network_op
+                        if len(parts) >= 4:
+                            # Assume first 3-4 parts are the prefix
+                            # Check if 4th part looks like a common prefix part
+                            return '_'.join(parts[:4]) if len(parts[3]) <= 3 else '_'.join(parts[:3])
+                        elif len(parts) >= 3:
+                            return '_'.join(parts[:3])
+                        elif len(parts) >= 2:
+                            return '_'.join(parts[:2])
+
+        # PRIORITY 2: Try to load agent metadata as fallback
         agent_metadata_path = os.path.join("demos", module_name, "agent_metadata.json")
         if os.path.exists(agent_metadata_path):
             with open(agent_metadata_path, 'r') as f:
@@ -27,21 +57,6 @@ def get_module_prefix(module_name: str) -> str:
                 # We want: company_department
                 if agent_id and agent_id.endswith('_agent'):
                     return agent_id[:-6]  # Remove '_agent' suffix
-
-        # Fallback: Try to load tool metadata to get prefix pattern
-        tool_metadata_path = os.path.join("demos", module_name, "tool_metadata.json")
-        if os.path.exists(tool_metadata_path):
-            with open(tool_metadata_path, 'r') as f:
-                metadata = json.load(f)
-                # Look at any tool ID to extract the prefix
-                for key, value in metadata.items():
-                    if isinstance(value, dict) and 'tool_id' in value:
-                        tool_id = value['tool_id']
-                        # Tool ID format: company_department_purpose
-                        # We want: company_department
-                        parts = tool_id.split('_')
-                        if len(parts) >= 3:
-                            return '_'.join(parts[:2])
 
         # Fallback: Try to extract from module name itself
         # This is less reliable but better than nothing
