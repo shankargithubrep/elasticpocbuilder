@@ -70,7 +70,18 @@ class LLMAPIError(VulcanException):
     def __init__(self, status_code: int = None, error_message: str = None, provider: str = None):
         message = f"LLM API error: {error_message or 'Unknown error'}"
         
-        if status_code == 401:
+        # Check for expired key specifically
+        if error_message and "expired" in error_message.lower() and "key" in error_message.lower():
+            user_message = "Your LLM API key has expired."
+            suggestion = (
+                "**Your API key needs to be renewed:**\n"
+                "1. Get a new API key from your LLM provider\n"
+                "2. Update `LLM_PROXY_API_KEY` in your `.env` file\n"
+                "3. Restart the application\n"
+                "4. For LLM proxy services, check your admin dashboard to renew keys\n\n"
+                "**Note:** Some proxy services expire keys daily for security."
+            )
+        elif status_code == 401:
             user_message = "Authentication failed with the LLM service."
             suggestion = (
                 "**Check your credentials:**\n"

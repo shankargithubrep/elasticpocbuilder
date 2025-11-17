@@ -225,6 +225,16 @@ class LLMProxyClient:
                 status_code = getattr(e, 'status_code', None)
                 error_msg = str(e)
                 
+                # Check for expired key errors
+                if "expired" in error_msg.lower() and "key" in error_msg.lower():
+                    logger.error(f"LLM API key expired: {error_msg}")
+                    raise LLMAPIError(status_code=401, error_message="API key has expired", provider=self.provider) from e
+                
+                # Check for authentication/auth errors (even if status is 400)
+                if "authentication" in error_msg.lower() or "auth" in error_msg.lower():
+                    logger.error(f"LLM authentication failed: {error_msg}")
+                    raise LLMAPIError(status_code=401, error_message=error_msg, provider=self.provider) from e
+                
                 # Check for model not found errors
                 if "model" in error_msg.lower() and ("not found" in error_msg.lower() or "invalid" in error_msg.lower()):
                     logger.error(f"Model '{model}' not found in provider '{self.provider}'")

@@ -425,9 +425,28 @@ You can now refine the generated modules or start a new demo!"""
         else:
             # Normal conversation
             with st.chat_message("assistant"):
-                with st.spinner("Analyzing..."):
-                    response = process_smart_message(prompt)
-                    st.markdown(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-            # Force rerun to update sidebar with new context
-            st.rerun()
+                try:
+                    with st.spinner("Analyzing..."):
+                        response = process_smart_message(prompt)
+                        st.markdown(response)
+                        st.session_state.messages.append({"role": "assistant", "content": response})
+                    # Force rerun to update sidebar with new context
+                    st.rerun()
+                except Exception as e:
+                    # Handle errors in conversation processing
+                    from src.ui.error_display import display_error
+                    from src.exceptions import VulcanException
+                    
+                    # Display the error
+                    display_error(e, title="Message Processing Failed")
+                    
+                    # Add error message to chat history
+                    if isinstance(e, VulcanException):
+                        error_msg = e.user_message
+                    else:
+                        error_msg = f"Error processing message: {str(e)}"
+                    
+                    st.session_state.messages.append({"role": "assistant", "content": f"❌ {error_msg}"})
+                    
+                    # Show helpful message
+                    st.info("💡 **You can:**\n- Fix the issue and try again\n- Type 'skip' to use defaults\n- Continue the conversation once the issue is resolved")
