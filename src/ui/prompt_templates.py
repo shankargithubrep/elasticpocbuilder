@@ -76,7 +76,7 @@ Identify 4-8 metric categories relevant to the use case:
 - Security Metrics (if relevant)
 - User Experience Metrics (RUM, if relevant)
 
-**4. Use Cases Section (5-8 detailed use cases)**
+**4. Use Cases Section (4-6 detailed use cases)**
 
 Expand each basic use case into a comprehensive description with:
 
@@ -84,12 +84,6 @@ Expand each basic use case into a comprehensive description with:
 ### [Number]. [Descriptive Use Case Title]
 
 **Objective**: One sentence clearly stating the business or technical goal.
-
-**Implementation**:
-- Bullet points describing HOW this would be implemented
-- Reference specific Elastic features (dashboards, Lens visualizations, Canvas, Anomaly Detection, Alerting)
-- Mention data collection approaches from section 3
-- Include technical details: what gets instrumented, monitored, or integrated
 
 **Key Metrics**:
 - List 3-6 specific metrics tracked for this use case
@@ -103,8 +97,8 @@ Expand each basic use case into a comprehensive description with:
 ```
 
 **Use Case Guidelines:**
-- Each use case should be realistic and implementable
-- Reference actual Elastic capabilities (not hypothetical features)
+- Each use case should be realistic and achievable through ES|QL queries and data analysis
+- Focus on what insights can be derived from the data (not how to build dashboards or ML jobs)
 - Progress from foundational (monitoring, visibility) to advanced (optimization, prediction) use cases
 - Include at least one use case about data consolidation if pain points mention disparate systems
 - Include at least one use case about cost analysis if financial concerns are mentioned
@@ -116,11 +110,6 @@ Expand each basic use case into a comprehensive description with:
 - Recommended index patterns
 - Critical field mappings (10-15 key fields with descriptions)
 - Data retention considerations
-
-**Implementation Timeline:**
-- 4-6 phase breakdown with week ranges
-- What gets deployed/configured in each phase
-- Milestones and deliverables
 
 **Tone & Style Guidelines**
 
@@ -137,8 +126,9 @@ Before finalizing, ensure:
 - ✓ Every metric has realistic field names in dot.notation
 - ✓ Data collection methods are specified (Metricbeat, APM, Filebeat, etc.)
 - ✓ Pain points include technical root causes, not just symptoms
-- ✓ Use cases have clear objectives and implementation steps
+- ✓ Use cases have clear objectives and expected outputs/benefits
 - ✓ No ESQL, KQL, or query syntax appears anywhere
+- ✓ No mentions of dashboards, ML jobs, alerting rules, or other unimplemented features
 - ✓ Industry-specific terminology is used appropriately
 - ✓ All systems/tools mentioned are real products enterprises use
 

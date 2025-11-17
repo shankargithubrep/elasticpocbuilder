@@ -62,7 +62,7 @@ class QueryStrategyGenerator:
 
         # Start with requested number of queries
         num_queries = 5  # Reduced from 7 to avoid truncation
-        max_retries = 2
+        max_retries = 4  # Increased to allow more aggressive reduction (5→3→2→1)
 
         for attempt in range(max_retries):
             try:
@@ -85,8 +85,9 @@ class QueryStrategyGenerator:
                 # Check if response appears truncated
                 if self._is_likely_truncated(strategy_text):
                     logger.warning(f"Response appears truncated (attempt {attempt + 1}/{max_retries})")
-                    # Reduce number of queries for next attempt
-                    num_queries = max(3, num_queries - 2)
+                    # Aggressively reduce number of queries for next attempt
+                    # 5 → 3 → 2 → 1 (instead of stopping at 3)
+                    num_queries = max(1, num_queries - 2)
                     if attempt < max_retries - 1:
                         continue
 
@@ -99,7 +100,8 @@ class QueryStrategyGenerator:
                 if "Invalid JSON" in str(e) and attempt < max_retries - 1:
                     # Try with fewer queries on JSON parsing errors
                     logger.warning(f"JSON parsing failed (attempt {attempt + 1}/{max_retries}): {e}")
-                    num_queries = max(3, num_queries - 2)
+                    # More aggressive reduction: 5 → 3 → 2 → 1
+                    num_queries = max(1, num_queries - 2)
                     continue
                 else:
                     logger.error(f"Failed to generate query strategy: {e}", exc_info=True)
