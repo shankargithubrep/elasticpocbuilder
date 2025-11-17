@@ -75,15 +75,9 @@ class SearchQueryStrategyGenerator:
 
             strategy_text = response.content[0].text
 
-            # Debug logging
-            logger.info(f"Search strategy LLM response length: {len(strategy_text)}")
-            print(f"\n{'='*70}")
-            print(f"SEARCH STRATEGY LLM RESPONSE")
-            print(f"{'='*70}")
-            print(f"Length: {len(strategy_text)}")
-            print(f"First 500 chars:\n{strategy_text[:500]}")
-            print(f"Last 500 chars:\n{strategy_text[-500:]}")
-            print(f"{'='*70}\n")
+            # Debug logging (only to logger, not console)
+            logger.debug(f"Search strategy LLM response length: {len(strategy_text)}")
+            logger.debug(f"Search strategy preview: {strategy_text[:500]}")
 
             strategy_json = self._extract_json(strategy_text)
 

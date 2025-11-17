@@ -45,10 +45,15 @@ class ModuleGenerator:
         Returns:
             Path to the generated module directory
         """
-        # Create unique module name
-        company_slug = config['company_name'].lower().replace(' ', '_')
+        # Create unique module name with defensive handling for None values
+        company_name = config.get('company_name') or 'demo'
+        company_slug = company_name.lower().replace(' ', '_')
+        
+        department = config.get('department') or 'general'
+        department_slug = department.lower().replace(' ', '_')
+        
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        module_name = f"{company_slug}_{config['department'].lower()}_{timestamp}"
+        module_name = f"{company_slug}_{department_slug}_{timestamp}"
         module_path = self.base_path / module_name
 
         # Create module directory structure
@@ -101,10 +106,15 @@ class ModuleGenerator:
         Returns:
             Path to the generated module directory
         """
-        # Create unique module name
-        company_slug = config['company_name'].lower().replace(' ', '_')
+        # Create unique module name with defensive handling for None values
+        company_name = config.get('company_name') or 'demo'
+        company_slug = company_name.lower().replace(' ', '_')
+        
+        department = config.get('department') or 'general'
+        department_slug = department.lower().replace(' ', '_')
+        
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        module_name = f"{company_slug}_{config['department'].lower()}_{timestamp}"
+        module_name = f"{company_slug}_{department_slug}_{timestamp}"
         module_path = self.base_path / module_name
 
         # Create module directory structure
@@ -149,10 +159,15 @@ class ModuleGenerator:
         Returns:
             Path to the generated module directory (ready for data generation)
         """
-        # Create unique module name
-        company_slug = config['company_name'].lower().replace(' ', '_')
+        # Create unique module name with defensive handling for None values
+        company_name = config.get('company_name') or 'demo'
+        company_slug = company_name.lower().replace(' ', '_')
+        
+        department = config.get('department') or 'general'
+        department_slug = department.lower().replace(' ', '_')
+        
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        module_name = f"{company_slug}_{config['department'].lower()}_{timestamp}"
+        module_name = f"{company_slug}_{department_slug}_{timestamp}"
         module_path = self.base_path / module_name
 
         # Create module directory structure
