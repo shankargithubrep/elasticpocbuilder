@@ -1559,6 +1559,20 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
         \"\"\"
         if weights is not None:
             weights = np.array(weights, dtype=float)
+
+            # Handle weight count mismatch
+            if len(weights) > len(choices):
+                import logging
+                logging.warning(f"Truncating {{len(weights) - len(choices)}} excess weights (had {{len(weights)}}, need {{len(choices)}})")
+                weights = weights[:len(choices)]
+            elif len(weights) < len(choices):
+                raise ValueError(
+                    f"Not enough weights for choices!\\n"
+                    f"  Choices ({{len(choices)}}): {{choices}}\\n"
+                    f"  Weights ({{len(weights)}}): {{weights.tolist()}}\\n"
+                    f"  Missing {{len(choices) - len(weights)}} weight(s)"
+                )
+
             probabilities = weights / weights.sum()
             return np.random.choice(choices, size=size, p=probabilities, replace=replace)
         else:
@@ -1677,6 +1691,36 @@ df = pd.DataFrame({{'id': ids, 'name': names, 'status': statuses, 'amount': amou
 
 **NEVER VIOLATE THIS RULE - IT WILL CRASH THE ENTIRE DEMO GENERATION!**
 
+**WEIGHT MANAGEMENT BEST PRACTICES:**
+
+**RECOMMENDED: Use dictionaries to define weighted choices (prevents count mismatches):**
+```python
+# Define weights as dictionary - impossible to mismatch!
+protocol_weights = {{
+    'http': 15,
+    'https': 40,
+    'ssh': 8,
+    'dns': 10
+}}
+protocols = list(protocol_weights.keys())
+weights = list(protocol_weights.values())
+df['protocol'] = safe_choice(protocols, size=n, weights=weights)
+```
+
+**Alternative: Parallel arrays (must count carefully):**
+```python
+# If using parallel arrays, ensure counts match EXACTLY!
+protocols = ['http', 'https', 'ssh', 'dns']  # 4 items
+weights = [15, 40, 8, 10]  # 4 weights - MUST MATCH!
+df['protocol'] = safe_choice(protocols, size=n, weights=weights)
+```
+
+**Why dictionaries are better:**
+- ✅ Impossible to mismatch counts (keys and values always paired)
+- ✅ More readable and maintainable
+- ✅ Self-documenting (can see weight for each choice)
+- ✅ safe_choice will truncate excess weights or error on insufficient weights
+
 **CODE EFFICIENCY GUIDELINES:**
 - Keep inline lists SHORT (max 10-15 items), use variables for long lists
 - Minimize comments - let code be self-documenting
@@ -1705,8 +1749,24 @@ CRITICAL: Generate data with REALISTIC CLUSTERING for meaningful analytics queri
    ```
 
 2. **CATEGORICAL FIELDS** - CONCENTRATE values (NOT equal distribution):
+
+   **RECOMMENDED: Use dictionaries for weights (prevents count mismatches):**
+   ```python
+   # Dictionary approach - impossible to mismatch counts!
+   status_weights = {{
+       'active': 80,
+       'pending': 15,
+       'failed': 5
+   }}
+   statuses = list(status_weights.keys())
+   weights = list(status_weights.values())
+   status = safe_choice(statuses, size=n, weights=weights)
+   ```
+
+   **Alternative (parallel arrays - must count carefully):**
    ```python
    # 80% active, 15% pending, 5% failed
+   # WARNING: Ensure weights list has SAME length as choices!
    status = safe_choice(['active', 'pending', 'failed'], size=n, weights=[80, 15, 5])
    ```
 
