@@ -23,6 +23,21 @@ ESQL_STRICT_RULES = """
 The index name should be used directly without any suffix.
 Lookup mode is determined by index settings, not naming convention.
 
+**CRITICAL - Redundant JOIN Equality (Very Common Error):**
+When the join field has the SAME NAME in both datasets, use ONLY the field name. DO NOT add `== field_name`.
+
+✅ CORRECT: `| LOOKUP JOIN user_profiles ON user.name`
+✅ CORRECT: `| LOOKUP JOIN products ON product_id`
+✅ CORRECT: `| LOOKUP JOIN network_assets ON labels.asset_id`
+❌ WRONG: `| LOOKUP JOIN user_profiles ON user.name == user.name` - Creates ambiguous reference!
+❌ WRONG: `| LOOKUP JOIN products ON product_id == product_id` - Redundant and causes errors!
+❌ WRONG: `| LOOKUP JOIN network_assets ON labels.asset_id == labels.asset_id` - Will fail!
+
+**Why This Fails**: After the JOIN, both datasets have the same field name, creating an ambiguous reference.
+ES|QL cannot determine which dataset's field you mean in the `ON` clause.
+
+**Rule**: When field names match in both datasets, use: `ON field_name` (NOT `ON field == field`)
+
 **CRITICAL - Field References After LOOKUP JOIN:**
 After a LOOKUP JOIN, fields from the joined dataset are available **DIRECTLY** without any prefix.
 

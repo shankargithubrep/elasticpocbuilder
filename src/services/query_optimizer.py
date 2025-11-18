@@ -93,10 +93,15 @@ def fix_query(
 
 1. **Redundant JOIN Conditions** - MOST COMMON ERROR
    ❌ WRONG: `| LOOKUP JOIN products ON product_id == product_id`
+   ❌ WRONG: `| LOOKUP JOIN user_profiles ON user.name == user.name`
+   ❌ WRONG: `| LOOKUP JOIN network_assets ON labels.asset_id == labels.asset_id`
    ✅ CORRECT: `| LOOKUP JOIN products ON product_id`
+   ✅ CORRECT: `| LOOKUP JOIN user_profiles ON user.name`
+   ✅ CORRECT: `| LOOKUP JOIN network_assets ON labels.asset_id`
 
    When both sides of the == are identical, remove the `== field` part entirely.
-   This is ALWAYS wrong and will cause errors.
+   This applies to BOTH simple field names (product_id) AND dotted field names (user.name, labels.asset_id).
+   This is ALWAYS wrong and will cause "ambiguous reference" errors.
 
 2. **Table Prefixes After JOIN**
    ❌ WRONG: `| LOOKUP JOIN members ON member_id | STATS COUNT(*) BY members.tier`
@@ -212,8 +217,9 @@ def apply_deterministic_fixes(esql: str) -> str:
     """
     # Fix redundant JOIN conditions like: ON field == field
     # Pattern: LOOKUP JOIN <table> ON <field> == <same_field>
+    # Handles both simple fields (product_id) and dotted fields (user.name)
     esql = re.sub(
-        r'(LOOKUP\s+JOIN\s+\w+\s+ON\s+)(\w+)\s+==\s+\2\b',
+        r'(LOOKUP\s+JOIN\s+\w+\s+ON\s+)([\w.]+)\s+==\s+\2\b',
         r'\1\2',
         esql,
         flags=re.IGNORECASE
