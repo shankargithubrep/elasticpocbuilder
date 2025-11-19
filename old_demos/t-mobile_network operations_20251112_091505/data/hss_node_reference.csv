@@ -1,0 +1,9 @@
+hss_node,hss_cluster,datacenter,database_type,replication_mode,capacity_subscribers
+hss-01.tmobile.net,HSS_Cluster_1,DC-Central,Oracle RAC,Master-Slave,3000000
+hss-02.tmobile.net,HSS_Cluster_1,DC-Central,MySQL Cluster,Master-Slave,3000000
+hss-03.tmobile.net,HSS_Cluster_2,DC-Central,MySQL Cluster,Multi-Master,2000000
+hss-04.tmobile.net,HSS_Cluster_2,DC-East,MySQL Cluster,Master-Master,2000000
+hss-05.tmobile.net,HSS_Cluster_3,DC-West,Oracle RAC,Master-Slave,5000000
+hss-06.tmobile.net,HSS_Cluster_3,DC-East,Cassandra,Multi-Master,3000000
+hss-07.tmobile.net,HSS_Cluster_4,DC-Central,Cassandra,Master-Slave,3000000
+hss-08.tmobile.net,HSS_Cluster_4,DC-East,Oracle RAC,Master-Master,2000000

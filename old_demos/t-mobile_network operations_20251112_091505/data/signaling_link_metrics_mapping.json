@@ -1,0 +1,56 @@
+{
+  "mappings": {
+    "properties": {
+      "@timestamp": {
+        "type": "date"
+      },
+      "metric_id": {
+        "type": "keyword"
+      },
+      "mme_host": {
+        "type": "keyword"
+      },
+      "link_type": {
+        "type": "keyword"
+      },
+      "peer_node": {
+        "type": "keyword"
+      },
+      "messages_per_second": {
+        "type": "integer"
+      },
+      "error_rate": {
+        "type": "float"
+      },
+      "congestion_level": {
+        "type": "keyword"
+      },
+      "sctp_associations": {
+        "type": "integer"
+      },
+      "sctp_retransmissions": {
+        "type": "integer"
+      },
+      "link_status": {
+        "type": "keyword"
+      },
+      "cpu_utilization": {
+        "type": "float"
+      },
+      "memory_utilization": {
+        "type": "float"
+      },
+      "active_subscribers": {
+        "type": "integer"
+      }
+    }
+  },
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "index": {
+      "mode": "time_series",
+      "routing_path": ["mme_host"]
+    }
+  }
+}

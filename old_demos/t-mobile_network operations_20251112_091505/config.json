@@ -1,0 +1,55 @@
+{
+  "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+  "demo_type": "analytics",
+  "module_version": "1.0.0",
+  "generated_at": "2025-11-12T09:19:54.293820",
+  "customer_context": {
+    "company_name": "T-Mobile",
+    "department": "Network Operations",
+    "industry": "Telecommunications",
+    "pain_points": [
+      "Need to detect network issues before help desk is overwhelmed",
+      "HSS database corruption or synchronization issues affecting subscriber authentication",
+      "Radio equipment failure and cell tower handoff failures",
+      "MME software bugs and resource exhaustion",
+      "Rogue network attempts and SS7 security attacks",
+      "Core network split-brain and signaling storms",
+      "Dropped calls during mobility and interrupted data sessions",
+      "Service downtime leading to revenue loss and SLA violations"
+    ],
+    "use_cases": [
+      "Track unique IMSI and cell ID cardinality changes over time",
+      "Identify cell tower handoff cascade failures",
+      "Detect core network split-brain or signaling storms",
+      "Alert on sustained spike patterns across multiple lag periods",
+      "Detect security attacks or roaming misconfigurations",
+      "Detect mass authentication failure events (HSS issues)",
+      "Monitor 4G and 5G network for issues and proactively take action",
+      "Analyze UE Initiated Service Request procedure failures",
+      "Identify MME software bugs or resource exhaustion"
+    ],
+    "scale": "500+ unique subscribers affected during incidents, 2-5 MME hosts monitored, 50+ unique cell IDs",
+    "metrics": [
+      "Cell spike detection across lag periods",
+      "Percent change in IMSI and cell ID metrics",
+      "Procedure failure counts (minimum 200 failures per 5-minute interval)",
+      "IMSI spike detection across lag periods",
+      "Unique IMSI count changes (imsi_change_1 > 400, imsi_change_2 > 280)",
+      "Unique cell ID count changes (cell_id_change_1 > 50, cell_id_change_2 > 25)"
+    ],
+    "demo_type": "analytics",
+    "dataset_size_preference": "large"
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  },
+  "query_testing": {
+    "enabled": true,
+    "queries_fixed": 0,
+    "queries_need_manual_fix": 7,
+    "total_tested": 7,
+    "tested_at": "2025-11-12T09:45:34.587025"
+  }
+}

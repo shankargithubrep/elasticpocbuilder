@@ -1,0 +1,57 @@
+{
+  "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+  "demo_type": "analytics",
+  "module_version": "1.0.0",
+  "generated_at": "2025-11-13T11:24:35.191771",
+  "customer_context": {
+    "company_name": "T-Mobile",
+    "department": "Network Operations",
+    "industry": "Telecommunications",
+    "pain_points": [
+      "Extended outages increasing customer churn probability",
+      "Radio equipment failure and cell site power failures affecting handoffs",
+      "Core network split-brain and signaling storms causing cyclical failures",
+      "HSS database corruption or synchronization issues affecting subscriber authentication",
+      "SLA violations with enterprise customers",
+      "Rogue network attempts and SS7 security attacks",
+      "MME software bugs and resource exhaustion causing service degradation",
+      "Dropped calls during mobility and interrupted data sessions"
+    ],
+    "use_cases": [
+      "Identify systematic infrastructure failures through pattern analysis",
+      "Detect unusual subscriber population changes invisible to traditional error rate monitoring",
+      "Identify MME software bugs or resource exhaustion before total outage",
+      "Alert on unusual subscriber authentication patterns before help desk is overwhelmed",
+      "Filter noise and only alert on serious multi-dimensional problems",
+      "Detect security attacks or roaming misconfigurations",
+      "Detect core network split-brain or signaling storms across multiple hosts",
+      "Detect mass authentication failure events from HSS database issues",
+      "Monitor 4G and 5G network for issues and proactively take action",
+      "Identify cell tower handoff cascade failures from infrastructure problems"
+    ],
+    "scale": "500+ unique subscribers affected per incident, 2-5 MME hosts, 50+ cell IDs",
+    "metrics": [
+      "Unique IMSI count changes (imsi_change_1 > 400, imsi_change_2 > 280)",
+      "Multi-lag spike detection across IMSI and cell dimensions",
+      "Unique cell ID count changes (cell_id_change_1 > 50, cell_id_change_2 > 25)",
+      "Percent change in IMSI and cell ID cardinality",
+      "PROCEDURE_CFCQ failure codes",
+      "Failure volume per 5-minute interval (minimum 200)"
+    ],
+    "demo_type": "analytics",
+    "dataset_size_preference": "medium",
+    "use_enhanced_generation": true
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  },
+  "query_testing": {
+    "enabled": true,
+    "queries_fixed": 0,
+    "queries_need_manual_fix": 8,
+    "total_tested": 8,
+    "tested_at": "2025-11-13T11:31:50.231341"
+  }
+}

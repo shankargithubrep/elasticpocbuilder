@@ -1,0 +1,43 @@
+{
+  "module_version": "1.0.0",
+  "generated_at": "2025-10-29T21:55:30.587502",
+  "customer_context": {
+    "company_name": "Bass Pro Shops",
+    "department": "Product Management",
+    "industry": "Outdoor Retail/Sporting Goods",
+    "pain_points": [
+      "Scattered market research and sales data across multiple systems",
+      "Cannot quickly correlate sales spikes with market trends or customer segments",
+      "Product performance analysis takes days instead of minutes",
+      "Missing connections between customer feedback, regional preferences, and inventory turnover",
+      "Competitive intelligence trapped in spreadsheets while opportunities pass by"
+    ],
+    "use_cases": [
+      "Real-time regional trend analysis (Southeast bass fishing vs. Northwest fly fishing)",
+      "Seasonal demand prediction (spring turkey season, fall deer hunting)",
+      "Customer segment analysis (weekend warriors vs. serious anglers vs. family campers)",
+      "Product bundle opportunity identification based on purchase patterns",
+      "New product category discovery from search queries and competitor intelligence"
+    ],
+    "scale": "Millions of transactions across hunting, fishing, camping, and outdoor lifestyle categories",
+    "metrics": [
+      "Regional product category growth",
+      "Seasonal demand patterns",
+      "Customer segment preferences",
+      "Product bundle opportunities",
+      "Inventory turnover rates",
+      "Competitor product offerings"
+    ]
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  },
+  "query_testing": {
+    "enabled": true,
+    "queries_fixed": 3,
+    "queries_need_manual_fix": 3,
+    "total_tested": 7
+  }
+}

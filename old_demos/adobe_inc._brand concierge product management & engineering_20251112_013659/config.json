@@ -1,0 +1,56 @@
+{
+  "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+  "demo_type": "analytics",
+  "module_version": "1.0.0",
+  "generated_at": "2025-11-12T01:40:50.910278",
+  "customer_context": {
+    "company_name": "Adobe Inc.",
+    "department": "Brand Concierge Product Management & Engineering",
+    "industry": "Software/SaaS - Digital Experience Platform",
+    "pain_points": [
+      "Multi-tenant performance isolation challenges - noisy neighbor problems require manual log analysis to identify",
+      "Slow feedback loops on product releases - 4-6 weeks to understand feature impact prevents rapid iteration",
+      "Fragmented product usage visibility across disparate data sources (Google Analytics, Application Insights, Snowflake, Salesforce) requiring 2-3 days of manual data extraction",
+      "Disconnected user experience and technical performance - cannot correlate customer complaints with actual performance data",
+      "No early warning system for customer health - at-risk accounts identified only 30-60 days before renewal, costing $8-12M annually in preventable churn"
+    ],
+    "use_cases": [
+      "API Partner Ecosystem Health Monitoring - ensure third-party integrations operate reliably, maintain partner satisfaction, identify issues before they escalate to partner churn",
+      "Multi-Tenant Performance Monitoring & SLA Management - ensure fair resource allocation across 850+ tenants, detect noisy neighbor situations, guarantee SLA compliance (P95 API latency <500ms, 99.9% uptime)",
+      "Proactive Customer Health Monitoring & Churn Prevention - identify at-risk customers 60-90 days before renewal using data-driven health scoring, reducing annual churn from 12% to <8%",
+      "A/B Testing & Product Experimentation Platform - enable rapid experimentation by measuring feature variant performance against business KPIs, making go/no-go decisions within days of launch",
+      "Real-Time Feature Adoption Analysis & Funnel Optimization - track granular feature usage patterns and workflow conversion rates, reducing feedback loops from 4-6 weeks to 3-7 days"
+    ],
+    "scale": "850+ enterprise customer accounts, 125,000+ daily active users, 45M+ brand assets, 8.5M+ daily API requests, multi-region AWS deployment (US-East, US-West, EU-West, APAC), 15-person product team, 60-person engineering organization, 40+ technology partner integrations",
+    "metrics": [
+      "customer.health_score - 0-100 composite score from weighted usage signals",
+      "tenant.sla.availability_pct - successful requests / total requests * 100 per tenant",
+      "experiment.conversion_rate per variant",
+      "session.duration.ms and session.page_views",
+      "customer.churn_risk_probability - ML-calculated probability 0.0-1.0",
+      "transaction.experience.lcp - Largest Contentful Paint",
+      "feature.stickiness - DAU/MAU ratio per feature",
+      "transaction.experience.fid - First Input Delay",
+      "transaction.duration.us - P95/P99 latency by tenant",
+      "feature.adoption_rate - users who used feature in last 30 days / total active users * 100",
+      "api.success_rate_pct - 2xx responses / total requests * 100 per partner",
+      "experiment.uplift_pct - variant vs control performance improvement",
+      "webhook.delivery_success_rate per partner integration",
+      "funnel.conversion_rate for multi-step workflows"
+    ],
+    "demo_type": "analytics",
+    "dataset_size_preference": "small"
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  },
+  "query_testing": {
+    "enabled": true,
+    "queries_fixed": 0,
+    "queries_need_manual_fix": 8,
+    "total_tested": 8,
+    "tested_at": "2025-11-12T01:45:03.185703"
+  }
+}

@@ -1,0 +1,51 @@
+cost_center,business_unit,department,budget_annual_usd,current_spend_usd,intel_host_count,amd_host_count,target_cost_reduction_pct,migration_budget_usd
+CC-1568,Treasury,Data Engineering,3799751.9,3541383.15,24,47,25.42,239584.61
+CC-5462,Asset Management,Data Engineering,7413432.69,6116445.51,34,9,23.34,435280.39
+CC-7072,Asset Management,Data Engineering,7492453.12,5482764.32,34,41,23.5,74019.25
+CC-7914,Treasury,Infrastructure,1228808.19,646474.43,15,39,19.77,490409.42
+CC-1664,Asset Management,Data Engineering,1811576.59,990307.27,92,10,31.25,332157.09
+CC-1663,Trading,Platform Engineering,3572658.25,3384234.28,42,33,31.01,58662.38
+CC-7763,Retail Banking,Data Engineering,5544833.22,4579281.81,27,8,16.36,227215.19
+CC-2153,Retail Banking,Data Engineering,2911842.01,2048207.15,92,33,30.91,111224.97
+CC-4878,Trading,Data Engineering,7502629.41,5286067.42,85,37,20.16,222521.24
+CC-4609,Investment Banking,Application Development,8741375.0,5545603.87,47,48,20.07,217487.61
+CC-8866,Trading,Application Development,9653662.38,8605551.79,14,30,24.18,383326.46
+CC-3457,Risk Management,Infrastructure,5736834.72,4083829.76,98,31,29.19,206667.67
+CC-8018,Retail Banking,Application Development,8444236.75,7683720.65,47,44,17.36,316840.86
+CC-3074,Asset Management,Infrastructure,2372055.2,1995937.53,57,14,16.0,76075.54
+CC-5657,Treasury,Application Development,8308893.8,6797670.4,26,17,23.72,113952.73
+CC-2366,Treasury,Data Engineering,7271384.96,4105548.79,28,46,25.2,178726.76
+CC-6321,Trading,Infrastructure,9974750.71,6999186.5,100,35,28.02,123730.71
+CC-2626,Risk Management,Data Engineering,8149424.66,5137811.03,73,8,17.84,112220.58
+CC-1965,Retail Banking,Data Engineering,1498710.43,1278940.39,12,34,15.16,50820.62
+CC-7025,Treasury,Data Engineering,7088081.69,5859383.15,99,3,31.68,106365.46
+CC-2994,Investment Banking,Application Development,2984958.82,2353172.4,60,12,18.21,458318.98
+CC-5362,Investment Banking,Application Development,1924938.12,1503800.92,14,34,32.95,129361.44
+CC-3410,Trading,Infrastructure,1394823.59,834296.69,51,20,28.76,237644.61
+CC-5534,Asset Management,Platform Engineering,2764674.8,2167001.25,27,16,32.24,344028.84
+CC-1430,Investment Banking,Platform Engineering,7397076.42,6433682.13,22,7,20.5,223330.0
+CC-8439,Trading,Platform Engineering,6231490.71,5127735.98,18,45,20.55,148395.06
+CC-2157,Investment Banking,Application Development,8503301.99,4691454.34,34,46,30.05,266239.18
+CC-8956,Treasury,Application Development,5989433.86,3685926.64,74,9,28.12,128865.78
+CC-8106,Trading,Platform Engineering,9013761.79,5279652.9,36,50,18.25,87946.85
+CC-4886,Asset Management,Platform Engineering,7176631.41,4182691.73,23,26,34.67,94278.97
+CC-6783,Trading,Platform Engineering,3971170.45,2964628.64,74,39,33.49,399507.47
+CC-8617,Retail Banking,Platform Engineering,8697993.95,4464661.9,19,14,17.17,448908.42
+CC-4909,Risk Management,Application Development,8415383.48,5843198.38,36,49,19.92,117872.71
+CC-7005,Asset Management,Application Development,7267073.13,6796802.83,47,0,32.88,290917.96
+CC-6071,Trading,Platform Engineering,5521741.02,5013665.13,25,26,31.07,405160.53
+CC-5609,Asset Management,Infrastructure,2195769.65,1988070.72,33,16,30.9,335916.96
+CC-8682,Asset Management,Platform Engineering,7104361.96,6700294.42,62,30,33.37,473811.44
+CC-6095,Risk Management,Data Engineering,9525646.03,7778165.02,19,31,23.65,242524.8
+CC-4951,Treasury,Application Development,2482881.71,1725070.7,88,50,17.68,102301.72
+CC-2286,Investment Banking,Infrastructure,5675232.8,4770961.88,11,35,30.72,284715.09
+CC-7257,Investment Banking,Application Development,843826.95,531724.11,55,48,32.93,362935.94
+CC-3424,Asset Management,Platform Engineering,5135869.11,3377005.03,44,30,25.37,121523.25
+CC-4362,Investment Banking,Platform Engineering,2290396.94,2136231.83,38,1,22.72,170016.66
+CC-4207,Trading,Infrastructure,3116073.92,2120128.53,44,30,29.67,199030.05
+CC-6696,Investment Banking,Infrastructure,1294070.39,740840.46,21,0,20.53,280353.42
+CC-6005,Asset Management,Data Engineering,7998961.35,7410573.44,56,16,34.04,445899.97
+CC-3477,Investment Banking,Platform Engineering,4852500.67,2660495.71,45,9,15.31,498587.84
+CC-1780,Retail Banking,Platform Engineering,6014821.16,4836711.64,86,31,22.76,219110.92
+CC-9275,Asset Management,Infrastructure,5969536.67,5400760.84,100,3,26.84,170780.55
+CC-4018,Treasury,Platform Engineering,9726643.43,8082896.68,44,25,24.45,153299.24

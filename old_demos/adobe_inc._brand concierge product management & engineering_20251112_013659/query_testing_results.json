@@ -1,0 +1,224 @@
+{
+  "tested_at": "2025-11-12T01:45:03.185703",
+  "total_queries": 8,
+  "successfully_fixed": 0,
+  "needs_manual_fix": 8,
+  "queries": [
+    {
+      "name": "Noisy Neighbor Detection with Tenant Context",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "BadRequestError(400, 'verification_exception', 'Found 1 problem\\nline 8:40: Unknown column [sla_target_p95_ms]')",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM api_requests\n| STATS p95_latency = PERCENTILE(response_time_ms, 95), request_volume = COUNT(*) BY tenant_id\n| LOOKUP JOIN tenants ON tenant_id\n| INLINESTATS avg_p95 = AVG(p95_latency), avg_volume = AVG(request_volume)\n| EVAL latency_vs_avg_pct = ((p95_latency - avg_p95) / avg_p95) * 100\n| EVAL volume_vs_avg_pct = ((request_volume - avg_volume) / avg_volume) * 100\n| EVAL noisy_neighbor_score = (latency_vs_avg_pct * 0.4) + (volume_vs_avg_pct * 0.6)\n| EVAL sla_breach = CASE(p95_latency > sla_target_p95_ms, true, false)\n| WHERE noisy_neighbor_score > 50 OR sla_breach == true\n| EVAL revenue_impact = contract_arr / 12 / 30\n| SORT noisy_neighbor_score DESC\n| KEEP tenant_id, tenant_name, account_tier, p95_latency, sla_target_p95_ms, noisy_neighbor_score, sla_breach, revenue_impact\n| LIMIT 20"
+        },
+        {
+          "attempt": 2,
+          "error": "BadRequestError(400, 'verification_exception', 'Found 1 problem\\nline 8:40: Unknown column [sla_target_p95_ms]')",
+          "esql": "FROM tenants\n| LOOKUP JOIN api_requests ON tenant_id\n| STATS p95_latency = PERCENTILE(response_time_ms, 95), request_volume = COUNT(*) BY tenant_id\n| INLINESTATS avg_p95 = AVG(p95_latency), avg_volume = AVG(request_volume)\n| EVAL latency_vs_avg_pct = ((p95_latency - avg_p95) / avg_p95) * 100\n| EVAL volume_vs_avg_pct = ((request_volume - avg_volume) / avg_volume) * 100\n| EVAL noisy_neighbor_score = (latency_vs_avg_pct * 0.4) + (volume_vs_avg_pct * 0.6)\n| EVAL sla_breach = CASE(p95_latency > sla_target_p95_ms, true, false)\n| WHERE noisy_neighbor_score > 50 OR sla_breach == true\n| EVAL revenue_impact = contract_arr / 12 / 30\n| SORT noisy_neighbor_score DESC\n| KEEP tenant_id, tenant_name, account_tier, p95_latency, sla_target_p95_ms, noisy_neighbor_score, sla_breach, revenue_impact\n| LIMIT 20"
+        },
+        {
+          "attempt": 3,
+          "error": "BadRequestError(400, 'verification_exception', 'Found 1 problem\\nline 8:40: Unknown column [sla_target_p95_ms]')",
+          "esql": "FROM tenants\n| LOOKUP JOIN api_requests ON tenant_id\n| STATS p95_latency = PERCENTILE(response_time_ms, 95), request_volume = COUNT(*) BY tenant_id\n| INLINESTATS avg_p95 = AVG(p95_latency), avg_volume = AVG(request_volume)\n| EVAL latency_vs_avg_pct = ((p95_latency - avg_p95) / avg_p95) * 100\n| EVAL volume_vs_avg_pct = ((request_volume - avg_volume) / avg_volume) * 100\n| EVAL noisy_neighbor_score = (latency_vs_avg_pct * 0.4) + (volume_vs_avg_pct * 0.6)\n| EVAL sla_breach = CASE(p95_latency > sla_target_p95_ms, true, false)\n| WHERE noisy_neighbor_score > 50 OR sla_breach == true\n| EVAL revenue_impact = contract_arr / 12 / 30\n| SORT noisy_neighbor_score DESC\n| KEEP tenant_id, tenant_name, account_tier, p95_latency, sla_target_p95_ms, noisy_neighbor_score, sla_breach, revenue_impact\n| LIMIT 20"
+        }
+      ],
+      "original_esql": "FROM api_requests\n| STATS p95_latency = PERCENTILE(response_time_ms, 95), request_volume = COUNT(*) BY tenant_id\n| LOOKUP JOIN tenants ON tenant_id\n| INLINESTATS avg_p95 = AVG(p95_latency), avg_volume = AVG(request_volume)\n| EVAL latency_vs_avg_pct = ((p95_latency - avg_p95) / avg_p95) * 100\n| EVAL volume_vs_avg_pct = ((request_volume - avg_volume) / avg_volume) * 100\n| EVAL noisy_neighbor_score = (latency_vs_avg_pct * 0.4) + (volume_vs_avg_pct * 0.6)\n| EVAL sla_breach = CASE(p95_latency > sla_target_p95_ms, true, false)\n| WHERE noisy_neighbor_score > 50 OR sla_breach == true\n| EVAL revenue_impact = contract_arr / 12 / 30\n| SORT noisy_neighbor_score DESC\n| KEEP tenant_id, tenant_name, account_tier, p95_latency, sla_target_p95_ms, noisy_neighbor_score, sla_breach, revenue_impact\n| LIMIT 20",
+      "final_esql": null
+    },
+    {
+      "name": "At-Risk Customer Early Warning System",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM feature_usage_events\n| STATS feature_dau = COUNT_DISTINCT(user_id), feature_events = COUNT(*) BY tenant_id\n| LOOKUP JOIN tenants ON tenant_id\n| EVAL days_to_renewal = (TO_LONG(renewal_date) - TO_LONG(NOW())) / 86400000\n| EVAL usage_trend_score = CASE(\n    feature_dau < 5, 20,\n    feature_dau < 15, 50,\n    feature_dau < 50, 70,\n    85\n  )\n| EVAL engagement_score = CASE(\n    feature_events < 100, 25,\n    feature_events < 500, 55,\n    feature_events < 2000, 75,\n    90\n  )\n| EVAL health_score = (usage_trend_score * 0.6) + (engagement_score * 0.4)\n| EVAL churn_risk_probability = CASE(\n    health_score < 40, 0.85,\n    health_score < 55, 0.65,\n    health_score < 70, 0.35,\n    0.15\n  )\n| WHERE days_to_renewal <= 90 AND days_to_renewal > 0 AND churn_risk_probability >= 0.35\n| EVAL potential_revenue_loss = contract_arr * churn_risk_probability\n| SORT churn_risk_probability DESC, potential_revenue_loss DESC\n| KEEP tenant_id, tenant_name, health_score, churn_risk_probability, days_to_renewal, contract_arr, potential_revenue_loss, customer_success_manager, feature_dau\n| LIMIT 50"
+        },
+        {
+          "attempt": 2,
+          "error": "BadRequestError(400, 'verification_exception', 'Found 1 problem\\nline 4:35: Unknown column [renewal_date]')",
+          "esql": "FROM tenants\n| LOOKUP JOIN feature_usage_events ON tenant_id\n| STATS feature_dau = COUNT_DISTINCT(user_id), feature_events = COUNT(*) BY tenant_id\n| EVAL days_to_renewal = (TO_LONG(renewal_date) - TO_LONG(NOW())) / 86400000\n| EVAL usage_trend_score = CASE(\n    feature_dau < 5, 20,\n    feature_dau < 15, 50,\n    feature_dau < 50, 70,\n    85\n  )\n| EVAL engagement_score = CASE(\n    feature_events < 100, 25,\n    feature_events < 500, 55,\n    feature_events < 2000, 75,\n    90\n  )\n| EVAL health_score = (usage_trend_score * 0.6) + (engagement_score * 0.4)\n| EVAL churn_risk_probability = CASE(\n    health_score < 40, 0.85,\n    health_score < 55, 0.65,\n    health_score < 70, 0.35,\n    0.15\n  )\n| WHERE days_to_renewal <= 90 AND days_to_renewal > 0 AND churn_risk_probability >= 0.35\n| EVAL potential_revenue_loss = contract_arr * churn_risk_probability\n| SORT churn_risk_probability DESC, potential_revenue_loss DESC\n| KEEP tenant_id, tenant_name, health_score, churn_risk_probability, days_to_renewal, contract_arr, potential_revenue_loss, customer_success_manager, feature_dau\n| LIMIT 50"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM tenants\n| LOOKUP JOIN feature_usage_events ON tenant_id\n| STATS feature_dau = COUNT_DISTINCT(user_id), feature_events = COUNT(*) BY tenant_id, tenant_name, renewal_date, contract_arr, customer_success_manager\n| EVAL days_to_renewal = (TO_LONG(renewal_date) - TO_LONG(NOW())) / 86400000\n| EVAL usage_trend_score = CASE(\n    feature_dau < 5, 20,\n    feature_dau < 15, 50,\n    feature_dau < 50, 70,\n    85\n  )\n| EVAL engagement_score = CASE(\n    feature_events < 100, 25,\n    feature_events < 500, 55,\n    feature_events < 2000, 75,\n    90\n  )\n| EVAL health_score = (usage_trend_score * 0.6) + (engagement_score * 0.4)\n| EVAL churn_risk_probability = CASE(\n    health_score < 40, 0.85,\n    health_score < 55, 0.65,\n    health_score < 70, 0.35,\n    0.15\n  )\n| WHERE days_to_renewal <= 90 AND days_to_renewal > 0 AND churn_risk_probability >= 0.35\n| EVAL potential_revenue_loss = contract_arr * churn_risk_probability\n| SORT churn_risk_probability DESC, potential_revenue_loss DESC\n| KEEP tenant_id, tenant_name, health_score, churn_risk_probability, days_to_renewal, contract_arr, potential_revenue_loss, customer_success_manager, feature_dau\n| LIMIT 50"
+        }
+      ],
+      "original_esql": "FROM feature_usage_events\n| STATS feature_dau = COUNT_DISTINCT(user_id), feature_events = COUNT(*) BY tenant_id\n| LOOKUP JOIN tenants ON tenant_id\n| EVAL days_to_renewal = (TO_LONG(renewal_date) - TO_LONG(NOW())) / 86400000\n| EVAL usage_trend_score = CASE(\n    feature_dau < 5, 20,\n    feature_dau < 15, 50,\n    feature_dau < 50, 70,\n    85\n  )\n| EVAL engagement_score = CASE(\n    feature_events < 100, 25,\n    feature_events < 500, 55,\n    feature_events < 2000, 75,\n    90\n  )\n| EVAL health_score = (usage_trend_score * 0.6) + (engagement_score * 0.4)\n| EVAL churn_risk_probability = CASE(\n    health_score < 40, 0.85,\n    health_score < 55, 0.65,\n    health_score < 70, 0.35,\n    0.15\n  )\n| WHERE days_to_renewal <= 90 AND days_to_renewal > 0 AND churn_risk_probability >= 0.35\n| EVAL potential_revenue_loss = contract_arr * churn_risk_probability\n| SORT churn_risk_probability DESC, potential_revenue_loss DESC\n| KEEP tenant_id, tenant_name, health_score, churn_risk_probability, days_to_renewal, contract_arr, potential_revenue_loss, customer_success_manager, feature_dau\n| LIMIT 50",
+      "final_esql": null
+    },
+    {
+      "name": "API Partner Integration Health Monitoring",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM api_requests\n| WHERE partner_id IS NOT NULL\n| EVAL success = CASE(http_status >= 200 AND http_status < 300, 1, 0)\n| STATS \n    avg_success_rate = (SUM(success) / COUNT(*)) * 100,\n    min_success_rate = MIN(CASE(success == 1, 100, 0)),\n    total_requests_7d = COUNT(*)\n  BY partner_id\n| LOOKUP JOIN api_partners ON partner_id\n| EVAL health_status = CASE(\n    avg_success_rate >= 99.5, \"healthy\",\n    avg_success_rate >= 98, \"monitoring\",\n    avg_success_rate >= 95, \"at_risk\",\n    \"critical\"\n  )\n| WHERE health_status IN (\"at_risk\", \"critical\")\n| EVAL priority = CASE(\n    tier == \"Platinum\" AND health_status == \"critical\", 1,\n    tier == \"Platinum\" AND health_status == \"at_risk\", 2,\n    health_status == \"critical\", 3,\n    4\n  )\n| SORT priority ASC, avg_success_rate ASC\n| KEEP partner_id, partner_name, tier, avg_success_rate, min_success_rate, health_status, total_requests_7d, priority\n| LIMIT 30"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM api_partners\n| LOOKUP JOIN api_requests ON partner_id\n| EVAL success = CASE(http_status >= 200 AND http_status < 300, 1, 0)\n| STATS \n    avg_success_rate = (SUM(success) / COUNT(*)) * 100,\n    total_requests_7d = COUNT(*),\n    min_success_rate = MIN(success) * 100\n  BY partner_id, partner_name, tier\n| EVAL health_status = CASE(\n    avg_success_rate >= 99.5, \"healthy\",\n    avg_success_rate >= 98, \"monitoring\",\n    avg_success_rate >= 95, \"at_risk\",\n    \"critical\"\n  )\n| WHERE health_status IN (\"at_risk\", \"critical\")\n| EVAL priority = CASE(\n    tier == \"Platinum\" AND health_status == \"critical\", 1,\n    tier == \"Platinum\" AND health_status == \"at_risk\", 2,\n    health_status == \"critical\", 3,\n    4\n  )\n| SORT priority ASC, avg_success_rate ASC\n| KEEP partner_id, partner_name, tier, avg_success_rate, min_success_rate, health_status, total_requests_7d, priority\n| LIMIT 30"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM api_partners\n| LOOKUP JOIN api_requests ON partner_id\n| EVAL success = CASE(http_status >= 200 AND http_status < 300, 1, 0)\n| STATS \n    avg_success_rate = (SUM(success) * 100.0) / COUNT(*),\n    total_requests_7d = COUNT(*),\n    min_success_rate = MIN(success) * 100\n  BY partner_id, partner_name, tier\n| EVAL health_status = CASE(\n    avg_success_rate >= 99.5, \"healthy\",\n    avg_success_rate >= 98, \"monitoring\",\n    avg_success_rate >= 95, \"at_risk\",\n    \"critical\"\n  )\n| WHERE health_status IN (\"at_risk\", \"critical\")\n| EVAL priority = CASE(\n    tier == \"Platinum\" AND health_status == \"critical\", 1,\n    tier == \"Platinum\" AND health_status == \"at_risk\", 2,\n    health_status == \"critical\", 3,\n    4\n  )\n| SORT priority ASC, avg_success_rate ASC\n| KEEP partner_id, partner_name, tier, avg_success_rate, min_success_rate, health_status, total_requests_7d, priority\n| LIMIT 30"
+        }
+      ],
+      "original_esql": "FROM api_requests\n| WHERE partner_id IS NOT NULL\n| EVAL success = CASE(http_status >= 200 AND http_status < 300, 1, 0)\n| STATS \n    avg_success_rate = (SUM(success) / COUNT(*)) * 100,\n    min_success_rate = MIN(CASE(success == 1, 100, 0)),\n    total_requests_7d = COUNT(*)\n  BY partner_id\n| LOOKUP JOIN api_partners ON partner_id\n| EVAL health_status = CASE(\n    avg_success_rate >= 99.5, \"healthy\",\n    avg_success_rate >= 98, \"monitoring\",\n    avg_success_rate >= 95, \"at_risk\",\n    \"critical\"\n  )\n| WHERE health_status IN (\"at_risk\", \"critical\")\n| EVAL priority = CASE(\n    tier == \"Platinum\" AND health_status == \"critical\", 1,\n    tier == \"Platinum\" AND health_status == \"at_risk\", 2,\n    health_status == \"critical\", 3,\n    4\n  )\n| SORT priority ASC, avg_success_rate ASC\n| KEEP partner_id, partner_name, tier, avg_success_rate, min_success_rate, health_status, total_requests_7d, priority\n| LIMIT 30",
+      "final_esql": null
+    },
+    {
+      "name": "Multi-Tenant SLA Compliance Dashboard",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "BadRequestError(400, 'verification_exception', 'Found 1 problem\\nline 9:40: Unknown column [sla_target_p95_ms]')",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM api_requests\n| STATS \n    p95_latency = PERCENTILE(response_time_ms, 95),\n    total_requests = COUNT(*),\n    error_count = SUM(CASE(http_status >= 500, 1, 0))\n  BY tenant_id, region\n| LOOKUP JOIN tenants ON tenant_id\n| EVAL uptime_pct = ((total_requests - error_count) / total_requests) * 100\n| EVAL sla_breach = CASE(p95_latency > sla_target_p95_ms OR uptime_pct < 99.9, true, false)\n| EVAL latency_margin = sla_target_p95_ms - p95_latency\n| WHERE sla_breach == true OR latency_margin < 50\n| SORT latency_margin ASC\n| KEEP tenant_id, tenant_name, account_tier, region, p95_latency, sla_target_p95_ms, uptime_pct, sla_breach, contract_arr\n| LIMIT 50"
+        },
+        {
+          "attempt": 2,
+          "error": "BadRequestError(400, 'verification_exception', 'Found 1 problem\\nline 9:40: Unknown column [sla_target_p95_ms]')",
+          "esql": "FROM tenants\n| LOOKUP JOIN api_requests ON tenant_id\n| STATS \n    p95_latency = PERCENTILE(response_time_ms, 95),\n    total_requests = COUNT(*),\n    error_count = SUM(CASE(http_status >= 500, 1, 0))\n  BY tenant_id, region\n| EVAL uptime_pct = ((total_requests - error_count) / total_requests) * 100\n| EVAL sla_breach = CASE(p95_latency > sla_target_p95_ms OR uptime_pct < 99.9, true, false)\n| EVAL latency_margin = sla_target_p95_ms - p95_latency\n| WHERE sla_breach == true OR latency_margin < 50\n| SORT latency_margin ASC\n| KEEP tenant_id, tenant_name, account_tier, region, p95_latency, sla_target_p95_ms, uptime_pct, sla_breach, contract_arr\n| LIMIT 50"
+        },
+        {
+          "attempt": 3,
+          "error": "BadRequestError(400, 'verification_exception', 'Found 1 problem\\nline 9:40: Unknown column [sla_target_p95_ms]')",
+          "esql": "FROM tenants\n| LOOKUP JOIN api_requests ON tenant_id\n| STATS \n    p95_latency = PERCENTILE(response_time_ms, 95),\n    total_requests = COUNT(*),\n    error_count = SUM(CASE(http_status >= 500, 1, 0))\n  BY tenant_id, region\n| EVAL uptime_pct = ((total_requests - error_count) / total_requests) * 100\n| EVAL sla_breach = CASE(p95_latency > sla_target_p95_ms OR uptime_pct < 99.9, true, false)\n| EVAL latency_margin = sla_target_p95_ms - p95_latency\n| WHERE sla_breach == true OR latency_margin < 50\n| SORT latency_margin ASC\n| KEEP tenant_id, tenant_name, account_tier, region, p95_latency, sla_target_p95_ms, uptime_pct, sla_breach, contract_arr\n| LIMIT 50"
+        }
+      ],
+      "original_esql": "FROM api_requests\n| STATS \n    p95_latency = PERCENTILE(response_time_ms, 95),\n    total_requests = COUNT(*),\n    error_count = SUM(CASE(http_status >= 500, 1, 0))\n  BY tenant_id, region\n| LOOKUP JOIN tenants ON tenant_id\n| EVAL uptime_pct = ((total_requests - error_count) / total_requests) * 100\n| EVAL sla_breach = CASE(p95_latency > sla_target_p95_ms OR uptime_pct < 99.9, true, false)\n| EVAL latency_margin = sla_target_p95_ms - p95_latency\n| WHERE sla_breach == true OR latency_margin < 50\n| SORT latency_margin ASC\n| KEEP tenant_id, tenant_name, account_tier, region, p95_latency, sla_target_p95_ms, uptime_pct, sla_breach, contract_arr\n| LIMIT 50",
+      "final_esql": null
+    },
+    {
+      "name": "Feature Adoption Velocity Analysis",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM feature_usage_events\n| STATS \n    unique_users = COUNT_DISTINCT(user_id),\n    total_interactions = COUNT(*),\n    avg_duration_ms = AVG(interaction_duration_ms),\n    conversion_count = SUM(CASE(conversion_event == true, 1, 0))\n  BY feature_name, feature_category\n| EVAL conversion_rate = (conversion_count / total_interactions) * 100\n| EVAL engagement_score = CASE(\n    unique_users >= 1000 AND conversion_rate >= 50, 90,\n    unique_users >= 500 AND conversion_rate >= 40, 75,\n    unique_users >= 200 AND conversion_rate >= 30, 60,\n    unique_users >= 100, 45,\n    30\n  )\n| SORT engagement_score DESC, unique_users DESC\n| KEEP feature_name, feature_category, unique_users, total_interactions, conversion_rate, avg_duration_ms, engagement_score\n| LIMIT 20"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM feature_usage_events\n| STATS \n    unique_users = COUNT_DISTINCT(user_id),\n    total_interactions = COUNT(*),\n    avg_duration_ms = AVG(interaction_duration_ms),\n    conversion_count = SUM(CASE(conversion_event, 1, 0))\n  BY feature_name, feature_category\n| EVAL conversion_rate = (conversion_count / total_interactions) * 100\n| EVAL engagement_score = CASE(\n    unique_users >= 1000 AND conversion_rate >= 50, 90,\n    unique_users >= 500 AND conversion_rate >= 40, 75,\n    unique_users >= 200 AND conversion_rate >= 30, 60,\n    unique_users >= 100, 45,\n    30\n  )\n| SORT engagement_score DESC, unique_users DESC\n| KEEP feature_name, feature_category, unique_users, total_interactions, conversion_rate, avg_duration_ms, engagement_score\n| LIMIT 20"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM feature_usage_events\n| STATS \n    unique_users = COUNT_DISTINCT(user_id),\n    total_interactions = COUNT(*),\n    avg_duration_ms = AVG(interaction_duration_ms)\n  BY feature_name, feature_category\n| EVAL engagement_score = CASE(\n    unique_users >= 1000, 90,\n    unique_users >= 500, 75,\n    unique_users >= 200, 60,\n    unique_users >= 100, 45,\n    30\n  )\n| SORT engagement_score DESC, unique_users DESC\n| KEEP feature_name, feature_category, unique_users, total_interactions, avg_duration_ms, engagement_score\n| LIMIT 20"
+        }
+      ],
+      "original_esql": "FROM feature_usage_events\n| STATS \n    unique_users = COUNT_DISTINCT(user_id),\n    total_interactions = COUNT(*),\n    avg_duration_ms = AVG(interaction_duration_ms),\n    conversion_count = SUM(CASE(conversion_event == true, 1, 0))\n  BY feature_name, feature_category\n| EVAL conversion_rate = (conversion_count / total_interactions) * 100\n| EVAL engagement_score = CASE(\n    unique_users >= 1000 AND conversion_rate >= 50, 90,\n    unique_users >= 500 AND conversion_rate >= 40, 75,\n    unique_users >= 200 AND conversion_rate >= 30, 60,\n    unique_users >= 100, 45,\n    30\n  )\n| SORT engagement_score DESC, unique_users DESC\n| KEEP feature_name, feature_category, unique_users, total_interactions, conversion_rate, avg_duration_ms, engagement_score\n| LIMIT 20",
+      "final_esql": null
+    },
+    {
+      "name": "Webhook Delivery Reliability Monitor",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM webhook_deliveries\n| STATS \n    total_deliveries = COUNT(*),\n    successful = SUM(CASE(success == true, 1, 0)),\n    failed = SUM(CASE(success == false, 1, 0)),\n    avg_retries = AVG(retry_count),\n    avg_latency_ms = AVG(delivery_latency_ms),\n    p95_latency = PERCENTILE(delivery_latency_ms, 95)\n  BY partner_id, event_type\n| LOOKUP JOIN api_partners ON partner_id\n| EVAL success_rate = (successful / total_deliveries) * 100\n| EVAL reliability_score = CASE(\n    success_rate >= 99 AND avg_retries < 0.5, 95,\n    success_rate >= 97 AND avg_retries < 1, 80,\n    success_rate >= 95 AND avg_retries < 2, 65,\n    success_rate >= 90, 50,\n    30\n  )\n| WHERE success_rate < 98 OR avg_retries > 1\n| SORT reliability_score ASC, success_rate ASC\n| KEEP partner_id, partner_name, tier, event_type, total_deliveries, success_rate, avg_retries, avg_latency_ms, p95_latency, reliability_score\n| LIMIT 30"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM webhook_deliveries\n| STATS \n    total_deliveries = COUNT(*),\n    successful = SUM(CASE(success == true, 1, 0)),\n    failed = SUM(CASE(success == false, 1, 0)),\n    avg_retries = AVG(retry_count),\n    avg_latency_ms = AVG(delivery_latency_ms),\n    p95_latency = PERCENTILE(delivery_latency_ms, 95)\n  BY partner_id, event_type\n| LOOKUP JOIN api_partners ON partner_id\n| EVAL success_rate = (successful / total_deliveries) * 100\n| EVAL reliability_score = CASE(\n    success_rate >= 99 AND avg_retries < 0.5, 95,\n    success_rate >= 97 AND avg_retries < 1, 80,\n    success_rate >= 95 AND avg_retries < 2, 65,\n    success_rate >= 90, 50,\n    30\n  )\n| WHERE success_rate < 98 OR avg_retries > 1\n| SORT reliability_score ASC, success_rate ASC\n| KEEP partner_id, partner_name, tier, event_type, total_deliveries, success_rate, avg_retries, avg_latency_ms, p95_latency, reliability_score\n| LIMIT 30"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM webhook_deliveries\n| STATS \n    total_deliveries = COUNT(*),\n    successful = SUM(CASE(success == true, 1, 0)),\n    failed = SUM(CASE(success == false, 1, 0)),\n    avg_retries = AVG(retry_count),\n    avg_latency_ms = AVG(delivery_latency_ms),\n    p95_latency = PERCENTILE(delivery_latency_ms, 95)\n  BY partner_id, event_type\n| LOOKUP JOIN api_partners ON partner_id\n| EVAL success_rate = (successful / total_deliveries) * 100\n| EVAL reliability_score = CASE(\n    success_rate >= 99 AND avg_retries < 0.5, 95,\n    success_rate >= 97 AND avg_retries < 1, 80,\n    success_rate >= 95 AND avg_retries < 2, 65,\n    success_rate >= 90, 50,\n    30\n  )\n| WHERE success_rate < 98 OR avg_retries > 1\n| SORT reliability_score ASC, success_rate ASC\n| KEEP partner_id, partner_name, tier, event_type, total_deliveries, success_rate, avg_retries, avg_latency_ms, p95_latency, reliability_score\n| LIMIT 30"
+        }
+      ],
+      "original_esql": "FROM webhook_deliveries\n| STATS \n    total_deliveries = COUNT(*),\n    successful = SUM(CASE(success == true, 1, 0)),\n    failed = SUM(CASE(success == false, 1, 0)),\n    avg_retries = AVG(retry_count),\n    avg_latency_ms = AVG(delivery_latency_ms),\n    p95_latency = PERCENTILE(delivery_latency_ms, 95)\n  BY partner_id, event_type\n| LOOKUP JOIN api_partners ON partner_id\n| EVAL success_rate = (successful / total_deliveries) * 100\n| EVAL reliability_score = CASE(\n    success_rate >= 99 AND avg_retries < 0.5, 95,\n    success_rate >= 97 AND avg_retries < 1, 80,\n    success_rate >= 95 AND avg_retries < 2, 65,\n    success_rate >= 90, 50,\n    30\n  )\n| WHERE success_rate < 98 OR avg_retries > 1\n| SORT reliability_score ASC, success_rate ASC\n| KEEP partner_id, partner_name, tier, event_type, total_deliveries, success_rate, avg_retries, avg_latency_ms, p95_latency, reliability_score\n| LIMIT 30",
+      "final_esql": null
+    },
+    {
+      "name": "User Session Quality Metrics",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM user_sessions\n| STATS \n    total_sessions = COUNT(*),\n    avg_duration_ms = AVG(session_duration_ms),\n    avg_page_views = AVG(page_views),\n    avg_lcp_ms = AVG(lcp_ms),\n    avg_fid_ms = AVG(fid_ms),\n    bounce_rate = (SUM(CASE(bounce == true, 1, 0)) / COUNT(*)) * 100\n  BY device_type, browser\n| EVAL quality_score = CASE(\n    avg_lcp_ms < 2500 AND avg_fid_ms < 100 AND bounce_rate < 30, 90,\n    avg_lcp_ms < 4000 AND avg_fid_ms < 300 AND bounce_rate < 50, 70,\n    avg_lcp_ms < 6000 AND bounce_rate < 70, 50,\n    30\n  )\n| EVAL session_health = CASE(\n    quality_score >= 80, \"excellent\",\n    quality_score >= 60, \"good\",\n    quality_score >= 40, \"needs_improvement\",\n    \"poor\"\n  )\n| SORT quality_score DESC\n| KEEP device_type, browser, total_sessions, avg_duration_ms, avg_page_views, avg_lcp_ms, avg_fid_ms, bounce_rate, quality_score, session_health\n| LIMIT 20"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM user_sessions\n| STATS \n    total_sessions = COUNT(*),\n    avg_duration_ms = AVG(session_duration_ms),\n    avg_page_views = AVG(page_views),\n    avg_lcp_ms = AVG(lcp_ms),\n    avg_fid_ms = AVG(fid_ms),\n    bounce_count = SUM(CASE(bounce == true, 1, 0)),\n    total_count = COUNT(*)\n  BY device_type, browser\n| EVAL bounce_rate = (TO_DOUBLE(bounce_count) / total_count) * 100\n| EVAL quality_score = CASE(\n    avg_lcp_ms < 2500 AND avg_fid_ms < 100 AND bounce_rate < 30, 90,\n    avg_lcp_ms < 4000 AND avg_fid_ms < 300 AND bounce_rate < 50, 70,\n    avg_lcp_ms < 6000 AND bounce_rate < 70, 50,\n    30\n  )\n| EVAL session_health = CASE(\n    quality_score >= 80, \"excellent\",\n    quality_score >= 60, \"good\",\n    quality_score >= 40, \"needs_improvement\",\n    \"poor\"\n  )\n| SORT quality_score DESC\n| KEEP device_type, browser, total_sessions, avg_duration_ms, avg_page_views, avg_lcp_ms, avg_fid_ms, bounce_rate, quality_score, session_health\n| LIMIT 20"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM user_sessions\n| STATS \n    total_sessions = COUNT(*),\n    avg_duration_ms = AVG(session_duration_ms),\n    avg_page_views = AVG(page_views),\n    avg_lcp_ms = AVG(lcp_ms),\n    avg_fid_ms = AVG(fid_ms),\n    bounce_count = COUNT(*) WHERE page_views == 1\n  BY device_type, browser\n| EVAL bounce_rate = (TO_DOUBLE(bounce_count) / total_sessions) * 100\n| EVAL quality_score = CASE(\n    avg_lcp_ms < 2500 AND avg_fid_ms < 100 AND bounce_rate < 30, 90,\n    avg_lcp_ms < 4000 AND avg_fid_ms < 300 AND bounce_rate < 50, 70,\n    avg_lcp_ms < 6000 AND bounce_rate < 70, 50,\n    30\n  )\n| EVAL session_health = CASE(\n    quality_score >= 80, \"excellent\",\n    quality_score >= 60, \"good\",\n    quality_score >= 40, \"needs_improvement\",\n    \"poor\"\n  )\n| SORT quality_score DESC\n| KEEP device_type, browser, total_sessions, avg_duration_ms, avg_page_views, avg_lcp_ms, avg_fid_ms, bounce_rate, quality_score, session_health\n| LIMIT 20"
+        }
+      ],
+      "original_esql": "FROM user_sessions\n| STATS \n    total_sessions = COUNT(*),\n    avg_duration_ms = AVG(session_duration_ms),\n    avg_page_views = AVG(page_views),\n    avg_lcp_ms = AVG(lcp_ms),\n    avg_fid_ms = AVG(fid_ms),\n    bounce_rate = (SUM(CASE(bounce == true, 1, 0)) / COUNT(*)) * 100\n  BY device_type, browser\n| EVAL quality_score = CASE(\n    avg_lcp_ms < 2500 AND avg_fid_ms < 100 AND bounce_rate < 30, 90,\n    avg_lcp_ms < 4000 AND avg_fid_ms < 300 AND bounce_rate < 50, 70,\n    avg_lcp_ms < 6000 AND bounce_rate < 70, 50,\n    30\n  )\n| EVAL session_health = CASE(\n    quality_score >= 80, \"excellent\",\n    quality_score >= 60, \"good\",\n    quality_score >= 40, \"needs_improvement\",\n    \"poor\"\n  )\n| SORT quality_score DESC\n| KEEP device_type, browser, total_sessions, avg_duration_ms, avg_page_views, avg_lcp_ms, avg_fid_ms, bounce_rate, quality_score, session_health\n| LIMIT 20",
+      "final_esql": null
+    },
+    {
+      "name": "Regional Performance Comparison",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM api_requests\n| STATS \n    request_count = COUNT(*),\n    avg_latency = AVG(response_time_ms),\n    p50_latency = PERCENTILE(response_time_ms, 50),\n    p95_latency = PERCENTILE(response_time_ms, 95),\n    p99_latency = PERCENTILE(response_time_ms, 99),\n    error_rate = (SUM(CASE(http_status >= 500, 1, 0)) / COUNT(*)) * 100\n  BY region\n| INLINESTATS \n    global_avg = AVG(avg_latency),\n    global_p95 = AVG(p95_latency)\n| EVAL latency_vs_global = ((avg_latency - global_avg) / global_avg) * 100\n| EVAL p95_vs_global = ((p95_latency - global_p95) / global_p95) * 100\n| EVAL performance_grade = CASE(\n    p95_latency < 500 AND error_rate < 1, \"A\",\n    p95_latency < 750 AND error_rate < 2, \"B\",\n    p95_latency < 1000 AND error_rate < 5, \"C\",\n    \"D\"\n  )\n| SORT p95_latency DESC\n| KEEP region, request_count, avg_latency, p50_latency, p95_latency, p99_latency, error_rate, latency_vs_global, p95_vs_global, performance_grade"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM api_requests\n| STATS \n    request_count = COUNT(*),\n    avg_latency = AVG(response_time_ms),\n    p50_latency = PERCENTILE(response_time_ms, 50),\n    p95_latency = PERCENTILE(response_time_ms, 95),\n    p99_latency = PERCENTILE(response_time_ms, 99),\n    error_rate = (SUM(CASE(http_status >= 500, 1, 0)) * 100.0 / COUNT(*))\n  BY region\n| INLINESTATS \n    global_avg = AVG(avg_latency),\n    global_p95 = AVG(p95_latency)\n| EVAL latency_vs_global = ((avg_latency - global_avg) / global_avg) * 100\n| EVAL p95_vs_global = ((p95_latency - global_p95) / global_p95) * 100\n| EVAL performance_grade = CASE(\n    p95_latency < 500 AND error_rate < 1, \"A\",\n    p95_latency < 750 AND error_rate < 2, \"B\",\n    p95_latency < 1000 AND error_rate < 5, \"C\",\n    \"D\"\n  )\n| SORT p95_latency DESC\n| KEEP region, request_count, avg_latency, p50_latency, p95_latency, p99_latency, error_rate, latency_vs_global, p95_vs_global, performance_grade"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM api_requests\n| WHERE @timestamp >= \"2024-11-01T00:00:00.000Z\" AND @timestamp <= \"2024-11-15T23:59:59.999Z\"\n| STATS \n    request_count = COUNT(*),\n    avg_latency = AVG(response_time_ms),\n    p50_latency = PERCENTILE(response_time_ms, 50),\n    p95_latency = PERCENTILE(response_time_ms, 95),\n    p99_latency = PERCENTILE(response_time_ms, 99),\n    error_rate = (SUM(CASE(http_status >= 500, 1, 0)) * 100.0 / COUNT(*))\n  BY region\n| INLINESTATS \n    global_avg = AVG(avg_latency),\n    global_p95 = AVG(p95_latency)\n| EVAL latency_vs_global = ((avg_latency - global_avg) / global_avg) * 100\n| EVAL p95_vs_global = ((p95_latency - global_p95) / global_p95) * 100\n| EVAL performance_grade = CASE(\n    p95_latency < 500 AND error_rate < 1, \"A\",\n    p95_latency < 750 AND error_rate < 2, \"B\",\n    p95_latency < 1000 AND error_rate < 5, \"C\",\n    \"D\"\n  )\n| SORT p95_latency DESC\n| KEEP region, request_count, avg_latency, p50_latency, p95_latency, p99_latency, error_rate, latency_vs_global, p95_vs_global, performance_grade"
+        }
+      ],
+      "original_esql": "FROM api_requests\n| STATS \n    request_count = COUNT(*),\n    avg_latency = AVG(response_time_ms),\n    p50_latency = PERCENTILE(response_time_ms, 50),\n    p95_latency = PERCENTILE(response_time_ms, 95),\n    p99_latency = PERCENTILE(response_time_ms, 99),\n    error_rate = (SUM(CASE(http_status >= 500, 1, 0)) / COUNT(*)) * 100\n  BY region\n| INLINESTATS \n    global_avg = AVG(avg_latency),\n    global_p95 = AVG(p95_latency)\n| EVAL latency_vs_global = ((avg_latency - global_avg) / global_avg) * 100\n| EVAL p95_vs_global = ((p95_latency - global_p95) / global_p95) * 100\n| EVAL performance_grade = CASE(\n    p95_latency < 500 AND error_rate < 1, \"A\",\n    p95_latency < 750 AND error_rate < 2, \"B\",\n    p95_latency < 1000 AND error_rate < 5, \"C\",\n    \"D\"\n  )\n| SORT p95_latency DESC\n| KEEP region, request_count, avg_latency, p50_latency, p95_latency, p99_latency, error_rate, latency_vs_global, p95_vs_global, performance_grade",
+      "final_esql": null
+    }
+  ]
+}

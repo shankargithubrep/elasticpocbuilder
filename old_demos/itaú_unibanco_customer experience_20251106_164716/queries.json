@@ -1,0 +1,58 @@
+[
+  {
+    "name": "Frontend-to-Backend Performance Correlation via Distributed Tracing",
+    "description": "Correlates slow page loads with backend service performance using trace_id \n            to identify whether bottlenecks originate from frontend rendering, backend processing, or \n            database queries. Shows percentage contribution of each layer. This addresses the critical \n            pain point of inability to connect frontend navigation with backend requests.",
+    "query": "FROM rum_page_loads\n| WHERE @timestamp > NOW() - 24 hours AND total_page_load_ms > 3000\n| LOOKUP JOIN backend_services ON trace_id\n| LOOKUP JOIN application_catalog ON application_id\n| EVAL frontend_time_ms = total_page_load_ms - duration_ms\n| EVAL backend_contribution_pct = (TO_DOUBLE(duration_ms) / total_page_load_ms) * 100\n| WHERE backend_contribution_pct > 30\n| STATS \n    avg_total_load = AVG(total_page_load_ms),\n    avg_backend_time = AVG(duration_ms),\n    avg_frontend_time = AVG(frontend_time_ms),\n    avg_db_time = AVG(database_query_time_ms),\n    slow_page_count = COUNT(*)\n  BY application_name, service_name\n| SORT avg_total_load DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "use_case": "Frontend-to-Backend Performance Correlation",
+    "complexity": "high"
+  },
+  {
+    "name": "Navigation Timing Phase Breakdown for Performance Diagnosis",
+    "description": "Breaks down page load into distinct timing phases (DNS, TCP, TTFB, response \n            download, DOM processing) and compares each phase against application-specific averages to \n            identify which phase is causing performance degradation. Highlights outliers by device and \n            connection type.",
+    "query": "FROM rum_page_loads\n| WHERE @timestamp > NOW() - 7 days\n| LOOKUP JOIN application_catalog ON application_id\n| EVAL network_time = dns_time_ms + tcp_time_ms + ttfb_ms + response_time_ms\n| EVAL processing_time = dom_processing_ms + load_event_ms\n| EVAL network_pct = (TO_DOUBLE(network_time) / total_page_load_ms) * 100\n| EVAL processing_pct = (TO_DOUBLE(processing_time) / total_page_load_ms) * 100\n| STATS \n    avg_dns = AVG(dns_time_ms),\n    avg_tcp = AVG(tcp_time_ms),\n    avg_ttfb = AVG(ttfb_ms),\n    avg_response = AVG(response_time_ms),\n    avg_dom = AVG(dom_processing_ms),\n    page_count = COUNT(*)\n  BY application_name, device_type\n| WHERE page_count > 10\n| SORT avg_ttfb DESC, avg_dom DESC\n| LIMIT 50",
+    "query_type": "scripted",
+    "use_case": "Navigation Timing Breakdown Analysis",
+    "complexity": "high"
+  },
+  {
+    "name": "Core Web Vitals Monitoring by Application Type & Business Context",
+    "description": "Measures Core Web Vitals compliance against application-specific performance \n            targets (not generic thresholds). Shows P75 metrics and compliance percentage by application \n            type, business unit, and device. Identifies which critical applications are failing to meet \n            their unique SLA targets.",
+    "query": "FROM rum_page_loads\n| WHERE @timestamp > NOW() - 30 days\n| LOOKUP JOIN application_catalog ON application_id\n| EVAL lcp_meets_target = CASE(lcp_ms <= target_lcp_ms, 1, 0)\n| EVAL inp_meets_target = CASE(inp_ms <= target_inp_ms, 1, 0)\n| EVAL cls_meets_target = CASE(cls_score <= target_cls, 1, 0)\n| EVAL all_targets_met = CASE(lcp_meets_target == 1 AND inp_meets_target == 1 AND cls_meets_target == 1, 1, 0)\n| STATS\n    p75_lcp = PERCENTILE(lcp_ms, 75),\n    p75_inp = PERCENTILE(inp_ms, 75),\n    p75_cls = PERCENTILE(cls_score, 75),\n    lcp_compliance_pct = AVG(lcp_meets_target) * 100,\n    inp_compliance_pct = AVG(inp_meets_target) * 100,\n    cls_compliance_pct = AVG(cls_meets_target) * 100,\n    overall_compliance_pct = AVG(all_targets_met) * 100,\n    page_load_count = COUNT(*)\n  BY application_name, application_type, business_unit, criticality, device_type\n| WHERE page_load_count > 50\n| SORT overall_compliance_pct ASC, page_load_count DESC\n| LIMIT 50",
+    "query_type": "scripted",
+    "use_case": "Core Web Vitals Monitoring & Alerting",
+    "complexity": "high"
+  },
+  {
+    "name": "Resource Loading Optimization with CDN Performance Analysis",
+    "description": "Analyzes resource loading performance by type (scripts, stylesheets, images, \n            fonts) and CDN provider. Identifies optimization opportunities through high cache miss rates, \n            slow P95 load times, and excessive transfer sizes. Helps prioritize CDN configuration and \n            asset optimization efforts.",
+    "query": "FROM rum_resource_timing\n| WHERE @timestamp > NOW() - 7 days AND http_status >= 200 AND http_status < 400\n| LOOKUP JOIN application_catalog ON application_id\n| EVAL cache_miss = CASE(is_cached == false, 1, 0)\n| EVAL slow_resource = CASE(duration_ms > 1000, 1, 0)\n| EVAL size_mb = TO_DOUBLE(transfer_size_bytes) / 1048576\n| STATS\n    total_resources = COUNT(*),\n    avg_duration_ms = AVG(duration_ms),\n    p95_duration_ms = PERCENTILE(duration_ms, 95),\n    avg_ttfb_ms = AVG(ttfb_ms),\n    avg_download_ms = AVG(download_time_ms),\n    total_transfer_mb = SUM(size_mb),\n    cache_miss_rate_pct = AVG(cache_miss) * 100,\n    slow_resource_pct = AVG(slow_resource) * 100\n  BY application_name, resource_type, cdn_provider\n| WHERE total_resources > 100\n| SORT p95_duration_ms DESC, cache_miss_rate_pct DESC\n| LIMIT 30",
+    "query_type": "scripted",
+    "use_case": "Resource Loading Optimization",
+    "complexity": "medium"
+  },
+  {
+    "name": "Long Task & JavaScript Error Correlation Analysis",
+    "description": "Identifies patterns between long-running JavaScript tasks and user-reported \n            errors. Analyzes Total Blocking Time (TBT) and correlates with error occurrences to pinpoint \n            problematic JavaScript execution that impacts user experience.",
+    "query": "FROM rum_page_loads\n| WHERE @timestamp > NOW() - 14 days AND long_task_count > 3\n| LOOKUP JOIN application_catalog ON application_id\n| EVAL severe_blocking = CASE(tbt_ms > 600, 1, 0)\n| EVAL has_errors = CASE(error_count > 0, 1, 0)\n| STATS\n    avg_long_tasks = AVG(long_task_count),\n    avg_tbt_ms = AVG(tbt_ms),\n    avg_inp_ms = AVG(inp_ms),\n    severe_blocking_pct = AVG(severe_blocking) * 100,\n    error_rate_pct = AVG(has_errors) * 100,\n    avg_error_count = AVG(error_count),\n    affected_pages = COUNT_DISTINCT(page_name),\n    total_loads = COUNT(*)\n  BY application_name, device_type, browser\n| WHERE total_loads > 20\n| SORT avg_tbt_ms DESC, error_rate_pct DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "use_case": "Long Task & JavaScript Error Correlation",
+    "complexity": "medium"
+  },
+  {
+    "name": "Device & Network Performance Comparison",
+    "description": "Compares Core Web Vitals performance across different device types and \n            network connection types. Helps identify whether performance issues are device-specific \n            or network-related, enabling targeted optimization strategies.",
+    "query": "FROM rum_page_loads\n| WHERE @timestamp > NOW() - 14 days\n| STATS\n    p75_lcp = PERCENTILE(lcp_ms, 75),\n    p75_inp = PERCENTILE(inp_ms, 75),\n    p75_cls = PERCENTILE(cls_score, 75),\n    p75_ttfb = PERCENTILE(ttfb_ms, 75),\n    avg_total_load = AVG(total_page_load_ms),\n    page_load_count = COUNT(*)\n  BY device_type, connection_type, region\n| WHERE page_load_count > 50\n| SORT p75_lcp DESC, p75_inp DESC\n| LIMIT 40",
+    "query_type": "scripted",
+    "use_case": "Core Web Vitals Monitoring & Alerting",
+    "complexity": "medium"
+  },
+  {
+    "name": "Page-Level Performance Hotspots",
+    "description": "Identifies specific pages with consistently poor performance across all \n            Core Web Vitals metrics. Helps prioritize which pages need immediate optimization attention \n            based on traffic volume and performance degradation.",
+    "query": "FROM rum_page_loads\n| WHERE @timestamp > NOW() - 7 days\n| STATS\n    p75_lcp = PERCENTILE(lcp_ms, 75),\n    p75_inp = PERCENTILE(inp_ms, 75),\n    p95_cls = PERCENTILE(cls_score, 95),\n    avg_error_count = AVG(error_count),\n    avg_failed_resources = AVG(failed_resource_count),\n    page_view_count = COUNT(*)\n  BY page_name, page_url\n| WHERE page_view_count > 100\n| EVAL performance_score = (p75_lcp / 2500) + (p75_inp / 200) + (p95_cls / 0.1)\n| SORT performance_score DESC, page_view_count DESC\n| LIMIT 30",
+    "query_type": "scripted",
+    "use_case": "Navigation Timing Breakdown Analysis",
+    "complexity": "medium"
+  }
+]

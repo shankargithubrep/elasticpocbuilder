@@ -1,0 +1,37 @@
+{
+  "mappings": {
+    "properties": {
+      "mme_host": {
+        "type": "keyword"
+      },
+      "mme_pool": {
+        "type": "keyword"
+      },
+      "datacenter": {
+        "type": "keyword"
+      },
+      "region": {
+        "type": "keyword"
+      },
+      "software_version": {
+        "type": "keyword"
+      },
+      "capacity_tier": {
+        "type": "keyword"
+      },
+      "primary_backup": {
+        "type": "keyword"
+      },
+      "max_subscribers": {
+        "type": "integer"
+      }
+    }
+  },
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "index": {
+      "mode": "lookup"
+    }
+  }
+}

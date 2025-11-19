@@ -1,0 +1,151 @@
+product_id,product_name,product_category,product_subcategory,unit_price,margin_percentage,product_description
+PROD000001,Basic Toys & Games Item 0,Toys & Games,Basic,36.66,38.6,Professional-grade Basic offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000002,Makeup Beauty & Health Item 1,Beauty & Health,Makeup,72.68,22.0,Innovative Makeup solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000003,Premium Automotive Item 2,Automotive,Premium,13.77,18.9,Best-selling Premium item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000004,Deluxe Books & Media Item 3,Books & Media,Deluxe,49.06,33.7,Premium Deluxe product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000005,Makeup Beauty & Health Item 4,Beauty & Health,Makeup,45.94,37.1,Premium Makeup product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000006,Tablets Electronics Item 5,Electronics,Tablets,30.88,30.0,Best-selling Tablets item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000007,Deluxe Automotive Item 6,Automotive,Deluxe,16.35,43.9,Premium Deluxe product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000008,Basic Automotive Item 7,Automotive,Basic,199.35,40.5,Eco-friendly Basic product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000009,Premium Pet Supplies Item 8,Pet Supplies,Premium,65.96,36.8,Innovative Premium solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000010,Deluxe Pet Supplies Item 9,Pet Supplies,Deluxe,5.28,34.7,Best-selling Deluxe item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000011,Basic Automotive Item 10,Automotive,Basic,20.98,24.1,Innovative Basic solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000012,Audio Electronics Item 11,Electronics,Audio,8.33,22.4,Professional-grade Audio offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000013,Smartphones Electronics Item 12,Electronics,Smartphones,32.47,16.1,Professional-grade Smartphones offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000014,Standard Food & Beverage Item 13,Food & Beverage,Standard,11.57,23.7,Innovative Standard solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000015,Premium Books & Media Item 14,Books & Media,Premium,57.58,44.7,Best-selling Premium item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000016,Accessories Clothing Item 15,Clothing,Accessories,70.24,40.7,Professional-grade Accessories offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000017,Deluxe Pet Supplies Item 16,Pet Supplies,Deluxe,36.56,22.9,Eco-friendly Deluxe product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000018,Basic Books & Media Item 17,Books & Media,Basic,24.5,41.4,Innovative Basic solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000019,Premium Toys & Games Item 18,Toys & Games,Premium,10.59,37.8,Innovative Premium solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000020,Standard Books & Media Item 19,Books & Media,Standard,98.23,15.2,Best-selling Standard item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000021,Water Sports Sports & Outdoors Item 20,Sports & Outdoors,Water Sports,19.18,21.1,Eco-friendly Water Sports product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000022,Team Sports Sports & Outdoors Item 21,Sports & Outdoors,Team Sports,6.91,18.8,Premium Team Sports product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000023,Smartphones Electronics Item 22,Electronics,Smartphones,34.5,26.3,Best-selling Smartphones item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000024,Deluxe Pet Supplies Item 23,Pet Supplies,Deluxe,16.25,18.2,Innovative Deluxe solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000025,Standard Books & Media Item 24,Books & Media,Standard,4.89,41.8,Eco-friendly Standard product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000026,Premium Toys & Games Item 25,Toys & Games,Premium,209.17,19.5,Professional-grade Premium offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000027,Basic Automotive Item 26,Automotive,Basic,43.92,38.9,Premium Basic product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000028,Personal Care Beauty & Health Item 27,Beauty & Health,Personal Care,14.56,42.5,Eco-friendly Personal Care product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000029,Laptops Electronics Item 28,Electronics,Laptops,37.58,25.0,Professional-grade Laptops offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000030,Kids Clothing Item 29,Clothing,Kids,87.6,20.0,Eco-friendly Kids product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000031,Standard Automotive Item 30,Automotive,Standard,120.82,21.4,Premium Standard product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000032,Deluxe Pet Supplies Item 31,Pet Supplies,Deluxe,8.81,18.5,Eco-friendly Deluxe product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000033,Personal Care Beauty & Health Item 32,Beauty & Health,Personal Care,34.1,15.4,Professional-grade Personal Care offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000034,Basic Pet Supplies Item 33,Pet Supplies,Basic,6.97,34.6,Innovative Basic solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000035,Premium Books & Media Item 34,Books & Media,Premium,76.94,37.8,Premium Premium product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000036,Basic Food & Beverage Item 35,Food & Beverage,Basic,30.2,25.1,Premium Basic product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000037,Shoes Clothing Item 36,Clothing,Shoes,16.82,19.9,Eco-friendly Shoes product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000038,Fitness Sports & Outdoors Item 37,Sports & Outdoors,Fitness,25.02,30.2,Innovative Fitness solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000039,Tablets Electronics Item 38,Electronics,Tablets,39.88,31.5,Professional-grade Tablets offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000040,Standard Books & Media Item 39,Books & Media,Standard,136.97,29.5,Premium Standard product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000041,Standard Pet Supplies Item 40,Pet Supplies,Standard,73.42,20.5,Professional-grade Standard offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000042,Deluxe Automotive Item 41,Automotive,Deluxe,20.74,25.6,Eco-friendly Deluxe product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000043,Personal Care Beauty & Health Item 42,Beauty & Health,Personal Care,44.95,22.5,Eco-friendly Personal Care product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000044,Team Sports Sports & Outdoors Item 43,Sports & Outdoors,Team Sports,6.03,41.4,Eco-friendly Team Sports product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000045,Deluxe Books & Media Item 44,Books & Media,Deluxe,24.93,33.9,Eco-friendly Deluxe product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000046,Bedding Home & Garden Item 45,Home & Garden,Bedding,38.94,25.5,Eco-friendly Bedding product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000047,Basic Pet Supplies Item 46,Pet Supplies,Basic,40.37,31.4,Eco-friendly Basic product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000048,Supplements Beauty & Health Item 47,Beauty & Health,Supplements,32.0,27.7,Premium Supplements product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000049,Standard Automotive Item 48,Automotive,Standard,37.83,41.6,Best-selling Standard item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000050,Accessories Electronics Item 49,Electronics,Accessories,44.38,35.1,Best-selling Accessories item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000051,Basic Toys & Games Item 50,Toys & Games,Basic,15.39,21.3,Eco-friendly Basic product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000052,Kids Clothing Item 51,Clothing,Kids,85.87,31.2,Best-selling Kids item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000053,Accessories Electronics Item 52,Electronics,Accessories,10.25,24.6,Professional-grade Accessories offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000054,Premium Books & Media Item 53,Books & Media,Premium,23.17,28.6,Innovative Premium solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000055,Kitchen Home & Garden Item 54,Home & Garden,Kitchen,21.93,37.5,Eco-friendly Kitchen product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000056,Audio Electronics Item 55,Electronics,Audio,44.56,41.9,Premium Audio product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000057,Shoes Clothing Item 56,Clothing,Shoes,42.59,19.0,Professional-grade Shoes offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000058,Shoes Clothing Item 57,Clothing,Shoes,88.38,34.9,Innovative Shoes solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000059,Basic Automotive Item 58,Automotive,Basic,39.3,16.1,Premium Basic product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000060,Supplements Beauty & Health Item 59,Beauty & Health,Supplements,115.01,30.3,Premium Supplements product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000061,Shoes Clothing Item 60,Clothing,Shoes,30.86,45.0,Premium Shoes product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000062,Deluxe Automotive Item 61,Automotive,Deluxe,34.13,29.9,Innovative Deluxe solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000063,Furniture Home & Garden Item 62,Home & Garden,Furniture,126.67,19.2,Innovative Furniture solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000064,Deluxe Food & Beverage Item 63,Food & Beverage,Deluxe,122.36,16.6,Professional-grade Deluxe offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000065,Kids Clothing Item 64,Clothing,Kids,9.57,20.5,Best-selling Kids item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000066,Premium Pet Supplies Item 65,Pet Supplies,Premium,22.06,34.8,Innovative Premium solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000067,Deluxe Books & Media Item 66,Books & Media,Deluxe,59.74,43.3,Eco-friendly Deluxe product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000068,Premium Pet Supplies Item 67,Pet Supplies,Premium,335.37,30.1,Professional-grade Premium offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000069,Deluxe Pet Supplies Item 68,Pet Supplies,Deluxe,61.78,36.9,Innovative Deluxe solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000070,Womens Clothing Item 69,Clothing,Womens,21.43,16.1,Premium Womens product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000071,Cycling Sports & Outdoors Item 70,Sports & Outdoors,Cycling,74.68,24.0,Professional-grade Cycling offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000072,Cycling Sports & Outdoors Item 71,Sports & Outdoors,Cycling,38.14,18.1,Premium Cycling product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000073,Deluxe Toys & Games Item 72,Toys & Games,Deluxe,10.09,38.8,Innovative Deluxe solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000074,Deluxe Pet Supplies Item 73,Pet Supplies,Deluxe,150.68,44.8,Eco-friendly Deluxe product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000075,Accessories Electronics Item 74,Electronics,Accessories,33.22,19.4,Best-selling Accessories item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000076,Skincare Beauty & Health Item 75,Beauty & Health,Skincare,12.29,37.9,Eco-friendly Skincare product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000077,Deluxe Food & Beverage Item 76,Food & Beverage,Deluxe,12.23,29.1,Eco-friendly Deluxe product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000078,Standard Food & Beverage Item 77,Food & Beverage,Standard,19.91,33.1,Innovative Standard solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000079,Camping Sports & Outdoors Item 78,Sports & Outdoors,Camping,32.61,21.9,Eco-friendly Camping product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000080,Basic Pet Supplies Item 79,Pet Supplies,Basic,16.1,42.4,Best-selling Basic item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000081,Deluxe Automotive Item 80,Automotive,Deluxe,30.24,28.9,Premium Deluxe product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000082,Basic Automotive Item 81,Automotive,Basic,32.89,35.8,Innovative Basic solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000083,Furniture Home & Garden Item 82,Home & Garden,Furniture,12.39,26.8,Eco-friendly Furniture product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000084,Premium Toys & Games Item 83,Toys & Games,Premium,60.07,27.0,Best-selling Premium item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000085,Garden Tools Home & Garden Item 84,Home & Garden,Garden Tools,99.68,37.3,Eco-friendly Garden Tools product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000086,Basic Food & Beverage Item 85,Food & Beverage,Basic,21.43,37.6,Premium Basic product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000087,Standard Automotive Item 86,Automotive,Standard,41.62,38.9,Best-selling Standard item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000088,Decor Home & Garden Item 87,Home & Garden,Decor,26.15,22.7,Professional-grade Decor offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000089,Shoes Clothing Item 88,Clothing,Shoes,12.94,19.3,Professional-grade Shoes offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000090,Basic Automotive Item 89,Automotive,Basic,30.57,37.6,Best-selling Basic item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000091,Kids Clothing Item 90,Clothing,Kids,97.93,23.0,Innovative Kids solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000092,Team Sports Sports & Outdoors Item 91,Sports & Outdoors,Team Sports,17.42,20.2,Professional-grade Team Sports offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000093,Tablets Electronics Item 92,Electronics,Tablets,30.84,28.8,Eco-friendly Tablets product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000094,Makeup Beauty & Health Item 93,Beauty & Health,Makeup,160.4,16.1,Eco-friendly Makeup product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000095,Supplements Beauty & Health Item 94,Beauty & Health,Supplements,16.77,30.1,Professional-grade Supplements offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000096,Accessories Clothing Item 95,Clothing,Accessories,239.36,43.0,Professional-grade Accessories offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000097,Deluxe Toys & Games Item 96,Toys & Games,Deluxe,64.15,16.7,Eco-friendly Deluxe product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000098,Garden Tools Home & Garden Item 97,Home & Garden,Garden Tools,72.22,29.2,Best-selling Garden Tools item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000099,Basic Toys & Games Item 98,Toys & Games,Basic,18.02,23.7,Innovative Basic solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000100,Fitness Sports & Outdoors Item 99,Sports & Outdoors,Fitness,15.13,21.8,Professional-grade Fitness offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000101,Standard Pet Supplies Item 100,Pet Supplies,Standard,35.65,25.7,Best-selling Standard item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000102,Womens Clothing Item 101,Clothing,Womens,2.89,26.2,Eco-friendly Womens product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000103,Basic Books & Media Item 102,Books & Media,Basic,60.0,32.6,Innovative Basic solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000104,Basic Automotive Item 103,Automotive,Basic,15.59,20.6,Premium Basic product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000105,Makeup Beauty & Health Item 104,Beauty & Health,Makeup,17.15,24.5,Best-selling Makeup item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000106,Womens Clothing Item 105,Clothing,Womens,67.18,36.6,Eco-friendly Womens product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000107,Smartphones Electronics Item 106,Electronics,Smartphones,27.23,34.3,Eco-friendly Smartphones product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000108,Garden Tools Home & Garden Item 107,Home & Garden,Garden Tools,9.3,27.4,Eco-friendly Garden Tools product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000109,Premium Automotive Item 108,Automotive,Premium,88.64,41.8,Eco-friendly Premium product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000110,Premium Pet Supplies Item 109,Pet Supplies,Premium,4.54,43.6,Best-selling Premium item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000111,Premium Toys & Games Item 110,Toys & Games,Premium,31.88,15.6,Premium Premium product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000112,Garden Tools Home & Garden Item 111,Home & Garden,Garden Tools,31.66,30.2,Best-selling Garden Tools item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000113,Accessories Clothing Item 112,Clothing,Accessories,18.21,25.1,Eco-friendly Accessories product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000114,Premium Pet Supplies Item 113,Pet Supplies,Premium,18.07,30.5,Best-selling Premium item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000115,Standard Food & Beverage Item 114,Food & Beverage,Standard,70.47,37.2,Premium Standard product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000116,Standard Books & Media Item 115,Books & Media,Standard,24.93,19.1,Innovative Standard solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000117,Standard Books & Media Item 116,Books & Media,Standard,28.38,39.5,Innovative Standard solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000118,Accessories Electronics Item 117,Electronics,Accessories,20.7,15.4,Innovative Accessories solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000119,Personal Care Beauty & Health Item 118,Beauty & Health,Personal Care,11.51,23.6,Professional-grade Personal Care offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000120,Audio Electronics Item 119,Electronics,Audio,38.64,37.8,Innovative Audio solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000121,Premium Pet Supplies Item 120,Pet Supplies,Premium,30.15,32.4,Best-selling Premium item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000122,Standard Food & Beverage Item 121,Food & Beverage,Standard,7.78,36.8,Professional-grade Standard offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000123,Standard Automotive Item 122,Automotive,Standard,33.43,42.6,Best-selling Standard item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000124,Laptops Electronics Item 123,Electronics,Laptops,7.27,36.5,Innovative Laptops solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000125,Deluxe Automotive Item 124,Automotive,Deluxe,31.49,26.1,Innovative Deluxe solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000126,Personal Care Beauty & Health Item 125,Beauty & Health,Personal Care,10.59,40.7,Eco-friendly Personal Care product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000127,Standard Books & Media Item 126,Books & Media,Standard,18.84,32.8,Eco-friendly Standard product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000128,Basic Toys & Games Item 127,Toys & Games,Basic,42.78,15.5,Best-selling Basic item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000129,Cycling Sports & Outdoors Item 128,Sports & Outdoors,Cycling,42.58,16.1,Eco-friendly Cycling product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000130,Smartphones Electronics Item 129,Electronics,Smartphones,5.67,22.7,Eco-friendly Smartphones product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000131,Bedding Home & Garden Item 130,Home & Garden,Bedding,6.81,31.9,Eco-friendly Bedding product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000132,Standard Books & Media Item 131,Books & Media,Standard,42.86,20.4,Best-selling Standard item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000133,Standard Toys & Games Item 132,Toys & Games,Standard,34.5,26.3,Innovative Standard solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000134,Standard Pet Supplies Item 133,Pet Supplies,Standard,47.53,41.3,Innovative Standard solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000135,Basic Pet Supplies Item 134,Pet Supplies,Basic,5.57,19.6,Professional-grade Basic offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000136,Basic Toys & Games Item 135,Toys & Games,Basic,68.05,32.9,Eco-friendly Basic product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000137,Team Sports Sports & Outdoors Item 136,Sports & Outdoors,Team Sports,64.78,38.5,Professional-grade Team Sports offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000138,Deluxe Books & Media Item 137,Books & Media,Deluxe,11.54,28.3,Professional-grade Deluxe offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000139,Deluxe Toys & Games Item 138,Toys & Games,Deluxe,261.96,31.0,Professional-grade Deluxe offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000140,Standard Food & Beverage Item 139,Food & Beverage,Standard,16.83,38.6,Best-selling Standard item with excellent customer reviews. Great value for everyday use with durable construction.
+PROD000141,Fitness Sports & Outdoors Item 140,Sports & Outdoors,Fitness,15.92,16.6,Premium Fitness product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000142,Kids Clothing Item 141,Clothing,Kids,73.84,28.6,Innovative Kids solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000143,Deluxe Automotive Item 142,Automotive,Deluxe,8.16,33.3,Premium Deluxe product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000144,Accessories Clothing Item 143,Clothing,Accessories,12.38,29.4,Eco-friendly Accessories product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000145,Tablets Electronics Item 144,Electronics,Tablets,14.91,43.5,Innovative Tablets solution designed for modern lifestyles. Combines functionality with contemporary design.
+PROD000146,Standard Automotive Item 145,Automotive,Standard,24.22,25.8,Premium Standard product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000147,Deluxe Books & Media Item 146,Books & Media,Deluxe,25.05,15.3,Professional-grade Deluxe offering exceptional performance. Trusted by experts and enthusiasts alike.
+PROD000148,Basic Automotive Item 147,Automotive,Basic,37.0,27.3,Premium Basic product featuring advanced technology and superior quality. Ideal for discerning customers seeking reliability.
+PROD000149,Supplements Beauty & Health Item 148,Beauty & Health,Supplements,17.23,15.2,Eco-friendly Supplements product made from sustainable materials. Perfect for environmentally conscious consumers.
+PROD000150,Standard Pet Supplies Item 149,Pet Supplies,Standard,48.95,23.5,Professional-grade Standard offering exceptional performance. Trusted by experts and enthusiasts alike.

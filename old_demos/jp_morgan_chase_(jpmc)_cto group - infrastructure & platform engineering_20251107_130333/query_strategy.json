@@ -1,0 +1,589 @@
+{
+  "datasets": [
+    {
+      "name": "infrastructure_metrics",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "500000+",
+      "required_fields": {
+        "metric_id": "keyword",
+        "@timestamp": "date",
+        "host_id": "keyword",
+        "application_id": "keyword",
+        "benchmark_id": "keyword",
+        "system.cpu.total.pct": "float",
+        "system.memory.used.pct": "float",
+        "system.diskio.read.bytes": "long",
+        "system.diskio.write.bytes": "long",
+        "system.diskio.io.time": "long",
+        "system.network.in.bytes": "long",
+        "system.network.out.bytes": "long",
+        "transaction.duration.us": "long",
+        "event.outcome": "keyword",
+        "transactions_per_second": "float",
+        "cost_per_hour_usd": "float",
+        "power_consumption_watts": "float",
+        "workload_type": "keyword",
+        "test_phase": "keyword",
+        "anomaly_notes": "text"
+      },
+      "relationships": [
+        "compute_hosts",
+        "applications",
+        "benchmark_definitions"
+      ],
+      "semantic_fields": [
+        "anomaly_notes"
+      ]
+    },
+    {
+      "name": "compute_hosts",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "5000+",
+      "required_fields": {
+        "host_id": "keyword",
+        "hostname": "keyword",
+        "host.cpu.model.name": "keyword",
+        "cpu_architecture": "keyword",
+        "cpu_vendor": "keyword",
+        "cpu_cores": "integer",
+        "memory_gb": "integer",
+        "datacenter": "keyword",
+        "rack_location": "keyword",
+        "hardware_generation": "keyword",
+        "purchase_date": "date",
+        "hourly_compute_cost_usd": "float",
+        "licensing_cost_annual_usd": "float",
+        "power_consumption_tdp_watts": "float",
+        "migration_candidate": "boolean",
+        "host_profile_description": "text"
+      },
+      "relationships": [
+        "infrastructure_metrics"
+      ],
+      "semantic_fields": [
+        "host_profile_description"
+      ]
+    },
+    {
+      "name": "applications",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "3000+",
+      "required_fields": {
+        "application_id": "keyword",
+        "application_name": "text",
+        "business_unit": "keyword",
+        "criticality_tier": "keyword",
+        "workload_category": "keyword",
+        "sla_target_ms": "float",
+        "min_tps_required": "float",
+        "cost_center": "keyword",
+        "migration_priority": "keyword",
+        "migration_status": "keyword",
+        "owner_team": "keyword",
+        "application_characteristics": "text"
+      },
+      "relationships": [
+        "infrastructure_metrics"
+      ],
+      "semantic_fields": [
+        "application_characteristics"
+      ]
+    },
+    {
+      "name": "benchmark_definitions",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200+",
+      "required_fields": {
+        "benchmark_id": "keyword",
+        "benchmark_name": "text",
+        "benchmark_type": "keyword",
+        "test_duration_minutes": "integer",
+        "target_load_level": "keyword",
+        "success_criteria": "text",
+        "spec_cpu_2017_score": "float",
+        "tpc_h_qphh": "float",
+        "sysbench_events_per_sec": "float",
+        "kafka_mb_per_sec": "float",
+        "custom_trade_settlement_tps": "float",
+        "custom_risk_calc_throughput": "float",
+        "custom_payment_validation_p95_ms": "float",
+        "benchmark_description": "text"
+      },
+      "relationships": [
+        "infrastructure_metrics"
+      ],
+      "semantic_fields": [
+        "benchmark_description"
+      ]
+    },
+    {
+      "name": "kafka_metrics",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "200000+",
+      "required_fields": {
+        "kafka_metric_id": "keyword",
+        "@timestamp": "date",
+        "host_id": "keyword",
+        "topic_name": "keyword",
+        "consumer_group": "keyword",
+        "consumer_lag": "long",
+        "message_throughput_per_sec": "float",
+        "topic_size_bytes": "long",
+        "partition_count": "integer",
+        "broker_cpu_pct": "float",
+        "broker_network_in_mb": "float",
+        "broker_network_out_mb": "float"
+      },
+      "relationships": [
+        "compute_hosts"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "hive_query_logs",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "150000+",
+      "required_fields": {
+        "query_id": "keyword",
+        "@timestamp": "date",
+        "host_id": "keyword",
+        "application_id": "keyword",
+        "query_execution_time_ms": "long",
+        "data_scanned_gb": "float",
+        "rows_returned": "long",
+        "query_type": "keyword",
+        "database_name": "keyword",
+        "user_name": "keyword",
+        "query_text": "text"
+      },
+      "relationships": [
+        "compute_hosts",
+        "applications"
+      ],
+      "semantic_fields": [
+        "query_text"
+      ]
+    },
+    {
+      "name": "cost_allocation",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "1000+",
+      "required_fields": {
+        "cost_center": "keyword",
+        "business_unit": "keyword",
+        "department": "keyword",
+        "budget_annual_usd": "float",
+        "current_spend_usd": "float",
+        "intel_host_count": "integer",
+        "amd_host_count": "integer",
+        "target_cost_reduction_pct": "float",
+        "migration_budget_usd": "float"
+      },
+      "relationships": [
+        "applications"
+      ],
+      "semantic_fields": []
+    }
+  ],
+  "queries": [
+    {
+      "name": "Intel vs AMD Performance Baseline Comparison with Cost Analysis",
+      "pain_point": "Lack of visibility into workload characteristics by hardware platform - cannot identify migration candidates or quantify performance differences",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "EVAL",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "infrastructure_metrics",
+        "compute_hosts",
+        "applications",
+        "benchmark_definitions"
+      ],
+      "required_fields": {
+        "infrastructure_metrics": [
+          "@timestamp",
+          "host_id",
+          "application_id",
+          "benchmark_id",
+          "transaction.duration.us",
+          "transactions_per_second",
+          "system.cpu.total.pct",
+          "cost_per_hour_usd"
+        ],
+        "compute_hosts": [
+          "host_id",
+          "cpu_architecture",
+          "host.cpu.model.name",
+          "hourly_compute_cost_usd",
+          "power_consumption_tdp_watts"
+        ],
+        "applications": [
+          "application_id",
+          "application_name",
+          "workload_category",
+          "criticality_tier"
+        ],
+        "benchmark_definitions": [
+          "benchmark_id",
+          "benchmark_name",
+          "benchmark_type"
+        ]
+      },
+      "join_chain": [
+        "infrastructure_metrics -> compute_hosts",
+        "infrastructure_metrics -> applications",
+        "infrastructure_metrics -> benchmark_definitions"
+      ],
+      "description": "Establish performance baselines across identical workloads on Intel Xeon vs AMD EPYC architectures. Calculate performance-per-dollar and cost-per-transaction metrics to quantify TCO differences. Filter to last 30 days of standardized benchmark runs.",
+      "complexity": "high",
+      "query": "FROM infrastructure_metrics\n| WHERE @timestamp > NOW() - 30 days AND test_phase == \"baseline\"\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| LOOKUP JOIN benchmark_definitions ON benchmark_id\n| STATS \n    avg_transaction_duration_ms = AVG(transaction.duration.us) / 1000,\n    p95_transaction_duration_ms = PERCENTILE(transaction.duration.us, 95) / 1000,\n    avg_tps = AVG(transactions_per_second),\n    avg_cpu_pct = AVG(system.cpu.total.pct),\n    avg_cost_per_hour = AVG(compute_hosts.hourly_compute_cost_usd),\n    avg_power_watts = AVG(compute_hosts.power_consumption_tdp_watts),\n    test_count = COUNT(*)\n  BY compute_hosts.cpu_architecture, compute_hosts.host.cpu.model.name, applications.workload_category, benchmark_definitions.benchmark_type\n| EVAL \n    performance_per_dollar = avg_tps / avg_cost_per_hour,\n    cost_per_million_transactions = (avg_cost_per_hour / avg_tps) * 1000000,\n    power_efficiency = avg_tps / avg_power_watts\n| SORT compute_hosts.cpu_architecture, applications.workload_category, performance_per_dollar DESC"
+    },
+    {
+      "name": "Application-Specific Migration Prioritization with ROI Calculation",
+      "pain_point": "Application-Specific Migration Prioritization - identify which applications benefit most from AMD migration",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE",
+        "STATS"
+      ],
+      "required_datasets": [
+        "infrastructure_metrics",
+        "compute_hosts",
+        "applications"
+      ],
+      "required_fields": {
+        "infrastructure_metrics": [
+          "@timestamp",
+          "host_id",
+          "application_id",
+          "transactions_per_second",
+          "system.cpu.total.pct",
+          "cost_per_hour_usd"
+        ],
+        "compute_hosts": [
+          "host_id",
+          "cpu_architecture",
+          "hourly_compute_cost_usd"
+        ],
+        "applications": [
+          "application_id",
+          "application_name",
+          "business_unit",
+          "criticality_tier",
+          "migration_priority",
+          "migration_status"
+        ]
+      },
+      "join_chain": [
+        "infrastructure_metrics -> compute_hosts",
+        "infrastructure_metrics -> applications"
+      ],
+      "description": "Compare each application's performance on Intel vs AMD to identify best migration candidates. Use INLINESTATS to calculate architecture-specific averages, then rank applications by potential performance gain and cost savings. Focus on applications not yet migrated.",
+      "complexity": "high",
+      "query": "FROM infrastructure_metrics\n| WHERE @timestamp > NOW() - 30 days AND test_phase == \"baseline\"\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| WHERE applications.migration_status != \"completed\"\n| INLINESTATS \n    avg_tps_by_arch = AVG(transactions_per_second),\n    avg_cost_by_arch = AVG(cost_per_hour_usd)\n  BY applications.application_id, compute_hosts.cpu_architecture\n| STATS \n    intel_avg_tps = AVG(CASE(compute_hosts.cpu_architecture == \"Intel\", transactions_per_second, null)),\n    amd_avg_tps = AVG(CASE(compute_hosts.cpu_architecture == \"AMD\", transactions_per_second, null)),\n    intel_avg_cost = AVG(CASE(compute_hosts.cpu_architecture == \"Intel\", cost_per_hour_usd, null)),\n    amd_avg_cost = AVG(CASE(compute_hosts.cpu_architecture == \"AMD\", cost_per_hour_usd, null)),\n    current_architecture = VALUES(CASE(compute_hosts.cpu_architecture == \"Intel\", \"Intel\", null))\n  BY applications.application_id, applications.application_name, applications.business_unit, applications.criticality_tier\n| WHERE intel_avg_tps IS NOT NULL AND amd_avg_tps IS NOT NULL\n| EVAL \n    performance_gain_pct = ((amd_avg_tps - intel_avg_tps) / intel_avg_tps) * 100,\n    cost_reduction_pct = ((intel_avg_cost - amd_avg_cost) / intel_avg_cost) * 100,\n    annual_savings_usd = (intel_avg_cost - amd_avg_cost) * 24 * 365,\n    migration_score = (performance_gain_pct * 0.6) + (cost_reduction_pct * 0.4)\n| WHERE performance_gain_pct > 0 AND cost_reduction_pct > 0\n| SORT migration_score DESC\n| LIMIT 50"
+    },
+    {
+      "name": "Real-Time Performance Regression Detection with Change Point Analysis",
+      "pain_point": "Continuous Performance Regression Detection - automatically detect performance regressions after infrastructure changes",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "CHANGE_POINT",
+        "STATS",
+        "EVAL",
+        "DATE_TRUNC"
+      ],
+      "required_datasets": [
+        "infrastructure_metrics",
+        "compute_hosts",
+        "applications"
+      ],
+      "required_fields": {
+        "infrastructure_metrics": [
+          "@timestamp",
+          "host_id",
+          "application_id",
+          "transaction.duration.us",
+          "event.outcome",
+          "system.cpu.total.pct"
+        ],
+        "compute_hosts": [
+          "host_id",
+          "hostname",
+          "cpu_architecture",
+          "datacenter"
+        ],
+        "applications": [
+          "application_id",
+          "application_name",
+          "sla_target_ms",
+          "criticality_tier"
+        ]
+      },
+      "join_chain": [
+        "infrastructure_metrics -> compute_hosts",
+        "infrastructure_metrics -> applications"
+      ],
+      "description": "Detect statistically significant performance regressions in real-time using CHANGE_POINT analysis. Aggregate transaction duration by hour, identify change points, and flag SLA violations. Essential for catching issues during migration windows.",
+      "complexity": "high",
+      "query": "FROM infrastructure_metrics\n| WHERE @timestamp > NOW() - 7 days\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| EVAL hour_bucket = DATE_TRUNC(1 hour, @timestamp)\n| STATS \n    avg_duration_ms = AVG(transaction.duration.us) / 1000,\n    p95_duration_ms = PERCENTILE(transaction.duration.us, 95) / 1000,\n    p99_duration_ms = PERCENTILE(transaction.duration.us, 99) / 1000,\n    error_rate_pct = (COUNT(CASE(event.outcome == \"failure\", 1, null)) / COUNT(*)) * 100,\n    avg_cpu_pct = AVG(system.cpu.total.pct)\n  BY hour_bucket, applications.application_id, applications.application_name, applications.sla_target_ms, compute_hosts.hostname, compute_hosts.cpu_architecture\n| SORT hour_bucket ASC\n| CHANGE_POINT avg_duration_ms BY hour_bucket\n| WHERE change_point_detected == true OR p95_duration_ms > applications.sla_target_ms\n| EVAL \n    sla_violation = CASE(p95_duration_ms > applications.sla_target_ms, \"YES\", \"NO\"),\n    severity = CASE(\n      p99_duration_ms > applications.sla_target_ms * 2, \"CRITICAL\",\n      p95_duration_ms > applications.sla_target_ms * 1.5, \"HIGH\",\n      \"MEDIUM\"\n    )\n| SORT hour_bucket DESC\n| LIMIT 100"
+    },
+    {
+      "name": "Unified Kafka and Infrastructure Performance Correlation",
+      "pain_point": "Consolidate Kafka & Hive Metrics into Unified Observability - bring fragmented data into Elasticsearch for real-time correlation",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "EVAL",
+        "WHERE",
+        "FUSE"
+      ],
+      "required_datasets": [
+        "kafka_metrics",
+        "compute_hosts",
+        "infrastructure_metrics"
+      ],
+      "required_fields": {
+        "kafka_metrics": [
+          "@timestamp",
+          "host_id",
+          "topic_name",
+          "consumer_lag",
+          "message_throughput_per_sec",
+          "broker_cpu_pct"
+        ],
+        "compute_hosts": [
+          "host_id",
+          "hostname",
+          "cpu_architecture",
+          "datacenter"
+        ],
+        "infrastructure_metrics": [
+          "@timestamp",
+          "host_id",
+          "system.cpu.total.pct",
+          "system.network.in.bytes",
+          "system.network.out.bytes"
+        ]
+      },
+      "join_chain": [
+        "kafka_metrics -> compute_hosts"
+      ],
+      "description": "Correlate Kafka consumer lag and throughput with underlying infrastructure metrics to identify bottlenecks. Use FUSE to combine Kafka-specific metrics with system-level performance data for holistic view.",
+      "complexity": "medium",
+      "query": "FUSE\n  (\n    FROM kafka_metrics\n    | WHERE @timestamp > NOW() - 24 hours\n    | LOOKUP JOIN compute_hosts ON host_id\n    | STATS \n        avg_consumer_lag = AVG(consumer_lag),\n        max_consumer_lag = MAX(consumer_lag),\n        avg_throughput = AVG(message_throughput_per_sec),\n        avg_broker_cpu = AVG(broker_cpu_pct)\n      BY compute_hosts.hostname, compute_hosts.cpu_architecture, topic_name\n    | EVAL metric_source = \"kafka\"\n  ),\n  (\n    FROM infrastructure_metrics\n    | WHERE @timestamp > NOW() - 24 hours\n    | LOOKUP JOIN compute_hosts ON host_id\n    | STATS \n        avg_system_cpu = AVG(system.cpu.total.pct),\n        avg_network_in_mb = AVG(system.network.in.bytes) / 1024 / 1024,\n        avg_network_out_mb = AVG(system.network.out.bytes) / 1024 / 1024\n      BY compute_hosts.hostname, compute_hosts.cpu_architecture\n    | EVAL metric_source = \"infrastructure\"\n  )"
+    },
+    {
+      "name": "Semantic Search for High-Risk Migration Candidates",
+      "pain_point": "No standardized performance benchmarking framework - ad-hoc testing with inconsistent tools and metrics across teams",
+      "esql_features": [
+        "SEMANTIC",
+        "LOOKUP JOIN",
+        "WHERE",
+        "STATS"
+      ],
+      "required_datasets": [
+        "applications",
+        "infrastructure_metrics",
+        "compute_hosts"
+      ],
+      "required_fields": {
+        "applications": [
+          "application_id",
+          "application_name",
+          "application_characteristics",
+          "criticality_tier",
+          "migration_status"
+        ],
+        "infrastructure_metrics": [
+          "@timestamp",
+          "application_id",
+          "host_id",
+          "transactions_per_second",
+          "system.cpu.total.pct"
+        ],
+        "compute_hosts": [
+          "host_id",
+          "cpu_architecture",
+          "hostname"
+        ]
+      },
+      "join_chain": [
+        "infrastructure_metrics -> applications",
+        "infrastructure_metrics -> compute_hosts"
+      ],
+      "description": "Use semantic search to identify applications with characteristics that make them high-risk for migration (e.g., 'latency-sensitive real-time trading applications with strict SLA requirements'). Enrich with current performance metrics to prioritize testing.",
+      "complexity": "medium",
+      "query": "FROM applications\n| WHERE SEMANTIC(application_characteristics, \"compute-intensive batch processing applications with high CPU utilization that could benefit from AMD EPYC architecture\")\n| WHERE migration_status == \"not_started\" OR migration_status == \"planning\"\n| LOOKUP JOIN infrastructure_metrics ON application_id\n| LOOKUP JOIN compute_hosts ON host_id\n| WHERE infrastructure_metrics.@timestamp > NOW() - 7 days\n| STATS \n    avg_tps = AVG(infrastructure_metrics.transactions_per_second),\n    avg_cpu = AVG(infrastructure_metrics.system.cpu.total.pct),\n    current_arch = VALUES(compute_hosts.cpu_architecture)\n  BY applications.application_id, applications.application_name, applications.criticality_tier\n| SORT avg_cpu DESC\n| LIMIT 25"
+    },
+    {
+      "name": "Cost-Performance TCO Analysis with Parameterized Architecture Comparison",
+      "pain_point": "Cost-Performance Analysis & TCO Modeling - quantify cost savings and calculate ROI for Intel-to-AMD migration",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "EVAL",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "infrastructure_metrics",
+        "compute_hosts",
+        "applications",
+        "cost_allocation"
+      ],
+      "required_fields": {
+        "infrastructure_metrics": [
+          "@timestamp",
+          "host_id",
+          "application_id",
+          "transactions_per_second",
+          "cost_per_hour_usd",
+          "power_consumption_watts"
+        ],
+        "compute_hosts": [
+          "host_id",
+          "cpu_architecture",
+          "hourly_compute_cost_usd",
+          "licensing_cost_annual_usd",
+          "power_consumption_tdp_watts"
+        ],
+        "applications": [
+          "application_id",
+          "application_name",
+          "business_unit",
+          "cost_center"
+        ],
+        "cost_allocation": [
+          "cost_center",
+          "budget_annual_usd",
+          "target_cost_reduction_pct"
+        ]
+      },
+      "join_chain": [
+        "infrastructure_metrics -> compute_hosts",
+        "infrastructure_metrics -> applications",
+        "applications -> cost_allocation"
+      ],
+      "description": "Calculate comprehensive TCO including compute costs, licensing, and power consumption. Compare Intel vs AMD across business units. Parameterized query allows filtering by specific architecture for what-if analysis.",
+      "complexity": "high",
+      "query": "FROM infrastructure_metrics\n| WHERE @timestamp > NOW() - 30 days AND compute_hosts.cpu_architecture == ?target_architecture\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| LOOKUP JOIN cost_allocation ON applications.cost_center\n| STATS \n    total_compute_hours = COUNT(*),\n    avg_tps = AVG(transactions_per_second),\n    total_compute_cost = SUM(cost_per_hour_usd),\n    avg_power_consumption = AVG(power_consumption_watts)\n  BY applications.business_unit, applications.cost_center, compute_hosts.cpu_architecture\n| EVAL \n    annual_compute_cost = total_compute_cost * 12,\n    annual_power_cost = (avg_power_consumption * 24 * 365 * 0.12) / 1000,\n    licensing_cost = 50000,\n    total_tco_annual = annual_compute_cost + annual_power_cost + licensing_cost,\n    cost_per_million_transactions = (total_tco_annual / (avg_tps * 86400 * 365)) * 1000000\n| SORT total_tco_annual DESC"
+    },
+    {
+      "name": "Multi-Dimensional Stress Test Analysis with FORK",
+      "pain_point": "Stress Test & Capacity Planning - determine maximum sustainable load and breaking points under stress conditions",
+      "esql_features": [
+        "FORK",
+        "LOOKUP JOIN",
+        "STATS",
+        "WHERE",
+        "EVAL"
+      ],
+      "required_datasets": [
+        "infrastructure_metrics",
+        "compute_hosts",
+        "applications",
+        "benchmark_definitions"
+      ],
+      "required_fields": {
+        "infrastructure_metrics": [
+          "@timestamp",
+          "host_id",
+          "application_id",
+          "benchmark_id",
+          "transactions_per_second",
+          "system.cpu.total.pct",
+          "system.memory.used.pct",
+          "event.outcome",
+          "test_phase"
+        ],
+        "compute_hosts": [
+          "host_id",
+          "cpu_architecture",
+          "hostname",
+          "cpu_cores"
+        ],
+        "applications": [
+          "application_id",
+          "application_name",
+          "min_tps_required"
+        ],
+        "benchmark_definitions": [
+          "benchmark_id",
+          "benchmark_name",
+          "target_load_level"
+        ]
+      },
+      "join_chain": [
+        "infrastructure_metrics -> compute_hosts",
+        "infrastructure_metrics -> applications",
+        "infrastructure_metrics -> benchmark_definitions"
+      ],
+      "description": "Use FORK to simultaneously analyze multiple dimensions of stress test results: peak performance, error rates under load, and resource saturation points. Identifies maximum sustainable capacity before SLA degradation.",
+      "complexity": "high",
+      "query": "FROM infrastructure_metrics\n| WHERE @timestamp > NOW() - 7 days AND test_phase == \"stress_test\"\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| LOOKUP JOIN benchmark_definitions ON benchmark_id\n| FORK\n  (\n    STATS \n      peak_tps = MAX(transactions_per_second),\n      avg_tps = AVG(transactions_per_second),\n      test_duration_hours = (MAX(@timestamp) - MIN(@timestamp)) / 3600000\n    BY compute_hosts.cpu_architecture, applications.application_name, benchmark_definitions.target_load_level\n    | EVAL analysis_type = \"peak_performance\"\n  ),\n  (\n    STATS \n      error_rate_pct = (COUNT(CASE(event.outcome == \"failure\", 1, null)) / COUNT(*)) * 100,\n      total_errors = COUNT(CASE(event.outcome == \"failure\", 1, null))\n    BY compute_hosts.cpu_architecture, applications.application_name, benchmark_definitions.target_load_level\n    | WHERE error_rate_pct > 0.1\n    | EVAL analysis_type = \"error_analysis\"\n  ),\n  (\n    STATS \n      max_cpu_pct = MAX(system.cpu.total.pct),\n      max_memory_pct = MAX(system.memory.used.pct),\n      saturation_point = AVG(CASE(system.cpu.total.pct > 80, transactions_per_second, null))\n    BY compute_hosts.cpu_architecture, applications.application_name\n    | WHERE max_cpu_pct > 80 OR max_memory_pct > 85\n    | EVAL analysis_type = \"resource_saturation\"\n  )"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "infrastructure_metrics",
+      "to": "compute_hosts",
+      "type": "many-to-one",
+      "join_field": "host_id"
+    },
+    {
+      "from": "infrastructure_metrics",
+      "to": "applications",
+      "type": "many-to-one",
+      "join_field": "application_id"
+    },
+    {
+      "from": "infrastructure_metrics",
+      "to": "benchmark_definitions",
+      "type": "many-to-one",
+      "join_field": "benchmark_id"
+    },
+    {
+      "from": "kafka_metrics",
+      "to": "compute_hosts",
+      "type": "many-to-one",
+      "join_field": "host_id"
+    },
+    {
+      "from": "hive_query_logs",
+      "to": "compute_hosts",
+      "type": "many-to-one",
+      "join_field": "host_id"
+    },
+    {
+      "from": "hive_query_logs",
+      "to": "applications",
+      "type": "many-to-one",
+      "join_field": "application_id"
+    },
+    {
+      "from": "applications",
+      "to": "cost_allocation",
+      "type": "many-to-one",
+      "join_field": "cost_center"
+    }
+  ],
+  "field_mappings": {
+    "infrastructure_metrics.host_id": "compute_hosts.host_id",
+    "infrastructure_metrics.application_id": "applications.application_id",
+    "infrastructure_metrics.benchmark_id": "benchmark_definitions.benchmark_id",
+    "kafka_metrics.host_id": "compute_hosts.host_id",
+    "hive_query_logs.host_id": "compute_hosts.host_id",
+    "hive_query_logs.application_id": "applications.application_id",
+    "applications.cost_center": "cost_allocation.cost_center"
+  }
+}

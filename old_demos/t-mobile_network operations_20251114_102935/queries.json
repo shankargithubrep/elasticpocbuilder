@@ -1,0 +1,146 @@
+[
+  {
+    "name": "Core Network Split-Brain Detection with Multi-MME Context Conflict",
+    "description": "Detects split-brain conditions by identifying clusters where multiple MME hosts are processing signaling for the same IMSI within short time windows, indicating duplicate subscriber context ownership. Uses statistical analysis to identify abnormal multi-MME activity patterns that precede signaling storms.",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_split_brain_detection",
+      "description": "Detects core network split-brain conditions where multiple MME hosts claim ownership of same subscriber contexts. Identifies signaling storms and context conflicts before they cause widespread service disruption.",
+      "tags": [
+        "network",
+        "split-brain",
+        "mme",
+        "critical",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_events\n| EVAL time_bucket = DATE_TRUNC(1 hour, @timestamp)\n| STATS \n    unique_mmes = COUNT_DISTINCT(mme_host),\n    total_events = COUNT(*),\n    unique_subscribers = COUNT_DISTINCT(imsi_hash)\n  BY time_bucket, cluster_id, datacenter\n| WHERE unique_mmes >= 2\n| INLINESTATS \n    avg_mmes = AVG(unique_mmes),\n    p95_mmes = PERCENTILE(unique_mmes, 95)\n  BY cluster_id\n| EVAL split_brain_severity = CASE(\n    unique_mmes >= 4, \"CRITICAL\",\n    unique_mmes >= 3, \"HIGH\",\n    \"MEDIUM\"\n  )\n| KEEP cluster_id, split_brain_severity, unique_mmes, unique_subscribers, total_events, time_bucket, datacenter\n| SORT unique_mmes DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "Split-brain conditions where multiple MMEs claim ownership of same subscriber contexts cause signaling storms and session establishment failures, overwhelming diameter routing agents and HSS capacity. Current tools cannot detect duplicate transaction IDs or abnormal signaling patterns indicating split-brain scenarios."
+  },
+  {
+    "name": "HSS Authentication Transaction Failure Analysis with Database Node Correlation",
+    "description": "Analyzes HSS authentication transaction success rates (AIR command code) correlated with specific HSS nodes to identify database replication issues or node-specific failures. Uses z-score analysis to detect abnormal response times indicating database query performance degradation.",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_hss_auth_analysis",
+      "description": "Analyzes HSS authentication transaction failures and correlates with specific database nodes. Identifies replication lag, corruption, and node-specific performance issues affecting subscriber authentication.",
+      "tags": [
+        "hss",
+        "authentication",
+        "database",
+        "performance",
+        "esql"
+      ]
+    },
+    "query": "FROM diameter_transactions\n| WHERE command_code == \"Authentication-Information\"\n| EVAL time_bucket = DATE_TRUNC(1 hour, @timestamp)\n| STATS \n    auth_attempts = COUNT(*),\n    auth_failures = COUNT(*) WHERE transaction_success == false,\n    avg_response_ms = AVG(response_time_ms),\n    p95_response_ms = PERCENTILE(response_time_ms, 95)\n  BY time_bucket, hss_node\n| EVAL success_rate_pct = ((auth_attempts - auth_failures) / auth_attempts) * 100\n| INLINESTATS \n    avg_success = AVG(success_rate_pct),\n    stddev_success = STD_DEV(success_rate_pct),\n    avg_latency = AVG(avg_response_ms),\n    stddev_latency = STD_DEV(avg_response_ms)\n| EVAL success_z_score = (success_rate_pct - avg_success) / COALESCE(stddev_success, 1)\n| EVAL latency_z_score = (avg_response_ms - avg_latency) / COALESCE(stddev_latency, 1)\n| WHERE success_rate_pct < 98 OR latency_z_score > 2.5\n| EVAL health_status = CASE(\n    success_rate_pct < 95, \"CRITICAL\",\n    success_rate_pct < 98, \"DEGRADED\",\n    \"WARNING\"\n  )\n| KEEP hss_node, health_status, success_rate_pct, auth_failures, p95_response_ms, time_bucket\n| SORT success_rate_pct ASC\n| LIMIT 25",
+    "query_type": "scripted",
+    "pain_point": "HSS database replication lag and corruption cause authentication failures affecting subscriber attach procedures, but current monitoring only tracks database-level metrics without correlating actual authentication transaction success rates with specific HSS node performance."
+  },
+  {
+    "name": "Cell Handoff Cascade Failure Pattern Detection with Geographic Clustering",
+    "description": "Identifies cascade failure patterns where a single problematic cell causes handoff failures to multiple neighboring cells. Analyzes handoff success rates for cell pairs and detects when 3+ target cells sharing the same source cell show degraded handoff performance, indicating a source cell issue.",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_handoff_cascade",
+      "description": "Identifies cell handoff cascade failures where one problematic cell causes failures across multiple neighbors. Detects widespread dropped calls and data session interruptions from cascading cell tower issues.",
+      "tags": [
+        "handoff",
+        "cell-tower",
+        "cascade",
+        "radio",
+        "esql"
+      ]
+    },
+    "query": "FROM handoff_events\n| EVAL time_bucket = DATE_TRUNC(1 hour, @timestamp)\n| STATS \n    total_handoffs = COUNT(*),\n    failed_handoffs = COUNT(*) WHERE handoff_result == \"failure\",\n    unique_target_cells = COUNT_DISTINCT(target_cell_id)\n  BY time_bucket, source_cell_id\n| EVAL handoff_success_rate = ((total_handoffs - failed_handoffs) / total_handoffs) * 100\n| WHERE handoff_success_rate < 90 AND unique_target_cells >= 3\n| EVAL cascade_severity = CASE(\n    handoff_success_rate < 70, \"CRITICAL\",\n    handoff_success_rate < 85, \"HIGH\",\n    \"MEDIUM\"\n  )\n| KEEP source_cell_id, cascade_severity, handoff_success_rate, failed_handoffs, unique_target_cells, time_bucket\n| SORT failed_handoffs DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "Cell tower handoff failures cascade across multiple adjacent cells causing widespread dropped calls and data session interruptions, but current vendor-specific monitoring systems operate in silos making it impossible to identify cascading handoff failures across multiple cell sites."
+  },
+  {
+    "name": "Proactive MME Attach Procedure Degradation Detection with Multi-Dimensional Analysis",
+    "description": "Detects attach procedure degradation using statistical z-score analysis across MME hosts and cells. Identifies abnormal failure patterns 10-15 minutes before customer impact by comparing current attach success rates against baseline patterns, with drill-down to specific reject causes and affected cells.",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_attach_degradation",
+      "description": "Detects MME attach procedure degradation 10-15 minutes before help desk is overwhelmed. Uses statistical analysis to identify abnormal failure patterns and prevent customer-facing outages.",
+      "tags": [
+        "mme",
+        "attach",
+        "proactive",
+        "degradation",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_events\n| WHERE procedure_type == \"Attach\"\n| EVAL time_bucket = DATE_TRUNC(15 minutes, @timestamp)\n| STATS \n    attach_attempts = COUNT(*),\n    attach_failures = COUNT(*) WHERE procedure_result == \"failure\",\n    unique_cells = COUNT_DISTINCT(cell_id)\n  BY time_bucket, mme_host\n| EVAL success_rate_pct = ((attach_attempts - attach_failures) / attach_attempts) * 100\n| INLINESTATS \n    avg_success = AVG(success_rate_pct),\n    stddev_success = STD_DEV(success_rate_pct),\n    p95_success = PERCENTILE(success_rate_pct, 95)\n| EVAL z_score = (success_rate_pct - avg_success) / COALESCE(stddev_success, 1)\n| WHERE success_rate_pct < 95 OR z_score < -2.5\n| EVAL alert_severity = CASE(\n    success_rate_pct < 90, \"CRITICAL\",\n    success_rate_pct < 95, \"HIGH\",\n    \"MEDIUM\"\n  )\n| KEEP mme_host, alert_severity, success_rate_pct, attach_failures, unique_cells, time_bucket, z_score\n| SORT success_rate_pct ASC\n| LIMIT 25",
+    "query_type": "scripted",
+    "pain_point": "Network Operations Center relies on customer complaints and help desk ticket volume to identify network degradation, resulting in MTTD exceeding 15-20 minutes. Need to detect attach procedure failures 10-15 minutes before help desk is overwhelmed by identifying abnormal signaling patterns."
+  },
+  {
+    "name": "Subscriber Service Request Failure Root Cause Analysis with Device and Cell Correlation",
+    "description": "Performs root cause analysis of service request failures by correlating failure patterns with cell capacity metrics and procedure latency. Identifies dominant failure causes (paging failure, RRC timeout, MME reject) and pinpoints capacity-constrained cells or technology-specific issues requiring targeted optimization.",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_service_request_rca",
+      "description": "Performs root cause analysis of UE-initiated service request failures. Identifies whether issues stem from radio problems, core network congestion, or device issues to guide optimization efforts.",
+      "tags": [
+        "service-request",
+        "root-cause",
+        "optimization",
+        "ue",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_events\n| WHERE procedure_type == \"Service Request\"\n| EVAL time_bucket = DATE_TRUNC(1 hour, @timestamp)\n| STATS \n    total_requests = COUNT(*),\n    failed_requests = COUNT(*) WHERE procedure_result == \"failure\",\n    avg_latency_ms = AVG(procedure_latency_ms),\n    p95_latency_ms = PERCENTILE(procedure_latency_ms, 95)\n  BY time_bucket, cell_id, reject_cause\n| EVAL success_rate_pct = ((total_requests - failed_requests) / total_requests) * 100\n| WHERE success_rate_pct < 95\n| KEEP cell_id, success_rate_pct, failed_requests, reject_cause, p95_latency_ms, time_bucket\n| SORT failed_requests DESC\n| LIMIT 30",
+    "query_type": "scripted",
+    "pain_point": "UE-initiated service request failures cause poor user experience but root cause identification is difficult - could be radio issues, core network congestion, or device problems. Need deep-dive analysis to optimize network resource allocation and identify problematic device models or congested cells."
+  },
+  {
+    "name": "MME Software Bug and Resource Exhaustion Detection",
+    "description": "Identifies MME hosts experiencing abnormal procedure failure rates or latency spikes that indicate software bugs or resource exhaustion. Correlates failure patterns with specific procedure types and MME versions to pinpoint software defects requiring patches or capacity upgrades.",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_mme_health",
+      "description": "Identifies MME software bugs and resource exhaustion by analyzing procedure failure rates and latency patterns. Detects issues before they cause widespread service impact.",
+      "tags": [
+        "mme",
+        "software",
+        "capacity",
+        "health",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_events\n| EVAL time_bucket = DATE_TRUNC(15 minutes, @timestamp)\n| STATS \n    total_procedures = COUNT(*),\n    failures = COUNT(*) WHERE procedure_result IN (\"failure\", \"timeout\"),\n    avg_latency = AVG(procedure_latency_ms),\n    p95_latency = PERCENTILE(procedure_latency_ms, 95)\n  BY time_bucket, mme_host, procedure_type\n| EVAL failure_rate_pct = (TO_DOUBLE(failures) * 100.0) / total_procedures\n| INLINESTATS \n    avg_failure_rate = AVG(failure_rate_pct),\n    stddev_failure_rate = STD_DEV(failure_rate_pct)\n  BY mme_host\n| EVAL z_score = (failure_rate_pct - avg_failure_rate) / COALESCE(stddev_failure_rate, 1)\n| WHERE failure_rate_pct > 5 OR z_score > 3.0 OR p95_latency > 500\n| EVAL health_status = CASE(\n    failure_rate_pct > 10 OR p95_latency > 1000, \"CRITICAL\",\n    failure_rate_pct > 5 OR p95_latency > 500, \"WARNING\",\n    \"DEGRADED\"\n  )\n| KEEP mme_host, procedure_type, health_status, failure_rate_pct, failures, p95_latency, time_bucket\n| SORT failure_rate_pct DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "pain_point": "MME software bugs and resource exhaustion cause unpredictable service degradation but are difficult to detect proactively. Need to identify abnormal failure patterns and latency spikes that indicate software defects or capacity issues before widespread customer impact."
+  },
+  {
+    "name": "IMSI and Cell ID Cardinality Anomaly Detection",
+    "description": "Tracks unique IMSI and cell ID cardinality changes over time to detect mass authentication failures, cell tower outages, or network partitioning. Sudden drops in unique subscriber counts or cell activity indicate systemic issues requiring immediate investigation.",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_cardinality_anomaly",
+      "description": "Tracks unique IMSI and cell ID cardinality changes over time. Detects mass authentication failures, cell tower outages, or network partitioning by identifying sudden drops in subscriber or cell activity.",
+      "tags": [
+        "cardinality",
+        "anomaly",
+        "imsi",
+        "cell",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_events\n| EVAL time_bucket = DATE_TRUNC(15 minutes, @timestamp)\n| STATS \n    unique_subscribers = COUNT_DISTINCT(imsi_hash),\n    unique_cells = COUNT_DISTINCT(cell_id),\n    total_events = COUNT(*)\n  BY time_bucket, datacenter\n| INLINESTATS \n    avg_subscribers = AVG(unique_subscribers),\n    stddev_subscribers = STD_DEV(unique_subscribers),\n    avg_cells = AVG(unique_cells),\n    stddev_cells = STD_DEV(unique_cells)\n  BY datacenter\n| EVAL subscriber_z_score = (unique_subscribers - avg_subscribers) / COALESCE(stddev_subscribers, 1)\n| EVAL cell_z_score = (unique_cells - avg_cells) / COALESCE(stddev_cells, 1)\n| WHERE subscriber_z_score < -2.0 OR cell_z_score < -2.0\n| EVAL anomaly_type = CASE(\n    subscriber_z_score < -2.0 AND cell_z_score < -2.0, \"MASS_OUTAGE\",\n    subscriber_z_score < -2.0, \"AUTHENTICATION_FAILURE\",\n    \"CELL_OUTAGE\"\n  )\n| KEEP datacenter, anomaly_type, unique_subscribers, unique_cells, total_events, time_bucket, subscriber_z_score, cell_z_score\n| SORT subscriber_z_score ASC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "Need to detect network issues before help desk is overwhelmed. Tracking unique IMSI and cell ID cardinality changes helps identify mass authentication failures, cell tower outages, or network partitioning early."
+  },
+  {
+    "name": "Signaling Storm Detection Across Multiple MME Hosts",
+    "description": "Detects signaling storms by identifying sustained spikes in signaling event rates across multiple MME hosts. Uses statistical analysis to differentiate normal traffic bursts from pathological signaling storms that can overwhelm core network capacity.",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_signaling_storm",
+      "description": "Detects signaling storms by identifying sustained spikes in event rates across multiple MME hosts. Differentiates normal traffic bursts from pathological storms that overwhelm core network capacity.",
+      "tags": [
+        "signaling",
+        "storm",
+        "capacity",
+        "mme",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_events\n| EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)\n| STATS \n    event_count = COUNT(*),\n    unique_mmes = COUNT_DISTINCT(mme_host)\n  BY time_bucket, cluster_id\n| INLINESTATS \n    avg_events = AVG(event_count),\n    stddev_events = STD_DEV(event_count),\n    p95_events = PERCENTILE(event_count, 95)\n  BY cluster_id\n| EVAL z_score = (event_count - avg_events) / COALESCE(stddev_events, 1)\n| WHERE z_score > 3.0 AND unique_mmes >= 2\n| EVAL storm_severity = CASE(\n    z_score > 5.0, \"CRITICAL\",\n    z_score > 4.0, \"HIGH\",\n    \"MEDIUM\"\n  )\n| KEEP cluster_id, storm_severity, event_count, unique_mmes, time_bucket, z_score, p95_events\n| SORT z_score DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "Core network split-brain and signaling storms overwhelm diameter routing agents and HSS capacity. Need to detect sustained spike patterns across multiple lag periods before system-wide failure."
+  }
+]

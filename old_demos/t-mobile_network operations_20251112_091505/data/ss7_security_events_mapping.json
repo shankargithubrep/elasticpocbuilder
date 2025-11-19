@@ -1,0 +1,62 @@
+{
+  "mappings": {
+    "properties": {
+      "@timestamp": {
+        "type": "date"
+      },
+      "event_id": {
+        "type": "keyword"
+      },
+      "imsi": {
+        "type": "keyword"
+      },
+      "source_gt": {
+        "type": "keyword"
+      },
+      "destination_gt": {
+        "type": "keyword"
+      },
+      "message_type": {
+        "type": "keyword"
+      },
+      "attack_signature": {
+        "type": "keyword"
+      },
+      "threat_level": {
+        "type": "keyword"
+      },
+      "blocked": {
+        "type": "boolean"
+      },
+      "originating_network": {
+        "type": "keyword"
+      },
+      "sccp_called_party": {
+        "type": "keyword"
+      },
+      "sccp_calling_party": {
+        "type": "keyword"
+      },
+      "map_operation": {
+        "type": "keyword"
+      },
+      "event_description": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      }
+    }
+  },
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "index": {
+      "mode": "time_series",
+      "routing_path": ["imsi"]
+    }
+  }
+}

@@ -1,0 +1,201 @@
+product_id,product_name,product_category,product_subcategory,unit_price,brand,product_description
+PROD000001,HomeComfort Accessories Pro,Clothing,Accessories,12.46,BeautyGlow,Luxury Accessories by PlayFun for discerning customers seeking excellence
+PROD000002,PlayFun Educational Toys Standard,Toys & Games,Educational Toys,5.13,ReadWell,"Premium Educational Toys designed for everyday use, brought to you by VitalCare"
+PROD000003,VitalCare Parts Plus,Automotive,Parts,51.49,ValueBrand,High-quality Parts from StyleMax with excellent durability and performance
+PROD000004,TechPro Furniture Standard,Home & Garden,Furniture,29.44,ActiveLife,High-quality Furniture from TechPro with excellent durability and performance
+PROD000005,ActiveLife Dolls Plus,Toys & Games,Dolls,49.34,ReadWell,High-quality Dolls from ActiveLife with excellent durability and performance
+PROD000006,FreshChoice Fragrances Standard,Beauty & Personal Care,Fragrances,76.25,HomeComfort,Affordable Fragrances from ValueBrand with great value and reliability
+PROD000007,PlayFun Vitamins Premium,Health & Wellness,Vitamins,237.81,TechPro,Luxury Vitamins by FreshChoice for discerning customers seeking excellence
+PROD000008,AutoExpert Non-Fiction Plus,Books & Media,Non-Fiction,19.51,BeautyGlow,VitalCare's bestselling Non-Fiction featuring innovative design and superior quality
+PROD000009,TechPro Athletic Wear Plus,Sports & Outdoors,Athletic Wear,17.08,TechPro,Luxury Athletic Wear by TechPro for discerning customers seeking excellence
+PROD000010,ValueBrand Fitness Trackers Premium,Health & Wellness,Fitness Trackers,44.87,AutoExpert,Affordable Fitness Trackers from HomeComfort with great value and reliability
+PROD000011,ValueBrand Pantry Staples Elite,Food & Beverages,Pantry Staples,9.45,AutoExpert,"Premium Pantry Staples designed for everyday use, brought to you by ValueBrand"
+PROD000012,ValueBrand Skincare Standard,Beauty & Personal Care,Skincare,84.77,AutoExpert,VitalCare's bestselling Skincare featuring innovative design and superior quality
+PROD000013,FreshChoice Bikes Pro,Sports & Outdoors,Bikes,8.65,StyleMax,Affordable Bikes from ReadWell with great value and reliability
+PROD000014,PlayFun Makeup Standard,Beauty & Personal Care,Makeup,86.08,FreshChoice,Luxury Makeup by BeautyGlow for discerning customers seeking excellence
+PROD000015,ValueBrand Skincare Plus,Beauty & Personal Care,Skincare,16.78,VitalCare,"Premium Skincare designed for everyday use, brought to you by StyleMax"
+PROD000016,ReadWell Music Pro,Books & Media,Music,23.2,VitalCare,Luxury Music by StyleMax for discerning customers seeking excellence
+PROD000017,AutoExpert Bath & Body Pro,Beauty & Personal Care,Bath & Body,5.22,StyleMax,Affordable Bath & Body from PlayFun with great value and reliability
+PROD000018,StyleMax Decor Elite,Home & Garden,Decor,30.1,PlayFun,High-quality Decor from ValueBrand with excellent durability and performance
+PROD000019,HomeComfort Puzzles Standard,Toys & Games,Puzzles,89.15,ReadWell,FreshChoice's bestselling Puzzles featuring innovative design and superior quality
+PROD000020,ActiveLife Non-Fiction Elite,Books & Media,Non-Fiction,14.36,AutoExpert,StyleMax's bestselling Non-Fiction featuring innovative design and superior quality
+PROD000021,ReadWell Non-Fiction Premium,Books & Media,Non-Fiction,80.65,TechPro,Luxury Non-Fiction by FreshChoice for discerning customers seeking excellence
+PROD000022,ReadWell Headphones Premium,Electronics,Headphones,11.88,AutoExpert,"Premium Headphones designed for everyday use, brought to you by FreshChoice"
+PROD000023,ValueBrand Tools Premium,Automotive,Tools,62.63,FreshChoice,"Premium Tools designed for everyday use, brought to you by VitalCare"
+PROD000024,ReadWell Electronics Premium,Automotive,Electronics,116.48,ActiveLife,High-quality Electronics from TechPro with excellent durability and performance
+PROD000025,BeautyGlow Frozen Foods Standard,Food & Beverages,Frozen Foods,24.91,PremiumSelect,ValueBrand's bestselling Frozen Foods featuring innovative design and superior quality
+PROD000026,ReadWell Bedding Premium,Home & Garden,Bedding,59.69,HomeComfort,Affordable Bedding from BeautyGlow with great value and reliability
+PROD000027,PlayFun Beverages Pro,Food & Beverages,Beverages,61.52,BeautyGlow,High-quality Beverages from ValueBrand with excellent durability and performance
+PROD000028,HomeComfort Organic Plus,Food & Beverages,Organic,13.27,ReadWell,AutoExpert's bestselling Organic featuring innovative design and superior quality
+PROD000029,PlayFun Fiction Premium,Books & Media,Fiction,37.68,TechPro,"Premium Fiction designed for everyday use, brought to you by TechPro"
+PROD000030,PlayFun Bath & Body Plus,Beauty & Personal Care,Bath & Body,42.85,StyleMax,Luxury Bath & Body by AutoExpert for discerning customers seeking excellence
+PROD000031,TechPro Camping Gear Elite,Sports & Outdoors,Camping Gear,36.03,ReadWell,Luxury Camping Gear by FreshChoice for discerning customers seeking excellence
+PROD000032,PremiumSelect Parts Standard,Automotive,Parts,37.27,FreshChoice,High-quality Parts from TechPro with excellent durability and performance
+PROD000033,ActiveLife Laptops Elite,Electronics,Laptops,11.26,AutoExpert,Affordable Laptops from VitalCare with great value and reliability
+PROD000034,AutoExpert Garden Tools Elite,Home & Garden,Garden Tools,6.31,PlayFun,PlayFun's bestselling Garden Tools featuring innovative design and superior quality
+PROD000035,BeautyGlow Team Sports Pro,Sports & Outdoors,Team Sports,14.15,StyleMax,High-quality Team Sports from PlayFun with excellent durability and performance
+PROD000036,PlayFun Music Pro,Books & Media,Music,8.94,HomeComfort,Luxury Music by ValueBrand for discerning customers seeking excellence
+PROD000037,ValueBrand Beverages Elite,Food & Beverages,Beverages,17.14,ActiveLife,Affordable Beverages from StyleMax with great value and reliability
+PROD000038,VitalCare Organic Standard,Food & Beverages,Organic,15.11,PremiumSelect,Luxury Organic by PremiumSelect for discerning customers seeking excellence
+PROD000039,ReadWell Men's Apparel Elite,Clothing,Men's Apparel,185.48,TechPro,"Premium Men's Apparel designed for everyday use, brought to you by FreshChoice"
+PROD000040,PremiumSelect Accessories Plus,Clothing,Accessories,121.88,AutoExpert,Affordable Accessories from FreshChoice with great value and reliability
+PROD000041,TechPro Movies Standard,Books & Media,Movies,11.14,VitalCare,High-quality Movies from HomeComfort with excellent durability and performance
+PROD000042,PremiumSelect Camping Gear Plus,Sports & Outdoors,Camping Gear,102.63,BeautyGlow,Affordable Camping Gear from ActiveLife with great value and reliability
+PROD000043,ActiveLife Action Figures Plus,Toys & Games,Action Figures,35.67,ReadWell,StyleMax's bestselling Action Figures featuring innovative design and superior quality
+PROD000044,ReadWell Tools Plus,Automotive,Tools,36.9,ValueBrand,Luxury Tools by ReadWell for discerning customers seeking excellence
+PROD000045,PlayFun Kids' Clothing Premium,Clothing,Kids' Clothing,25.76,AutoExpert,AutoExpert's bestselling Kids' Clothing featuring innovative design and superior quality
+PROD000046,BeautyGlow Bedding Pro,Home & Garden,Bedding,49.59,ValueBrand,Affordable Bedding from AutoExpert with great value and reliability
+PROD000047,HomeComfort Women's Apparel Standard,Clothing,Women's Apparel,45.92,PremiumSelect,Luxury Women's Apparel by VitalCare for discerning customers seeking excellence
+PROD000048,PremiumSelect Movies Pro,Books & Media,Movies,26.2,BeautyGlow,Affordable Movies from BeautyGlow with great value and reliability
+PROD000049,StyleMax Smartphones Premium,Electronics,Smartphones,80.26,TechPro,High-quality Smartphones from TechPro with excellent durability and performance
+PROD000050,PremiumSelect Tablets Plus,Electronics,Tablets,24.27,PlayFun,PlayFun's bestselling Tablets featuring innovative design and superior quality
+PROD000051,StyleMax Frozen Foods Plus,Food & Beverages,Frozen Foods,105.61,PremiumSelect,BeautyGlow's bestselling Frozen Foods featuring innovative design and superior quality
+PROD000052,ActiveLife Dolls Premium,Toys & Games,Dolls,9.34,ValueBrand,Affordable Dolls from BeautyGlow with great value and reliability
+PROD000053,VitalCare Furniture Standard,Home & Garden,Furniture,7.11,VitalCare,Luxury Furniture by BeautyGlow for discerning customers seeking excellence
+PROD000054,VitalCare Hair Care Premium,Beauty & Personal Care,Hair Care,93.12,AutoExpert,Luxury Hair Care by AutoExpert for discerning customers seeking excellence
+PROD000055,VitalCare Movies Elite,Books & Media,Movies,324.81,HomeComfort,Luxury Movies by HomeComfort for discerning customers seeking excellence
+PROD000056,BeautyGlow Skincare Standard,Beauty & Personal Care,Skincare,9.31,FreshChoice,Affordable Skincare from HomeComfort with great value and reliability
+PROD000057,StyleMax Medical Supplies Plus,Health & Wellness,Medical Supplies,11.46,ActiveLife,High-quality Medical Supplies from AutoExpert with excellent durability and performance
+PROD000058,BeautyGlow Bedding Pro,Home & Garden,Bedding,43.39,PlayFun,Affordable Bedding from AutoExpert with great value and reliability
+PROD000059,PremiumSelect Smartphones Elite,Electronics,Smartphones,20.28,TechPro,ActiveLife's bestselling Smartphones featuring innovative design and superior quality
+PROD000060,BeautyGlow Puzzles Pro,Toys & Games,Puzzles,122.2,BeautyGlow,Affordable Puzzles from BeautyGlow with great value and reliability
+PROD000061,PlayFun Decor Standard,Home & Garden,Decor,23.0,BeautyGlow,Luxury Decor by StyleMax for discerning customers seeking excellence
+PROD000062,VitalCare Action Figures Elite,Toys & Games,Action Figures,23.18,StyleMax,ActiveLife's bestselling Action Figures featuring innovative design and superior quality
+PROD000063,PremiumSelect Dolls Standard,Toys & Games,Dolls,59.92,PremiumSelect,High-quality Dolls from PremiumSelect with excellent durability and performance
+PROD000064,BeautyGlow Hair Care Standard,Beauty & Personal Care,Hair Care,41.38,AutoExpert,Luxury Hair Care by HomeComfort for discerning customers seeking excellence
+PROD000065,StyleMax Snacks Plus,Food & Beverages,Snacks,57.46,PlayFun,High-quality Snacks from BeautyGlow with excellent durability and performance
+PROD000066,ActiveLife Smartphones Plus,Electronics,Smartphones,18.41,ActiveLife,High-quality Smartphones from HomeComfort with excellent durability and performance
+PROD000067,PlayFun Non-Fiction Elite,Books & Media,Non-Fiction,15.01,AutoExpert,StyleMax's bestselling Non-Fiction featuring innovative design and superior quality
+PROD000068,TechPro Skincare Standard,Beauty & Personal Care,Skincare,40.57,FreshChoice,Affordable Skincare from TechPro with great value and reliability
+PROD000069,PlayFun Kids' Clothing Plus,Clothing,Kids' Clothing,83.11,AutoExpert,Affordable Kids' Clothing from FreshChoice with great value and reliability
+PROD000070,FreshChoice Tablets Plus,Electronics,Tablets,12.13,ReadWell,Luxury Tablets by ValueBrand for discerning customers seeking excellence
+PROD000071,BeautyGlow Non-Fiction Standard,Books & Media,Non-Fiction,39.04,BeautyGlow,High-quality Non-Fiction from ActiveLife with excellent durability and performance
+PROD000072,ActiveLife Laptops Premium,Electronics,Laptops,39.63,ValueBrand,Affordable Laptops from StyleMax with great value and reliability
+PROD000073,BeautyGlow Tools Standard,Automotive,Tools,75.59,ReadWell,Affordable Tools from TechPro with great value and reliability
+PROD000074,FreshChoice Supplements Elite,Health & Wellness,Supplements,258.22,ActiveLife,TechPro's bestselling Supplements featuring innovative design and superior quality
+PROD000075,HomeComfort Skincare Standard,Beauty & Personal Care,Skincare,20.39,PlayFun,High-quality Skincare from HomeComfort with excellent durability and performance
+PROD000076,TechPro Dolls Plus,Toys & Games,Dolls,86.59,PremiumSelect,"Premium Dolls designed for everyday use, brought to you by ReadWell"
+PROD000077,ActiveLife Laptops Plus,Electronics,Laptops,66.57,BeautyGlow,TechPro's bestselling Laptops featuring innovative design and superior quality
+PROD000078,StyleMax Bedding Standard,Home & Garden,Bedding,147.82,ReadWell,"Premium Bedding designed for everyday use, brought to you by AutoExpert"
+PROD000079,ReadWell Garden Tools Pro,Home & Garden,Garden Tools,47.26,HomeComfort,"Premium Garden Tools designed for everyday use, brought to you by BeautyGlow"
+PROD000080,StyleMax Accessories Premium,Clothing,Accessories,5.95,ValueBrand,High-quality Accessories from StyleMax with excellent durability and performance
+PROD000081,BeautyGlow Parts Plus,Automotive,Parts,110.97,HomeComfort,Luxury Parts by AutoExpert for discerning customers seeking excellence
+PROD000082,FreshChoice Educational Toys Premium,Toys & Games,Educational Toys,29.46,PremiumSelect,Affordable Educational Toys from ReadWell with great value and reliability
+PROD000083,FreshChoice Hair Care Elite,Beauty & Personal Care,Hair Care,29.03,ValueBrand,Luxury Hair Care by ValueBrand for discerning customers seeking excellence
+PROD000084,HomeComfort Smart Home Premium,Electronics,Smart Home,38.67,TechPro,High-quality Smart Home from VitalCare with excellent durability and performance
+PROD000085,TechPro Smartphones Pro,Electronics,Smartphones,15.48,TechPro,High-quality Smartphones from AutoExpert with excellent durability and performance
+PROD000086,FreshChoice Electronics Elite,Automotive,Electronics,11.37,StyleMax,High-quality Electronics from BeautyGlow with excellent durability and performance
+PROD000087,PremiumSelect Maintenance Standard,Automotive,Maintenance,18.95,PremiumSelect,BeautyGlow's bestselling Maintenance featuring innovative design and superior quality
+PROD000088,AutoExpert Non-Fiction Standard,Books & Media,Non-Fiction,19.44,PlayFun,High-quality Non-Fiction from PremiumSelect with excellent durability and performance
+PROD000089,ActiveLife Non-Fiction Pro,Books & Media,Non-Fiction,19.46,VitalCare,"Premium Non-Fiction designed for everyday use, brought to you by PremiumSelect"
+PROD000090,ReadWell Electronics Pro,Automotive,Electronics,45.94,StyleMax,Affordable Electronics from FreshChoice with great value and reliability
+PROD000091,BeautyGlow Wellness Elite,Health & Wellness,Wellness,14.58,StyleMax,"Premium Wellness designed for everyday use, brought to you by PremiumSelect"
+PROD000092,AutoExpert Accessories Standard,Clothing,Accessories,47.03,HomeComfort,StyleMax's bestselling Accessories featuring innovative design and superior quality
+PROD000093,StyleMax Smartphones Standard,Electronics,Smartphones,151.59,PremiumSelect,Affordable Smartphones from ActiveLife with great value and reliability
+PROD000094,PremiumSelect Garden Tools Premium,Home & Garden,Garden Tools,103.19,PlayFun,High-quality Garden Tools from TechPro with excellent durability and performance
+PROD000095,HomeComfort Hair Care Standard,Beauty & Personal Care,Hair Care,12.69,PremiumSelect,"Premium Hair Care designed for everyday use, brought to you by ReadWell"
+PROD000096,VitalCare Wellness Plus,Health & Wellness,Wellness,146.99,StyleMax,Luxury Wellness by PremiumSelect for discerning customers seeking excellence
+PROD000097,PremiumSelect Fitness Equipment Premium,Sports & Outdoors,Fitness Equipment,4.81,AutoExpert,High-quality Fitness Equipment from BeautyGlow with excellent durability and performance
+PROD000098,TechPro Dolls Premium,Toys & Games,Dolls,68.53,HomeComfort,Affordable Dolls from HomeComfort with great value and reliability
+PROD000099,VitalCare Magazines Pro,Books & Media,Magazines,101.73,TechPro,"Premium Magazines designed for everyday use, brought to you by StyleMax"
+PROD000100,TechPro Accessories Plus,Clothing,Accessories,150.51,StyleMax,PlayFun's bestselling Accessories featuring innovative design and superior quality
+PROD000101,StyleMax Electronics Plus,Automotive,Electronics,67.67,PlayFun,Luxury Electronics by PremiumSelect for discerning customers seeking excellence
+PROD000102,ActiveLife Bath & Body Premium,Beauty & Personal Care,Bath & Body,66.64,ReadWell,Affordable Bath & Body from ValueBrand with great value and reliability
+PROD000103,HomeComfort Beverages Elite,Food & Beverages,Beverages,7.75,VitalCare,Luxury Beverages by FreshChoice for discerning customers seeking excellence
+PROD000104,StyleMax Fiction Elite,Books & Media,Fiction,33.76,HomeComfort,VitalCare's bestselling Fiction featuring innovative design and superior quality
+PROD000105,HomeComfort Garden Tools Premium,Home & Garden,Garden Tools,44.32,ValueBrand,High-quality Garden Tools from ReadWell with excellent durability and performance
+PROD000106,ValueBrand Makeup Elite,Beauty & Personal Care,Makeup,48.14,FreshChoice,AutoExpert's bestselling Makeup featuring innovative design and superior quality
+PROD000107,AutoExpert Garden Tools Pro,Home & Garden,Garden Tools,31.17,HomeComfort,FreshChoice's bestselling Garden Tools featuring innovative design and superior quality
+PROD000108,TechPro Organic Plus,Food & Beverages,Organic,147.3,ReadWell,Affordable Organic from StyleMax with great value and reliability
+PROD000109,ReadWell Puzzles Pro,Toys & Games,Puzzles,18.85,FreshChoice,Luxury Puzzles by BeautyGlow for discerning customers seeking excellence
+PROD000110,TechPro Pantry Staples Elite,Food & Beverages,Pantry Staples,51.63,PlayFun,Affordable Pantry Staples from TechPro with great value and reliability
+PROD000111,ValueBrand Organic Plus,Food & Beverages,Organic,33.36,PremiumSelect,High-quality Organic from StyleMax with excellent durability and performance
+PROD000112,StyleMax Team Sports Elite,Sports & Outdoors,Team Sports,21.37,AutoExpert,ActiveLife's bestselling Team Sports featuring innovative design and superior quality
+PROD000113,VitalCare Car Accessories Premium,Automotive,Car Accessories,9.42,TechPro,ValueBrand's bestselling Car Accessories featuring innovative design and superior quality
+PROD000114,ValueBrand Women's Apparel Standard,Clothing,Women's Apparel,474.21,AutoExpert,PremiumSelect's bestselling Women's Apparel featuring innovative design and superior quality
+PROD000115,VitalCare Women's Apparel Plus,Clothing,Women's Apparel,47.98,ActiveLife,ActiveLife's bestselling Women's Apparel featuring innovative design and superior quality
+PROD000116,PremiumSelect Furniture Elite,Home & Garden,Furniture,4.65,ReadWell,ActiveLife's bestselling Furniture featuring innovative design and superior quality
+PROD000117,PremiumSelect Laptops Standard,Electronics,Laptops,22.35,ValueBrand,AutoExpert's bestselling Laptops featuring innovative design and superior quality
+PROD000118,AutoExpert Smart Home Elite,Electronics,Smart Home,20.49,ReadWell,"Premium Smart Home designed for everyday use, brought to you by FreshChoice"
+PROD000119,AutoExpert Men's Apparel Standard,Clothing,Men's Apparel,22.39,ValueBrand,ActiveLife's bestselling Men's Apparel featuring innovative design and superior quality
+PROD000120,BeautyGlow Athletic Wear Pro,Sports & Outdoors,Athletic Wear,5.18,TechPro,High-quality Athletic Wear from FreshChoice with excellent durability and performance
+PROD000121,ValueBrand Accessories Elite,Clothing,Accessories,4.88,AutoExpert,ReadWell's bestselling Accessories featuring innovative design and superior quality
+PROD000122,AutoExpert Garden Tools Standard,Home & Garden,Garden Tools,128.15,TechPro,High-quality Garden Tools from ValueBrand with excellent durability and performance
+PROD000123,FreshChoice Movies Standard,Books & Media,Movies,34.92,PremiumSelect,Luxury Movies by TechPro for discerning customers seeking excellence
+PROD000124,ActiveLife Wellness Plus,Health & Wellness,Wellness,50.01,StyleMax,High-quality Wellness from StyleMax with excellent durability and performance
+PROD000125,VitalCare Women's Apparel Standard,Clothing,Women's Apparel,21.53,AutoExpert,VitalCare's bestselling Women's Apparel featuring innovative design and superior quality
+PROD000126,ValueBrand Accessories Plus,Clothing,Accessories,20.41,ValueBrand,Affordable Accessories from TechPro with great value and reliability
+PROD000127,HomeComfort Car Accessories Standard,Automotive,Car Accessories,51.48,StyleMax,"Premium Car Accessories designed for everyday use, brought to you by PremiumSelect"
+PROD000128,PremiumSelect Non-Fiction Premium,Books & Media,Non-Fiction,9.09,ReadWell,"Premium Non-Fiction designed for everyday use, brought to you by ReadWell"
+PROD000129,AutoExpert Bath & Body Premium,Beauty & Personal Care,Bath & Body,13.57,ValueBrand,Luxury Bath & Body by FreshChoice for discerning customers seeking excellence
+PROD000130,PremiumSelect Vitamins Premium,Health & Wellness,Vitamins,115.04,StyleMax,"Premium Vitamins designed for everyday use, brought to you by ValueBrand"
+PROD000131,HomeComfort Bedding Plus,Home & Garden,Bedding,65.94,TechPro,"Premium Bedding designed for everyday use, brought to you by BeautyGlow"
+PROD000132,TechPro Fiction Elite,Books & Media,Fiction,27.43,ActiveLife,Luxury Fiction by TechPro for discerning customers seeking excellence
+PROD000133,FreshChoice Supplements Premium,Health & Wellness,Supplements,8.31,AutoExpert,High-quality Supplements from StyleMax with excellent durability and performance
+PROD000134,ActiveLife Athletic Wear Elite,Sports & Outdoors,Athletic Wear,182.59,ActiveLife,Luxury Athletic Wear by VitalCare for discerning customers seeking excellence
+PROD000135,AutoExpert Fitness Equipment Pro,Sports & Outdoors,Fitness Equipment,19.21,PremiumSelect,Affordable Fitness Equipment from FreshChoice with great value and reliability
+PROD000136,ReadWell Hair Care Premium,Beauty & Personal Care,Hair Care,42.28,FreshChoice,Luxury Hair Care by ReadWell for discerning customers seeking excellence
+PROD000137,VitalCare Vitamins Standard,Health & Wellness,Vitamins,28.77,StyleMax,StyleMax's bestselling Vitamins featuring innovative design and superior quality
+PROD000138,FreshChoice Frozen Foods Plus,Food & Beverages,Frozen Foods,184.03,BeautyGlow,Luxury Frozen Foods by HomeComfort for discerning customers seeking excellence
+PROD000139,FreshChoice Fitness Trackers Premium,Health & Wellness,Fitness Trackers,34.53,StyleMax,Luxury Fitness Trackers by StyleMax for discerning customers seeking excellence
+PROD000140,TechPro Bedding Pro,Home & Garden,Bedding,12.74,VitalCare,Affordable Bedding from TechPro with great value and reliability
+PROD000141,ActiveLife Non-Fiction Premium,Books & Media,Non-Fiction,51.63,ActiveLife,"Premium Non-Fiction designed for everyday use, brought to you by ActiveLife"
+PROD000142,VitalCare Makeup Plus,Beauty & Personal Care,Makeup,148.4,PremiumSelect,Affordable Makeup from HomeComfort with great value and reliability
+PROD000143,StyleMax Bikes Standard,Sports & Outdoors,Bikes,15.16,HomeComfort,Affordable Bikes from PlayFun with great value and reliability
+PROD000144,HomeComfort Team Sports Standard,Sports & Outdoors,Team Sports,15.8,FreshChoice,PremiumSelect's bestselling Team Sports featuring innovative design and superior quality
+PROD000145,ReadWell Bedding Elite,Home & Garden,Bedding,6.3,PlayFun,High-quality Bedding from VitalCare with excellent durability and performance
+PROD000146,AutoExpert Kitchen Elite,Home & Garden,Kitchen,13.6,PlayFun,Luxury Kitchen by FreshChoice for discerning customers seeking excellence
+PROD000147,PlayFun Team Sports Plus,Sports & Outdoors,Team Sports,107.86,PlayFun,Luxury Team Sports by AutoExpert for discerning customers seeking excellence
+PROD000148,FreshChoice Bikes Elite,Sports & Outdoors,Bikes,13.13,BeautyGlow,ValueBrand's bestselling Bikes featuring innovative design and superior quality
+PROD000149,ActiveLife Hair Care Elite,Beauty & Personal Care,Hair Care,23.47,AutoExpert,"Premium Hair Care designed for everyday use, brought to you by VitalCare"
+PROD000150,TechPro Athletic Wear Premium,Sports & Outdoors,Athletic Wear,10.22,PremiumSelect,Affordable Athletic Wear from HomeComfort with great value and reliability
+PROD000151,AutoExpert Snacks Pro,Food & Beverages,Snacks,7.35,ActiveLife,"Premium Snacks designed for everyday use, brought to you by VitalCare"
+PROD000152,ValueBrand Medical Supplies Premium,Health & Wellness,Medical Supplies,8.4,VitalCare,High-quality Medical Supplies from BeautyGlow with excellent durability and performance
+PROD000153,ValueBrand Supplements Plus,Health & Wellness,Supplements,31.41,PremiumSelect,"Premium Supplements designed for everyday use, brought to you by ValueBrand"
+PROD000154,PlayFun Team Sports Pro,Sports & Outdoors,Team Sports,38.23,ValueBrand,Affordable Team Sports from PlayFun with great value and reliability
+PROD000155,ReadWell Maintenance Standard,Automotive,Maintenance,54.29,TechPro,High-quality Maintenance from BeautyGlow with excellent durability and performance
+PROD000156,TechPro Laptops Plus,Electronics,Laptops,50.52,PlayFun,Affordable Laptops from ActiveLife with great value and reliability
+PROD000157,PremiumSelect Maintenance Pro,Automotive,Maintenance,82.32,ReadWell,Luxury Maintenance by FreshChoice for discerning customers seeking excellence
+PROD000158,ActiveLife Shoes Standard,Clothing,Shoes,295.02,StyleMax,"Premium Shoes designed for everyday use, brought to you by VitalCare"
+PROD000159,AutoExpert Fitness Trackers Elite,Health & Wellness,Fitness Trackers,79.98,VitalCare,"Premium Fitness Trackers designed for everyday use, brought to you by BeautyGlow"
+PROD000160,TechPro Movies Elite,Books & Media,Movies,17.06,ReadWell,Luxury Movies by ActiveLife for discerning customers seeking excellence
+PROD000161,FreshChoice Parts Elite,Automotive,Parts,2.99,ValueBrand,High-quality Parts from HomeComfort with excellent durability and performance
+PROD000162,PremiumSelect Magazines Premium,Books & Media,Magazines,27.06,ActiveLife,"Premium Magazines designed for everyday use, brought to you by ReadWell"
+PROD000163,HomeComfort Fitness Trackers Premium,Health & Wellness,Fitness Trackers,141.0,HomeComfort,Luxury Fitness Trackers by PlayFun for discerning customers seeking excellence
+PROD000164,BeautyGlow Camping Gear Elite,Sports & Outdoors,Camping Gear,1.01,PlayFun,StyleMax's bestselling Camping Gear featuring innovative design and superior quality
+PROD000165,ActiveLife Beverages Premium,Food & Beverages,Beverages,75.18,StyleMax,Luxury Beverages by VitalCare for discerning customers seeking excellence
+PROD000166,PlayFun Accessories Pro,Clothing,Accessories,3.33,ValueBrand,"Premium Accessories designed for everyday use, brought to you by VitalCare"
+PROD000167,PlayFun Headphones Plus,Electronics,Headphones,17.29,HomeComfort,Luxury Headphones by VitalCare for discerning customers seeking excellence
+PROD000168,HomeComfort Educational Toys Premium,Toys & Games,Educational Toys,115.46,TechPro,"Premium Educational Toys designed for everyday use, brought to you by HomeComfort"
+PROD000169,VitalCare Laptops Standard,Electronics,Laptops,38.83,TechPro,Luxury Laptops by AutoExpert for discerning customers seeking excellence
+PROD000170,ActiveLife Tools Plus,Automotive,Tools,14.66,PremiumSelect,"Premium Tools designed for everyday use, brought to you by StyleMax"
+PROD000171,VitalCare Dolls Premium,Toys & Games,Dolls,19.2,ActiveLife,BeautyGlow's bestselling Dolls featuring innovative design and superior quality
+PROD000172,PlayFun Electronics Plus,Automotive,Electronics,20.43,TechPro,"Premium Electronics designed for everyday use, brought to you by VitalCare"
+PROD000173,AutoExpert Garden Tools Elite,Home & Garden,Garden Tools,67.89,TechPro,FreshChoice's bestselling Garden Tools featuring innovative design and superior quality
+PROD000174,AutoExpert Skincare Pro,Beauty & Personal Care,Skincare,20.93,PremiumSelect,High-quality Skincare from ValueBrand with excellent durability and performance
+PROD000175,PlayFun Parts Plus,Automotive,Parts,35.49,PremiumSelect,ReadWell's bestselling Parts featuring innovative design and superior quality
+PROD000176,BeautyGlow Tools Plus,Automotive,Tools,7.29,ReadWell,"Premium Tools designed for everyday use, brought to you by VitalCare"
+PROD000177,HomeComfort Beverages Standard,Food & Beverages,Beverages,19.07,ActiveLife,Luxury Beverages by StyleMax for discerning customers seeking excellence
+PROD000178,AutoExpert Kids' Clothing Premium,Clothing,Kids' Clothing,106.22,ValueBrand,High-quality Kids' Clothing from BeautyGlow with excellent durability and performance
+PROD000179,VitalCare Snacks Pro,Food & Beverages,Snacks,20.53,AutoExpert,ReadWell's bestselling Snacks featuring innovative design and superior quality
+PROD000180,TechPro Women's Apparel Standard,Clothing,Women's Apparel,31.96,ReadWell,HomeComfort's bestselling Women's Apparel featuring innovative design and superior quality
+PROD000181,StyleMax Fiction Plus,Books & Media,Fiction,26.65,TechPro,High-quality Fiction from ReadWell with excellent durability and performance
+PROD000182,ValueBrand Vitamins Standard,Health & Wellness,Vitamins,60.38,StyleMax,Luxury Vitamins by PlayFun for discerning customers seeking excellence
+PROD000183,TechPro Action Figures Plus,Toys & Games,Action Figures,59.12,FreshChoice,Luxury Action Figures by ValueBrand for discerning customers seeking excellence
+PROD000184,AutoExpert Parts Premium,Automotive,Parts,33.32,PremiumSelect,VitalCare's bestselling Parts featuring innovative design and superior quality
+PROD000185,VitalCare Laptops Pro,Electronics,Laptops,24.01,ReadWell,Luxury Laptops by ActiveLife for discerning customers seeking excellence
+PROD000186,FreshChoice Pantry Staples Premium,Food & Beverages,Pantry Staples,58.04,TechPro,PremiumSelect's bestselling Pantry Staples featuring innovative design and superior quality
+PROD000187,ActiveLife Accessories Premium,Clothing,Accessories,10.49,ValueBrand,"Premium Accessories designed for everyday use, brought to you by HomeComfort"
+PROD000188,StyleMax Men's Apparel Pro,Clothing,Men's Apparel,24.58,BeautyGlow,High-quality Men's Apparel from ActiveLife with excellent durability and performance
+PROD000189,TechPro Fiction Standard,Books & Media,Fiction,23.13,PlayFun,Affordable Fiction from PremiumSelect with great value and reliability
+PROD000190,ValueBrand Action Figures Elite,Toys & Games,Action Figures,15.57,PremiumSelect,Affordable Action Figures from VitalCare with great value and reliability
+PROD000191,BeautyGlow Medical Supplies Plus,Health & Wellness,Medical Supplies,21.88,PlayFun,Luxury Medical Supplies by ActiveLife for discerning customers seeking excellence
+PROD000192,StyleMax Headphones Premium,Electronics,Headphones,92.27,TechPro,High-quality Headphones from FreshChoice with excellent durability and performance
+PROD000193,PremiumSelect Action Figures Standard,Toys & Games,Action Figures,118.54,StyleMax,"Premium Action Figures designed for everyday use, brought to you by PlayFun"
+PROD000194,TechPro Smartphones Elite,Electronics,Smartphones,8.92,ReadWell,High-quality Smartphones from PremiumSelect with excellent durability and performance
+PROD000195,ReadWell Puzzles Pro,Toys & Games,Puzzles,23.4,ReadWell,"Premium Puzzles designed for everyday use, brought to you by PremiumSelect"
+PROD000196,BeautyGlow Fragrances Premium,Beauty & Personal Care,Fragrances,36.62,StyleMax,"Premium Fragrances designed for everyday use, brought to you by ActiveLife"
+PROD000197,VitalCare Magazines Plus,Books & Media,Magazines,24.14,TechPro,High-quality Magazines from TechPro with excellent durability and performance
+PROD000198,StyleMax Car Accessories Elite,Automotive,Car Accessories,6.43,PremiumSelect,High-quality Car Accessories from PlayFun with excellent durability and performance
+PROD000199,ValueBrand Snacks Pro,Food & Beverages,Snacks,19.06,ActiveLife,"Premium Snacks designed for everyday use, brought to you by FreshChoice"
+PROD000200,PremiumSelect Makeup Plus,Beauty & Personal Care,Makeup,18.21,PremiumSelect,High-quality Makeup from ActiveLife with excellent durability and performance

@@ -1,0 +1,66 @@
+[
+  {
+    "name": "Intel vs AMD Performance Baseline Comparison with Cost Analysis",
+    "description": "Establish performance baselines across identical workloads on Intel Xeon vs AMD EPYC architectures. \n            Calculate performance-per-dollar and cost-per-transaction metrics to quantify TCO differences. \n            Addresses pain point: Lack of visibility into workload characteristics by hardware platform.",
+    "query": "FROM infrastructure_metrics\n| WHERE test_phase == \"Baseline\"\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| LOOKUP JOIN benchmark_definitions ON benchmark_id\n| STATS \n    avg_transaction_duration_ms = AVG(transaction.duration.us) / 1000,\n    p95_transaction_duration_ms = PERCENTILE(transaction.duration.us, 95) / 1000,\n    avg_tps = AVG(transactions_per_second),\n    avg_cpu_pct = AVG(system.cpu.total.pct),\n    avg_cost_per_hour = AVG(hourly_compute_cost_usd),\n    avg_power_watts = AVG(power_consumption_tdp_watts),\n    test_count = COUNT(*)\n  BY cpu_vendor, workload_category, benchmark_type\n| EVAL \n    performance_per_dollar = avg_tps / avg_cost_per_hour,\n    cost_per_million_transactions = (avg_cost_per_hour / avg_tps) * 1000000,\n    power_efficiency = avg_tps / avg_power_watts\n| SORT cpu_vendor, workload_category, performance_per_dollar DESC",
+    "query_type": "scripted",
+    "use_case": "Baseline Performance Comparison: Intel vs AMD",
+    "complexity": "high"
+  },
+  {
+    "name": "Application-Specific Migration Prioritization with ROI Calculation",
+    "description": "Compare each application's performance on Intel vs AMD to identify best migration candidates. \n            Calculate performance gains and cost savings to rank applications by migration value. \n            Focus on applications not yet migrated to AMD.",
+    "query": "FROM infrastructure_metrics\n| WHERE test_phase == \"Baseline\"\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| WHERE migration_status != \"Completed\"\n| STATS \n    intel_avg_tps = AVG(CASE(cpu_vendor == \"Intel\", transactions_per_second, null)),\n    amd_avg_tps = AVG(CASE(cpu_vendor == \"AMD\", transactions_per_second, null)),\n    intel_avg_cost = AVG(CASE(cpu_vendor == \"Intel\", cost_per_hour_usd, null)),\n    amd_avg_cost = AVG(CASE(cpu_vendor == \"AMD\", cost_per_hour_usd, null))\n  BY application_id, application_name, business_unit, criticality_tier\n| WHERE intel_avg_tps IS NOT NULL AND amd_avg_tps IS NOT NULL\n| EVAL \n    performance_gain_pct = ((amd_avg_tps - intel_avg_tps) / intel_avg_tps) * 100,\n    cost_reduction_pct = ((intel_avg_cost - amd_avg_cost) / intel_avg_cost) * 100,\n    annual_savings_usd = (intel_avg_cost - amd_avg_cost) * 24 * 365,\n    migration_score = (performance_gain_pct * 0.6) + (cost_reduction_pct * 0.4)\n| WHERE performance_gain_pct > 0 AND cost_reduction_pct > 0\n| SORT migration_score DESC\n| LIMIT 50",
+    "query_type": "scripted",
+    "use_case": "Application-Specific Migration Prioritization",
+    "complexity": "high"
+  },
+  {
+    "name": "Real-Time Performance Regression Detection with SLA Monitoring",
+    "description": "Detect performance regressions in real-time by aggregating transaction duration by hour. \n            Identify SLA violations and flag severity levels. Essential for catching issues during migration windows.",
+    "query": "FROM infrastructure_metrics\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| EVAL hour_bucket = DATE_TRUNC(1 hour, @timestamp)\n| STATS \n    avg_duration_ms = AVG(transaction.duration.us) / 1000,\n    p95_duration_ms = PERCENTILE(transaction.duration.us, 95) / 1000,\n    p99_duration_ms = PERCENTILE(transaction.duration.us, 99) / 1000,\n    error_rate_pct = (COUNT(CASE(event.outcome == \"failure\", 1, null)) / COUNT(*)) * 100,\n    avg_cpu_pct = AVG(system.cpu.total.pct)\n  BY hour_bucket, application_id, application_name, sla_target_ms, hostname, cpu_vendor\n| WHERE p95_duration_ms > sla_target_ms\n| EVAL \n    sla_violation = CASE(p95_duration_ms > sla_target_ms, \"YES\", \"NO\"),\n    severity = CASE(\n      p99_duration_ms > sla_target_ms * 2, \"CRITICAL\",\n      p95_duration_ms > sla_target_ms * 1.5, \"HIGH\",\n      \"MEDIUM\"\n    )\n| SORT hour_bucket DESC\n| LIMIT 100",
+    "query_type": "scripted",
+    "use_case": "Continuous Performance Regression Detection",
+    "complexity": "high"
+  },
+  {
+    "name": "Unified Kafka and Infrastructure Performance Correlation",
+    "description": "Correlate Kafka consumer lag and throughput with underlying infrastructure metrics to identify bottlenecks. \n            Addresses pain point: Data scattered across disparate systems with no unified view.",
+    "query": "FROM kafka_metrics\n| LOOKUP JOIN compute_hosts ON host_id\n| STATS \n    avg_consumer_lag = AVG(consumer_lag),\n    max_consumer_lag = MAX(consumer_lag),\n    avg_throughput = AVG(message_throughput_per_sec),\n    avg_broker_cpu = AVG(broker_cpu_pct),\n    avg_network_in = AVG(broker_network_in_mb),\n    avg_network_out = AVG(broker_network_out_mb)\n  BY hostname, cpu_vendor, topic_name, consumer_group\n| EVAL \n    lag_severity = CASE(\n      max_consumer_lag > 50000, \"CRITICAL\",\n      max_consumer_lag > 25000, \"HIGH\",\n      \"NORMAL\"\n    ),\n    throughput_health = CASE(\n      avg_throughput < 1000, \"LOW\",\n      avg_throughput < 10000, \"MEDIUM\",\n      \"HIGH\"\n    )\n| WHERE max_consumer_lag > 10000\n| SORT max_consumer_lag DESC\n| LIMIT 50",
+    "query_type": "scripted",
+    "use_case": "Consolidate Kafka & Hive Metrics into Unified Observability",
+    "complexity": "medium"
+  },
+  {
+    "name": "Cost-Performance TCO Analysis by Business Unit",
+    "description": "Calculate comprehensive TCO including compute costs, licensing, and power consumption. \n            Compare Intel vs AMD across business units to quantify migration ROI.",
+    "query": "FROM infrastructure_metrics\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| LOOKUP JOIN cost_allocation ON cost_center\n| STATS \n    total_compute_hours = COUNT(*),\n    avg_tps = AVG(transactions_per_second),\n    total_compute_cost = SUM(cost_per_hour_usd),\n    avg_power_consumption = AVG(power_consumption_watts)\n  BY business_unit, cost_center, cpu_vendor\n| EVAL \n    annual_compute_cost = total_compute_cost * 12,\n    annual_power_cost = (avg_power_consumption * 24 * 365 * 0.12) / 1000,\n    licensing_cost = 50000,\n    total_tco_annual = annual_compute_cost + annual_power_cost + licensing_cost,\n    cost_per_million_transactions = (total_tco_annual / (avg_tps * 86400 * 365)) * 1000000\n| SORT total_tco_annual DESC",
+    "query_type": "scripted",
+    "use_case": "Cost-Performance Analysis & TCO Modeling",
+    "complexity": "high"
+  },
+  {
+    "name": "Multi-Dimensional Stress Test Analysis with FORK",
+    "description": "Simultaneously analyze multiple dimensions of stress test results: peak performance, \n            error rates under load, and resource saturation points. Identifies maximum sustainable capacity.",
+    "query": "FROM infrastructure_metrics\n| WHERE test_phase == \"Stress-Test\"\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| LOOKUP JOIN benchmark_definitions ON benchmark_id\n| FORK\n  (\n    STATS \n      peak_tps = MAX(transactions_per_second),\n      avg_tps = AVG(transactions_per_second),\n      test_duration_hours = (MAX(TO_LONG(@timestamp)) - MIN(TO_LONG(@timestamp))) / 3600000\n    BY cpu_vendor, application_name, target_load_level\n    | EVAL analysis_type = \"peak_performance\"\n  ),\n  (\n    STATS \n      error_rate_pct = (COUNT(CASE(event.outcome == \"failure\", 1, null)) / COUNT(*)) * 100,\n      total_errors = COUNT(CASE(event.outcome == \"failure\", 1, null))\n    BY cpu_vendor, application_name, target_load_level\n    | WHERE error_rate_pct > 0.1\n    | EVAL analysis_type = \"error_analysis\"\n  ),\n  (\n    STATS \n      max_cpu_pct = MAX(system.cpu.total.pct),\n      max_memory_pct = MAX(system.memory.used.pct),\n      saturation_point = AVG(CASE(system.cpu.total.pct > 80, transactions_per_second, null))\n    BY cpu_vendor, application_name\n    | WHERE max_cpu_pct > 80 OR max_memory_pct > 85\n    | EVAL analysis_type = \"resource_saturation\"\n  )",
+    "query_type": "scripted",
+    "use_case": "Stress Test & Capacity Planning",
+    "complexity": "high"
+  },
+  {
+    "name": "Hive Query Performance Analysis by Architecture",
+    "description": "Analyze Hive query execution times across Intel and AMD architectures. \n            Identify slow queries and compare performance characteristics by hardware platform.",
+    "query": "FROM hive_query_logs\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| STATS \n    avg_execution_ms = AVG(query_execution_time_ms),\n    p95_execution_ms = PERCENTILE(query_execution_time_ms, 95),\n    avg_data_scanned_gb = AVG(data_scanned_gb),\n    total_queries = COUNT(*)\n  BY cpu_vendor, database_name, query_type\n| EVAL \n    performance_rating = CASE(\n      p95_execution_ms < 10000, \"EXCELLENT\",\n      p95_execution_ms < 60000, \"GOOD\",\n      p95_execution_ms < 180000, \"FAIR\",\n      \"POOR\"\n    )\n| SORT p95_execution_ms DESC\n| LIMIT 50",
+    "query_type": "scripted",
+    "use_case": "Consolidate Kafka & Hive Metrics into Unified Observability",
+    "complexity": "medium"
+  },
+  {
+    "name": "Migration Budget Analysis and Cost Center Performance",
+    "description": "Track migration progress and budget utilization by cost center. \n            Compare current spend against budget and target cost reduction goals.",
+    "query": "FROM cost_allocation\n| EVAL \n    budget_utilization_pct = (current_spend_usd / budget_annual_usd) * 100,\n    total_hosts = intel_host_count + amd_host_count,\n    amd_adoption_pct = (TO_DOUBLE(amd_host_count) / total_hosts) * 100,\n    projected_annual_savings = current_spend_usd * (target_cost_reduction_pct / 100)\n| SORT budget_utilization_pct DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "use_case": "Cost-Performance Analysis & TCO Modeling",
+    "complexity": "low"
+  }
+]

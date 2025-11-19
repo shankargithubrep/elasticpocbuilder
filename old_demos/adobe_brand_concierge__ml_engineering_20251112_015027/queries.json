@@ -1,0 +1,218 @@
+[
+  {
+    "name": "Semantic Brand Asset Discovery",
+    "description": "Find brand assets using natural language queries that understand intent beyond keywords - eliminating need for clarifying questions",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_semantic_asset_search",
+      "description": "Discovers brand assets using semantic understanding of natural language queries. Eliminates 42% of clarifying questions by understanding user intent beyond exact keywords.",
+      "tags": [
+        "semantic",
+        "brand_assets",
+        "discovery",
+        "esql",
+        "retrieval"
+      ]
+    },
+    "query": "FROM brand_assets METADATA _score\n| WHERE MATCH(asset_description, \"modern minimalist logo design for technology startup\")\n  AND approval_status == \"approved\"\n| KEEP asset_id, asset_name, asset_description, asset_type, brand_name, tags, _score\n| SORT _score DESC\n| LIMIT 10",
+    "query_type": "scripted",
+    "pain_point": "Static query patterns unable to handle complex retrieval needs - 42% of AI Assistant queries require 2+ clarifying questions"
+  },
+  {
+    "name": "Weighted Hybrid Search - Balancing Semantic and Exact Match",
+    "description": "Advanced retrieval optimization: Balance semantic understanding (75% weight) with exact brand name matching (25% weight) for precision",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_hybrid_weighted_search",
+      "description": "Combines semantic search (75% weight) with exact brand matching (25% weight) for optimal precision. Reduces 2-3 day engineering cycles for new retrieval strategies to minutes.",
+      "tags": [
+        "hybrid",
+        "weighted",
+        "brand_assets",
+        "esql",
+        "precision"
+      ]
+    },
+    "query": "FROM brand_assets METADATA _score\n| WHERE MATCH(asset_description, \"Adobe Creative Cloud promotional banner\", {\"boost\": 0.75})\n   OR MATCH(brand_name, \"Brand Alpha\", {\"boost\": 0.25})\n| WHERE asset_type == \"image\"\n| KEEP asset_id, asset_name, brand_name, asset_type, tags, _score\n| SORT _score DESC\n| LIMIT 15",
+    "query_type": "scripted",
+    "pain_point": "No ability to combine multiple specialized retrieval strategies - engineers spend 2-3 days writing new Query DSL for new requirements"
+  },
+  {
+    "name": "Fuzzy Asset Search with Typo Tolerance",
+    "description": "Best practice: Handle misspellings and typos automatically without requiring query rewrites or user corrections",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_fuzzy_typo_search",
+      "description": "Handles misspellings and typos automatically using fuzzy matching. Improves user experience by eliminating need for query corrections and reducing failed searches.",
+      "tags": [
+        "fuzzy",
+        "typo_tolerance",
+        "brand_assets",
+        "esql",
+        "ux"
+      ]
+    },
+    "query": "FROM brand_assets METADATA _score\n| WHERE MATCH(asset_name, \"Marketing Template\", {\"fuzziness\": \"AUTO\"})\n  AND file_format IN (\"psd\", \"ai\", \"pdf\")\n| KEEP asset_id, asset_name, asset_description, file_format, brand_name, _score\n| SORT _score DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "Static query patterns unable to handle complex retrieval needs - users make typos in asset searches"
+  },
+  {
+    "name": "Multi-Term Precision Search with Minimum Match",
+    "description": "Advanced precision control: Require at least 3 out of 5 query terms to match, reducing noise and improving retrieval quality",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_precision_multi_term",
+      "description": "Analyzes poor-quality conversations using minimum match requirements. Reduces unhelpful responses by 31% through improved precision control and noise reduction.",
+      "tags": [
+        "precision",
+        "quality",
+        "conversations",
+        "esql",
+        "analytics"
+      ]
+    },
+    "query": "FROM ai_assistant_conversations METADATA _score\n| WHERE MATCH(query_text, \"configure brand asset approval workflow automation\", {\n    \"operator\": \"OR\",\n    \"minimum_should_match\": 3\n  })\n  AND quality_rating == \"poor\"\n  AND helpful == false\n| KEEP conversation_id, query_text, response_text, retrieval_strategy, quality_rating, _score\n| SORT _score DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "pain_point": "Inability to reason about retrieval quality and iterate - 31% of responses rated unhelpful, 68% due to poor document retrieval"
+  },
+  {
+    "name": "Conversation-Aware Contextual Retrieval",
+    "description": "Retrieve multi-turn conversations to analyze context patterns and improve stateful retrieval strategies",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_contextual_multi_turn",
+      "description": "Analyzes multi-turn conversation patterns to understand context dependencies. Solves stateless retrieval problem where each query is independent of previous turns.",
+      "tags": [
+        "contextual",
+        "multi_turn",
+        "conversations",
+        "esql",
+        "stateful"
+      ]
+    },
+    "query": "FROM ai_assistant_conversations METADATA _score\n| WHERE MATCH(query_text, \"how do I export that asset in different format\")\n  AND conversation_turn > 1\n  AND context_from_previous_turn IS NOT NULL\n| KEEP conversation_id, query_text, conversation_turn, context_from_previous_turn, retrieved_documents, helpful, _score\n| SORT _score DESC\n| LIMIT 15",
+    "query_type": "scripted",
+    "pain_point": "Limited context understanding across multi-turn conversations - each query to Elasticsearch is independent and stateless"
+  },
+  {
+    "name": "Retrieval Quality Incident Debug Search",
+    "description": "Find similar retrieval failures using exact phrase matching to quickly identify patterns and reduce debug time",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_incident_debug_search",
+      "description": "Identifies similar retrieval failure patterns using phrase matching. Reduces debug time from 30-60 minutes to under 10 minutes by surfacing known resolution patterns.",
+      "tags": [
+        "debugging",
+        "incidents",
+        "phrase_match",
+        "esql",
+        "troubleshooting"
+      ]
+    },
+    "query": "FROM retrieval_quality_incidents METADATA _score\n| WHERE MATCH_PHRASE(resolution_notes, \"Resolved by adjusting embedding\", {\"slop\": 2})\n  AND debug_time_minutes > 30\n  AND resolved == true\n| KEEP incident_id, user_query, failure_reason, debug_time_minutes, resolution_notes, _score\n| SORT _score DESC\n| LIMIT 10",
+    "query_type": "scripted",
+    "pain_point": "Difficulty debugging poor retrieval results - 30-60 minutes per incident with limited visibility"
+  },
+  {
+    "name": "Retrieval Experiment A/B Test Results Search",
+    "description": "Find high-performing retrieval experiments with specific quality thresholds to accelerate model evaluation",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_experiment_results",
+      "description": "Discovers high-performing retrieval experiments meeting quality thresholds. Reduces 3-week embedding model evaluation cycles to days through rapid experimentation.",
+      "tags": [
+        "experiments",
+        "ab_testing",
+        "quality",
+        "esql",
+        "optimization"
+      ]
+    },
+    "query": "FROM retrieval_experiments METADATA _score\n| WHERE MATCH(test_query, \"brand asset search with filters\")\n  AND precision_at_5 >= 0.80\n  AND recall_at_10 >= 0.70\n  AND deployed_to_production == false\n| KEEP experiment_id, experiment_name, retrieval_strategy, embedding_model, precision_at_5, recall_at_10, mrr_score, _score\n| SORT _score DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "No framework for retrieval experimentation and optimization - 3-week engineering project to evaluate new embedding models"
+  },
+  {
+    "name": "Enriched Asset Search with Customer Context",
+    "description": "Combine semantic asset search with customer account enrichment for personalized retrieval results",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_enriched_customer_search",
+      "description": "Combines semantic asset search with customer account context for personalized results. Demonstrates intelligent tool composition by merging multiple data sources automatically.",
+      "tags": [
+        "enriched",
+        "lookup_join",
+        "personalization",
+        "esql",
+        "composition"
+      ]
+    },
+    "query": "FROM brand_assets METADATA _score\n| WHERE MATCH(asset_description, \"healthcare patient education infographic\")\n  AND approval_status == \"approved\"\n| LOOKUP JOIN customer_accounts ON customer_account_id\n| WHERE industry == \"Healthcare\"\n  AND tier IN (\"Enterprise\", \"Professional\")\n| KEEP asset_id, asset_name, asset_description, brand_name, company_name, tier, _score\n| SORT _score DESC\n| LIMIT 10",
+    "query_type": "scripted",
+    "pain_point": "Static query patterns unable to handle complex retrieval needs - need to combine asset search with customer account details"
+  },
+  {
+    "name": "High-Value Asset Usage Analytics",
+    "description": "Identify most-used approved assets by brand to understand content effectiveness and reuse patterns",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_asset_usage_analytics",
+      "description": "Analyzes asset usage patterns to identify high-value content. Provides insights for content strategy and helps reduce maintenance burden on underutilized templates.",
+      "tags": [
+        "analytics",
+        "usage",
+        "brand_assets",
+        "esql",
+        "insights"
+      ]
+    },
+    "query": "FROM brand_assets\n| WHERE approval_status == \"approved\"\n| STATS \n    total_assets = COUNT(*),\n    avg_usage = AVG(usage_count),\n    max_usage = MAX(usage_count),\n    total_usage = SUM(usage_count)\n  BY brand_name, asset_type\n| WHERE total_assets > 5\n| EVAL usage_per_asset = TO_DOUBLE(total_usage) / total_assets\n| SORT total_usage DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "High maintenance burden for query template management - need visibility into which assets are actually valuable"
+  },
+  {
+    "name": "Conversation Quality by Retrieval Strategy",
+    "description": "Compare retrieval strategy effectiveness by analyzing quality ratings and helpfulness metrics",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_strategy_quality_comparison",
+      "description": "Compares retrieval strategy effectiveness using quality metrics. Enables data-driven decisions on which strategies to optimize or deprecate, reducing maintenance burden.",
+      "tags": [
+        "quality",
+        "comparison",
+        "strategies",
+        "esql",
+        "analytics"
+      ]
+    },
+    "query": "FROM ai_assistant_conversations\n| STATS \n    total_conversations = COUNT(*),\n    helpful_count = SUM(CASE(helpful == true, 1, 0)),\n    excellent_count = SUM(CASE(quality_rating == \"excellent\", 1, 0)),\n    poor_count = SUM(CASE(quality_rating == \"poor\", 1, 0)),\n    avg_latency = AVG(retrieval_latency_ms)\n  BY retrieval_strategy\n| EVAL helpfulness_rate = TO_DOUBLE(helpful_count) * 100.0 / total_conversations\n| EVAL excellence_rate = TO_DOUBLE(excellent_count) * 100.0 / total_conversations\n| EVAL poor_rate = TO_DOUBLE(poor_count) * 100.0 / total_conversations\n| SORT helpfulness_rate DESC\n| LIMIT 10",
+    "query_type": "scripted",
+    "pain_point": "Inability to reason about retrieval quality and iterate - 31% of responses rated unhelpful, 68% due to poor document retrieval"
+  },
+  {
+    "name": "Template Complexity vs Performance Analysis",
+    "description": "Analyze query template maintenance burden by correlating complexity scores with performance ratings",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_template_complexity_analysis",
+      "description": "Analyzes template maintenance burden vs performance. Identifies candidates for deprecation or simplification among 40+ Query DSL templates requiring 1-2 weeks to update.",
+      "tags": [
+        "templates",
+        "complexity",
+        "maintenance",
+        "esql",
+        "optimization"
+      ]
+    },
+    "query": "FROM query_templates\n| WHERE deprecated == false\n| STATS \n    template_count = COUNT(*),\n    avg_complexity = AVG(complexity_score),\n    total_maintenance_hours = SUM(maintenance_hours),\n    excellent_count = SUM(CASE(performance_rating == \"excellent\", 1, 0)),\n    poor_count = SUM(CASE(performance_rating == \"poor\", 1, 0))\n  BY use_case\n| EVAL avg_maintenance_per_template = total_maintenance_hours / template_count\n| EVAL excellence_rate = TO_DOUBLE(excellent_count) * 100.0 / template_count\n| SORT total_maintenance_hours DESC\n| LIMIT 15",
+    "query_type": "scripted",
+    "pain_point": "High maintenance burden for query template management - 40+ Query DSL templates requiring 1-2 weeks to update"
+  },
+  {
+    "name": "Incident Resolution Time by Failure Type",
+    "description": "Identify which failure types take longest to debug to prioritize tooling improvements",
+    "tool_metadata": {
+      "tool_id": "adobe_inc.brand_conc_incident_resolution_time",
+      "description": "Identifies failure types with longest debug times. Prioritizes tooling improvements to reduce 30-60 minute incident resolution times through better visibility.",
+      "tags": [
+        "incidents",
+        "debugging",
+        "resolution",
+        "esql",
+        "analytics"
+      ]
+    },
+    "query": "FROM retrieval_quality_incidents\n| STATS \n    incident_count = COUNT(*),\n    avg_debug_time = AVG(debug_time_minutes),\n    max_debug_time = MAX(debug_time_minutes),\n    resolved_count = SUM(CASE(resolved == true, 1, 0))\n  BY failure_reason\n| EVAL resolution_rate = TO_DOUBLE(resolved_count) * 100.0 / incident_count\n| WHERE incident_count > 10\n| SORT avg_debug_time DESC\n| LIMIT 10",
+    "query_type": "scripted",
+    "pain_point": "Difficulty debugging poor retrieval results - 30-60 minutes per incident with limited visibility"
+  }
+]

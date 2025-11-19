@@ -1,0 +1,61 @@
+{
+  "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+  "demo_type": "analytics",
+  "module_version": "1.0.0",
+  "generated_at": "2025-11-11T15:57:59.741570",
+  "customer_context": {
+    "company_name": "T-Mobile",
+    "department": "Network Operations & Engineering",
+    "industry": "Telecommunications - Mobile Network Operator",
+    "pain_points": [
+      "Fragmented subscriber experience visibility across network domains requiring manual correlation across vendor-specific EMS, OSS platforms, and RAN analytics tools adding 15-30 minutes to MTTD",
+      "Extended MTTR due to manual root cause analysis workflows adding 30-90 minutes per incident across multiple logins and interfaces",
+      "Reactive troubleshooting driven by subscriber complaints rather than proactive detection with average MTTR of 2-4 hours for cell site issues",
+      "Insufficient real-time analytics for high-cardinality network data with 15-60 minute delays in detecting emerging problems using batch processing",
+      "Inability to correlate network events with subscriber behavior patterns requiring hours of manual log analysis across disparate systems",
+      "Lack of standardized KPIs and metrics framework across NOC teams with inconsistent definitions and incompatible dashboards preventing enterprise-wide benchmarking"
+    ],
+    "use_cases": [
+      "Proactive Network Capacity Planning & Congestion Management - Use historical trending, ML forecasting, and rollup aggregations to identify cells approaching capacity limits and optimize traffic distribution",
+      "Multi-Dimensional Network Incident Root Cause Analysis - Enable rapid root cause identification by correlating cell site performance, core network events, transport metrics, and external factors in unified Kibana Canvas workbooks",
+      "Subscriber-Centric Experience Monitoring & Troubleshooting - Provide complete visibility into individual subscriber network experience with IMSI-based correlation across all network touches and APM transaction tracing",
+      "Intelligent Anomaly Detection for Emerging Network Patterns - Leverage ML population analysis, time series analysis, and multi-metric analysis to detect subtle performance degradation trends and capacity saturation patterns",
+      "End-to-End Network Performance Benchmarking & Optimization - Establish data-driven optimization workflows with standardized KPI dashboards and cohort analysis across cell sites, vendors, regions, and technologies",
+      "Real-Time Cell Site Performance Degradation Detection - Proactively identify cell sites experiencing performance degradation before subscriber impact escalates, reducing MTTD from 30+ minutes to under 5 minutes using ML anomaly detection and serial difference aggregations",
+      "Automated Network Event Correlation & Root Cause Inference - Reduce manual correlation time using APM correlation features, event enrichment pipelines, and incident signature pattern matching with percolate queries",
+      "Network Operations Command Center Unified Dashboard - Provide executive and NOC leadership with real-time situational awareness via Kibana Canvas with nationwide network health, incidents, and operational KPIs"
+    ],
+    "scale": "50,000+ cell sites nationwide, 100M+ active subscribers, billions of signaling events daily, multi-vendor RAN environment (Ericsson, Nokia, Samsung), 15+ regional NOC teams operating 24/7, 80+ core network elements (MME/SGW/PGW nodes)",
+    "metrics": [
+      "network.radio.rsrp_dbm, network.radio.rsrq_db, network.radio.sinr_db - Radio signal quality measurements from UE reports",
+      "network.rrc.connection_success_rate - RRC connection establishment success rates with failure cause analysis",
+      "incident.mttr_minutes_avg and incident.mttd_minutes_avg - Mean time to repair and detect with trend indicators",
+      "network.transport.latency_ms and network.transport.packet_loss_pct - Backhaul transport performance on S1/X2 interfaces",
+      "kpi.network_availability_pct - Nationwide aggregate availability calculated as available cell-minutes / total cell-minutes",
+      "network.imsi cardinality - Unique subscriber activity per cell site/MME for concentration anomaly detection",
+      "network.procedure.success_rate_pct - Procedure success/failure rates for Initial Attach, Service Request, TAU, Handover, PDN Connection",
+      "network.handover.outcome - X2 and S1 handover success rates and execution times by cell neighbor pair",
+      "ml.anomaly_score - ML-detected anomalies in time-series metrics with typical vs actual value comparison",
+      "network.voice.call_drop_rate and network.data.session_drop_rate - Voice and data session quality metrics",
+      "subscriber.experience.score - Composite subscriber experience score (0-100) from latency, throughput, and QoE metrics",
+      "network.anomaly.imsi_churn_rate_pct - Percentage change in unique IMSI counts indicating cell degradation",
+      "network.cell.prb_utilization_dl_pct and network.cell.prb_utilization_ul_pct - Physical Resource Block utilization for capacity monitoring",
+      "network.auth.result - HSS authentication responses and APN authorization results from S6a interface",
+      "network.cell.availability_pct - Cell site availability percentage from eNodeB/gNodeB PM counters"
+    ],
+    "demo_type": "analytics",
+    "dataset_size_preference": "small"
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  },
+  "query_testing": {
+    "enabled": true,
+    "queries_fixed": 0,
+    "queries_need_manual_fix": 8,
+    "total_tested": 8,
+    "tested_at": "2025-11-11T16:03:01.521064"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+  "demo_type": "analytics",
+  "module_version": "1.0.0",
+  "generated_at": "2025-11-07T13:04:51.152650",
+  "customer_context": {
+    "company_name": "JP Morgan Chase (JPMC)",
+    "department": "CTO Group - Infrastructure & Platform Engineering",
+    "industry": "Financial Services",
+    "pain_points": [
+      "High operational overhead managing multiple observability tools requiring constant context-switching",
+      "No standardized performance benchmarking framework - ad-hoc testing with inconsistent tools and metrics across teams",
+      "Delayed insights from batch processing - day-old Hive data prevents real-time anomaly detection during migrations",
+      "No real-time correlation between cost and performance metrics",
+      "High infrastructure costs on legacy Intel hardware with expensive licensing, power consumption, and limited performance per dollar",
+      "Data scattered across disparate systems (Kafka, Splunk, Prometheus, Hive) with no unified view",
+      "Lack of visibility into workload characteristics by hardware platform - cannot identify migration candidates or quantify performance differences"
+    ],
+    "use_cases": [
+      "Application-Specific Migration Prioritization - identify which applications benefit most from AMD migration",
+      "Baseline Performance Comparison: Intel vs AMD - establish performance baselines across identical workloads on different architectures",
+      "Continuous Performance Regression Detection - automatically detect performance regressions after infrastructure changes",
+      "Stress Test & Capacity Planning - determine maximum sustainable load and breaking points under stress conditions",
+      "Consolidate Kafka & Hive Metrics into Unified Observability - bring fragmented data into Elasticsearch for real-time correlation",
+      "Cost-Performance Analysis & TCO Modeling - quantify cost savings and calculate ROI for Intel-to-AMD migration"
+    ],
+    "scale": "Thousands of compute-intensive applications running on Intel Xeon and AMD EPYC processors",
+    "metrics": [
+      "Error Rates & SLA Compliance (event.outcome failure percentage, SLA violations)",
+      "Data Ingestion Rates (events per second into Elasticsearch)",
+      "Cost Efficiency Calculations (cost per transaction, performance per dollar, TCO projections)",
+      "Network Throughput (system.network.in/out.bytes, packet loss)",
+      "Kafka Metrics (consumer lag, message throughput, topic size)",
+      "Infrastructure Cost Attribution (hourly compute cost, power consumption, licensing costs)",
+      "Transaction Duration and Throughput (transaction.duration.histogram, TPS)",
+      "Benchmark Scores (SPEC CPU 2017, TPC-H, Sysbench, Kafka performance)",
+      "CPU Utilization by Architecture (system.cpu.total.pct by host.cpu.model.name)",
+      "Distributed Trace Performance (end-to-end span duration)",
+      "Custom Financial Workload Benchmarks (trade settlement rate, risk calculation throughput, payment validation latency)",
+      "Hive Query Performance (execution time, data scanned)",
+      "Disk I/O Performance (system.diskio.read/write.bytes, IOPS, latency percentiles)",
+      "Memory Performance (system.memory.used.pct, bandwidth, page faults)"
+    ],
+    "demo_type": "analytics",
+    "dataset_size_preference": "small"
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  },
+  "query_testing": {
+    "enabled": true,
+    "queries_fixed": 0,
+    "queries_need_manual_fix": 8,
+    "total_tested": 8,
+    "tested_at": "2025-11-07T13:09:12.837779"
+  }
+}

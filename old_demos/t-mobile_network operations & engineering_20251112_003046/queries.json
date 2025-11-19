@@ -1,0 +1,128 @@
+[
+  {
+    "name": "Real-Time Cell Site Performance Degradation Detection",
+    "description": "Detects cell sites experiencing performance degradation in last 15 minutes by comparing against regional averages, enabling sub-5 minute MTTD vs current 30+ minutes",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_cell_degradation",
+      "description": "Identifies cell sites with performance degradation in real-time. Compares cell metrics against regional baselines to detect anomalies before subscriber impact, reducing MTTD from 30+ minutes to under 5 minutes.",
+      "tags": [
+        "performance",
+        "proactive",
+        "cell-site",
+        "esql",
+        "alerts"
+      ]
+    },
+    "query": "FROM cell_performance_metrics\n| STATS \n    avg_call_drop_rate = AVG(kpi.call_drop_rate), \n    avg_prb_util = AVG(network.cell.prb_utilization_dl_pct), \n    avg_ho_success = AVG(network.handover.success_rate) \n  BY network.cell.id\n| LOOKUP JOIN cell_site_inventory ON network.cell.id\n| INLINESTATS \n    regional_avg_drop_rate = AVG(avg_call_drop_rate), \n    regional_avg_prb = AVG(avg_prb_util) \n  BY network.region.name\n| EVAL degradation_score = (avg_call_drop_rate / regional_avg_drop_rate) + (avg_prb_util / regional_avg_prb) - (avg_ho_success / 100)\n| WHERE degradation_score > 2.5 OR avg_prb_util > 85\n| EVAL alert_priority = CASE(\n    degradation_score > 4, \"CRITICAL\", \n    degradation_score > 3, \"HIGH\", \n    \"MEDIUM\"\n  )\n| SORT degradation_score DESC\n| KEEP \n    network.cell.id, \n    network.cell.name, \n    network.region.name, \n    network.noc.team, \n    avg_call_drop_rate, \n    avg_prb_util, \n    degradation_score, \n    alert_priority\n| LIMIT 50",
+    "query_type": "scripted",
+    "pain_point": "Reactive troubleshooting driven by subscriber complaints rather than proactive detection, with 15-30 minute MTTD delays"
+  },
+  {
+    "name": "Multi-Vendor Network Performance Benchmarking",
+    "description": "Enables objective standardized KPI comparison across vendors, regions, and technologies simultaneously using parallel analysis paths for enterprise-wide benchmarking",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_vendor_benchmark",
+      "description": "Compares network performance KPIs across vendors, regions, and technologies. Provides standardized benchmarking framework to identify best-performing segments and optimization opportunities.",
+      "tags": [
+        "benchmarking",
+        "kpi",
+        "vendor",
+        "esql",
+        "analytics"
+      ]
+    },
+    "query": "FROM cell_performance_metrics\n| LOOKUP JOIN cell_site_inventory ON network.cell.id\n| FORK\n  (STATS \n    avg_call_success = AVG(kpi.call_success_rate), \n    avg_ho_success = AVG(network.handover.success_rate), \n    avg_rrc_success = AVG(network.rrc.connection_success_rate), \n    p95_prb_util = PERCENTILE(capacity.busy_hour.prb_utilization_p95, 95) \n   BY network.vendor.name \n   | EVAL dimension = \"vendor\" \n   | RENAME network.vendor.name AS segment_name)\n  (STATS \n    avg_call_success = AVG(kpi.call_success_rate), \n    avg_ho_success = AVG(network.handover.success_rate), \n    avg_rrc_success = AVG(network.rrc.connection_success_rate), \n    p95_prb_util = PERCENTILE(capacity.busy_hour.prb_utilization_p95, 95) \n   BY network.region.name \n   | EVAL dimension = \"region\" \n   | RENAME network.region.name AS segment_name)\n  (STATS \n    avg_call_success = AVG(kpi.call_success_rate), \n    avg_ho_success = AVG(network.handover.success_rate), \n    avg_rrc_success = AVG(network.rrc.connection_success_rate), \n    p95_prb_util = PERCENTILE(capacity.busy_hour.prb_utilization_p95, 95) \n   BY network.technology \n   | EVAL dimension = \"technology\" \n   | RENAME network.technology AS segment_name)",
+    "query_type": "scripted",
+    "pain_point": "Lack of standardized KPIs and metrics framework across NOC teams preventing enterprise-wide benchmarking"
+  },
+  {
+    "name": "Automated Root Cause Analysis with Event Correlation",
+    "description": "Automatically correlates failure events and suggests probable root causes using statistical anomaly detection, reducing MTTR from 2-4 hours to under 30 minutes",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_root_cause",
+      "description": "Analyzes network signaling failures to identify root causes automatically. Correlates failure patterns across procedures and cells using anomaly detection, reducing manual MTTR from 2-4 hours to under 30 minutes.",
+      "tags": [
+        "root-cause",
+        "automation",
+        "mttr",
+        "esql",
+        "troubleshooting"
+      ]
+    },
+    "query": "FROM network_signaling_events\n| WHERE network.procedure.success == false\n| EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)\n| STATS \n    failure_count = COUNT(*), \n    failure_codes = MV_DEDUPE(VALUES(network.procedure.result_code)) \n  BY time_bucket, network.cell.id, network.procedure.type\n| LOOKUP JOIN cell_site_inventory ON network.cell.id\n| LOOKUP JOIN network_procedures_reference ON network.procedure.type\n| INLINESTATS \n    avg_failures = AVG(failure_count), \n    stddev_failures = STDDEV(failure_count) \n  BY network.procedure.type\n| EVAL anomaly_score = (failure_count - avg_failures) / stddev_failures\n| WHERE anomaly_score > 2 OR failure_count > 100\n| EVAL root_cause_indicator = CASE(\n    network.procedure.category == \"RRC\" AND anomaly_score > 3, \"Capacity_Overload\",\n    network.procedure.category == \"Handover\" AND anomaly_score > 3, \"Inter_Cell_Interference\",\n    \"Configuration_Issue\"\n  )\n| SORT anomaly_score DESC\n| KEEP \n    time_bucket, \n    network.cell.id, \n    network.cell.name, \n    network.procedure.type, \n    failure_count, \n    anomaly_score, \n    root_cause_indicator, \n    failure_codes\n| LIMIT 100",
+    "query_type": "scripted",
+    "pain_point": "Extended MTTR (2-4 hours) due to manual root cause analysis workflows across multiple systems"
+  },
+  {
+    "name": "Network Anomaly Detection with Subscriber Activity Changes",
+    "description": "Detects statistically significant changes in subscriber activity patterns per cell site, enabling proactive detection before complaints arrive and reducing MTTD to under 5 minutes",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_subscriber_anomaly",
+      "description": "Identifies sudden changes in subscriber activity patterns at cell sites. Detects subscriber churn spikes or connection drops proactively using statistical analysis, enabling intervention before mass complaints.",
+      "tags": [
+        "anomaly",
+        "subscribers",
+        "proactive",
+        "esql",
+        "detection"
+      ]
+    },
+    "query": "FROM network_signaling_events\n| EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)\n| STATS unique_subscribers = COUNT_DISTINCT(subscriber.imsi) BY time_bucket, network.cell.id\n| INLINESTATS \n    avg_subs = AVG(unique_subscribers), \n    stddev_subs = STDDEV(unique_subscribers) \n  BY network.cell.id\n| EVAL z_score = (unique_subscribers - avg_subs) / stddev_subs\n| WHERE z_score < -2 OR z_score > 2\n| LOOKUP JOIN cell_site_inventory ON network.cell.id\n| EVAL alert_type = CASE(\n    z_score < -2, \"Subscriber_Churn_Spike\",\n    \"Subscriber_Surge\"\n  )\n| SORT time_bucket DESC\n| KEEP \n    time_bucket, \n    network.cell.id, \n    network.cell.name, \n    network.region.name, \n    network.noc.team, \n    unique_subscribers, \n    z_score, \n    alert_type\n| LIMIT 50",
+    "query_type": "scripted",
+    "pain_point": "Reactive troubleshooting driven by subscriber complaints rather than proactive detection, with 15-30 minute MTTD delays"
+  },
+  {
+    "name": "Unified NOC Dashboard Multi-Dimensional View",
+    "description": "Provides real-time unified executive dashboard combining performance KPIs, signaling health, incidents, and capacity alerts with sub-minute latency vs 15-60 minute batch delays",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_noc_dashboard",
+      "description": "Provides comprehensive real-time network operations view. Combines performance KPIs, signaling health, active incidents, and capacity alerts in unified dashboard with sub-minute latency instead of 15-60 minute batch delays.",
+      "tags": [
+        "dashboard",
+        "realtime",
+        "executive",
+        "esql",
+        "operations"
+      ]
+    },
+    "query": "FROM cell_performance_metrics\n| STATS \n    avg_call_drop = AVG(kpi.call_drop_rate), \n    avg_prb_util = AVG(network.cell.prb_utilization_dl_pct),\n    total_active_subs = SUM(network.cell.active_subscribers),\n    avg_transport_latency = AVG(network.transport.latency_ms),\n    cells_over_80_util = COUNT_IF(network.cell.prb_utilization_dl_pct > 80)\n| EVAL metric_category = \"performance_kpis\"",
+    "query_type": "scripted",
+    "pain_point": "Insufficient real-time analytics for high-cardinality network data with 15-60 minute batch processing delays"
+  },
+  {
+    "name": "Capacity Planning - Cells Approaching Congestion",
+    "description": "Identifies cell sites approaching capacity limits using historical trending and current utilization patterns for proactive capacity planning",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_capacity_planning",
+      "description": "Identifies cells approaching capacity limits for proactive planning. Analyzes PRB utilization trends and busy hour patterns to predict congestion before subscriber impact occurs.",
+      "tags": [
+        "capacity",
+        "planning",
+        "proactive",
+        "esql",
+        "congestion"
+      ]
+    },
+    "query": "FROM cell_performance_metrics\n| STATS \n    avg_prb_dl = AVG(network.cell.prb_utilization_dl_pct),\n    avg_prb_ul = AVG(network.cell.prb_utilization_ul_pct),\n    p95_busy_hour = AVG(capacity.busy_hour.prb_utilization_p95),\n    avg_active_subs = AVG(network.cell.active_subscribers)\n  BY network.cell.id\n| LOOKUP JOIN cell_site_inventory ON network.cell.id\n| EVAL capacity_risk_score = (avg_prb_dl * 0.4) + (p95_busy_hour * 0.4) + ((avg_active_subs / network.cell.capacity_subscribers) * 100 * 0.2)\n| WHERE capacity_risk_score > 70\n| EVAL risk_level = CASE(\n    capacity_risk_score > 85, \"CRITICAL\",\n    capacity_risk_score > 75, \"HIGH\",\n    \"MEDIUM\"\n  )\n| SORT capacity_risk_score DESC\n| KEEP \n    network.cell.id,\n    network.cell.name,\n    network.region.name,\n    network.vendor.name,\n    network.technology,\n    avg_prb_dl,\n    p95_busy_hour,\n    avg_active_subs,\n    network.cell.capacity_subscribers,\n    capacity_risk_score,\n    risk_level\n| LIMIT 50",
+    "query_type": "scripted",
+    "pain_point": "Proactive Network Capacity Planning & Congestion Management - Use historical trending and predictive analytics to identify cells approaching capacity limits"
+  },
+  {
+    "name": "Handover Performance Analysis by Vendor",
+    "description": "Analyzes handover success rates and identifies inter-vendor handover issues that may indicate configuration problems or interference",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_handover_analysis",
+      "description": "Analyzes handover performance across vendors and cell pairs. Identifies problematic handover paths and inter-vendor issues to optimize mobility experience and reduce call drops.",
+      "tags": [
+        "handover",
+        "mobility",
+        "vendor",
+        "esql",
+        "optimization"
+      ]
+    },
+    "query": "FROM network_signaling_events\n| WHERE network.procedure.type == \"HANDOVER\"\n| STATS \n    total_handovers = COUNT(*),\n    successful_handovers = COUNT_IF(network.handover.success == true),\n    failed_handovers = COUNT_IF(network.handover.success == false),\n    avg_signal_rsrp = AVG(network.radio.rsrp_dbm)\n  BY network.handover.source_cell, network.handover.target_cell\n| EVAL success_rate_pct = (TO_DOUBLE(successful_handovers) * 100.0) / total_handovers\n| WHERE total_handovers > 10 AND success_rate_pct < 95\n| LOOKUP JOIN cell_site_inventory ON network.handover.source_cell == network.cell.id\n| RENAME \n    network.vendor.name AS source_vendor,\n    network.region.name AS source_region\n| SORT success_rate_pct ASC\n| KEEP \n    network.handover.source_cell,\n    network.handover.target_cell,\n    source_vendor,\n    source_region,\n    total_handovers,\n    success_rate_pct,\n    avg_signal_rsrp\n| LIMIT 100",
+    "query_type": "scripted",
+    "pain_point": "Fragmented subscriber experience visibility across network domains requiring manual correlation across vendor-specific Element Management Systems"
+  }
+]

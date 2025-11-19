@@ -1,0 +1,172 @@
+[
+  {
+    "name": "Semantic Content Discovery - Thematic Similarity",
+    "description": "Find content with similar thematic elements using semantic understanding beyond surface-level genre matching. Enables users to discover content based on narrative complexity, emotional tone, and thematic resonance. Addresses the 34% search dismissal rate from keyword-based search.",
+    "tool_metadata": {
+      "tool_id": "verizon_fios_consumer_t_semantic_discovery",
+      "description": "Discovers content using semantic thematic similarity. Finds shows/movies with matching narrative complexity, emotional tone, and themes beyond simple genre matching. Reduces search dismissal from 34% by understanding nuanced preferences.",
+      "tags": [
+        "semantic",
+        "discovery",
+        "personalization",
+        "esql"
+      ]
+    },
+    "query": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"complex family dynamics with moral ambiguity and redemption arc\")\n  AND availability == \"On-demand\"\n| KEEP content_id, _score, title, themes, genre, narrative_complexity, tone\n| SORT _score DESC\n| LIMIT 15",
+    "query_type": "scripted",
+    "pain_point": "Keyword-based search misses semantic intent and nuanced preferences - 34% of search results dismissed without engagement"
+  },
+  {
+    "name": "Weighted Hybrid Search - Balancing Semantic and Exact Match",
+    "description": "Advanced relevance tuning that balances semantic understanding (75% weight) with exact keyword matching (25% weight) for optimal content discovery. This best practice approach ensures users find both conceptually similar content and exact title matches.",
+    "tool_metadata": {
+      "tool_id": "verizon_fios_consumer_t_hybrid_search",
+      "description": "Balances semantic similarity (75%) with exact keyword matching (25%) for optimal content discovery. Ensures users find both conceptually similar content and exact title matches, improving search relevance.",
+      "tags": [
+        "hybrid",
+        "search",
+        "relevance",
+        "esql"
+      ]
+    },
+    "query": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"psychological thriller mystery\", {\"boost\": 0.75})\n   OR MATCH(title, \"psychological thriller mystery\", {\"boost\": 0.25})\n| KEEP content_id, _score, title, description, tone, narrative_complexity, genre\n| SORT _score DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "No understanding of content attributes beyond surface-level metadata - cannot distinguish narrative complexity, tone, or perspective"
+  },
+  {
+    "name": "Fuzzy Search for Typo-Tolerant Content Discovery",
+    "description": "Handle user typos and misspellings automatically using fuzzy matching. Critical for improving search success rates when users search by actor names, director names, or show titles with uncertain spelling.",
+    "tool_metadata": {
+      "tool_id": "verizon_fios_consumer_t_fuzzy_search",
+      "description": "Handles user typos and misspellings automatically using fuzzy matching. Improves search success when users search by actor, director, or title names with uncertain spelling, reducing search abandonment.",
+      "tags": [
+        "fuzzy",
+        "search",
+        "typo-tolerance",
+        "esql"
+      ]
+    },
+    "query": "FROM content_catalog METADATA _score\n| WHERE MATCH(cast, \"Bennedict Cumberbatch\", {\"fuzziness\": \"AUTO\"})\n   OR MATCH(director, \"Christofer Nolan\", {\"fuzziness\": \"AUTO\"})\n| KEEP content_id, _score, title, cast, director, genre, release_year\n| SORT _score DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "pain_point": "Keyword-based search misses semantic intent - users abandon searches due to typos or misspellings"
+  },
+  {
+    "name": "Cold Start Content Discovery - Thematic Expansion",
+    "description": "For new users with minimal viewing history, discover content by exploring related themes semantically. Helps reduce cold start time from 20-40 sessions to 3-5 sessions by intelligently expanding initial preferences.",
+    "tool_metadata": {
+      "tool_id": "verizon_fios_consumer_t_cold_start_discovery",
+      "description": "Reduces cold start time from 20-40 sessions to 3-5 sessions for new subscribers. Discovers content by exploring related themes semantically, reducing 18% new subscriber dissatisfaction.",
+      "tags": [
+        "cold-start",
+        "personalization",
+        "themes",
+        "esql"
+      ]
+    },
+    "query": "FROM content_themes METADATA _score\n| WHERE MATCH(theme_description, \"coming of age self discovery identity\")\n| MV_EXPAND related_themes\n| LOOKUP JOIN content_catalog ON related_themes == themes\n| KEEP content_id, _score, title, theme_name, related_themes, genre, narrative_complexity\n| SORT _score DESC\n| LIMIT 12",
+    "query_type": "scripted",
+    "pain_point": "Cold start problems - takes 20-40 viewing sessions to develop reasonable preference model, 18% new subscriber dissatisfaction"
+  },
+  {
+    "name": "Multi-Term Precision Search with Minimum Match Threshold",
+    "description": "Advanced precision control requiring at least 3 out of 5 search terms to match, reducing noise in multi-keyword searches. Best practice for complex user queries with multiple optional criteria.",
+    "tool_metadata": {
+      "tool_id": "verizon_fios_consumer_t_precision_search",
+      "description": "Controls precision by requiring at least 3 out of 5 search terms to match. Reduces noise in multi-keyword searches and improves relevance for complex user queries with multiple optional criteria.",
+      "tags": [
+        "precision",
+        "search",
+        "multi-term",
+        "esql"
+      ]
+    },
+    "query": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"female protagonist action adventure strong character development\", {\n    \"operator\": \"OR\",\n    \"minimum_should_match\": 3\n  })\n| KEEP content_id, _score, title, description, themes, subgenres, cast\n| SORT _score DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "Static content taxonomies from 2015 requiring manual updates - search returns too many irrelevant results"
+  },
+  {
+    "name": "User Preference Analysis with Theme Affinity",
+    "description": "Analyze user preference maturity and theme affinity to understand how well the preference model has developed. Identifies cold start users who need accelerated personalization.",
+    "tool_metadata": {
+      "tool_id": "verizon_fios_consumer_t_preference_analysis",
+      "description": "Analyzes user preference maturity and theme affinity across the subscriber base. Identifies cold start users needing accelerated personalization and tracks preference model development quality.",
+      "tags": [
+        "analytics",
+        "preferences",
+        "cold-start",
+        "esql"
+      ]
+    },
+    "query": "FROM user_preferences\n| WHERE profile_maturity == \"Cold Start\"\n| MV_EXPAND liked_themes\n| STATS \n    user_count = COUNT_DISTINCT(user_id),\n    avg_sessions = AVG(session_count),\n    theme_popularity = COUNT(*)\n  BY liked_themes\n| WHERE user_count > 5\n| SORT theme_popularity DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "Cold start problems - takes 20-40 viewing sessions to develop reasonable preference model"
+  },
+  {
+    "name": "Negative Signal Detection - Skip and Dismissal Patterns",
+    "description": "Identify content that users repeatedly skip or dismiss to learn negative preferences. Critical for addressing the problem where users who skip content repeatedly still receive similar recommendations.",
+    "tool_metadata": {
+      "tool_id": "verizon_fios_consumer_t_negative_signals",
+      "description": "Identifies content repeatedly skipped or dismissed by users to learn negative preferences. Prevents recommending similar content users have explicitly rejected, improving recommendation relevance.",
+      "tags": [
+        "analytics",
+        "negative-signals",
+        "personalization",
+        "esql"
+      ]
+    },
+    "query": "FROM viewing_history\n| WHERE skipped == true OR dismissed == true\n| WHERE completion_percentage < 0.2\n| STATS \n    skip_count = COUNT(*),\n    avg_watch_duration = AVG(watch_duration_seconds),\n    unique_users = COUNT_DISTINCT(user_id)\n  BY content_id\n| WHERE skip_count > 10\n| LOOKUP JOIN content_catalog ON content_id\n| KEEP content_id, title, genre, themes, skip_count, avg_watch_duration, unique_users\n| SORT skip_count DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "pain_point": "Binary recommendation logic ignores negative signals and context - users who skip content repeatedly still receive similar recommendations"
+  },
+  {
+    "name": "Content Performance by Narrative Complexity",
+    "description": "Analyze how different narrative complexity levels perform with users. Helps understand which complexity levels resonate with different audience segments.",
+    "tool_metadata": {
+      "tool_id": "verizon_fios_consumer_t_complexity_performance",
+      "description": "Analyzes performance of different narrative complexity levels across user segments. Identifies which complexity levels resonate with audiences to improve content recommendations and acquisition.",
+      "tags": [
+        "analytics",
+        "performance",
+        "content",
+        "esql"
+      ]
+    },
+    "query": "FROM viewing_history\n| WHERE completion_percentage > 0.7\n| LOOKUP JOIN content_catalog ON content_id\n| STATS \n    view_count = COUNT(*),\n    avg_completion = AVG(completion_percentage),\n    avg_rating = AVG(rating_given),\n    unique_viewers = COUNT_DISTINCT(user_id)\n  BY narrative_complexity, genre\n| WHERE view_count > 20\n| EVAL engagement_score = TO_DOUBLE(avg_completion) * avg_rating\n| SORT engagement_score DESC\n| LIMIT 30",
+    "query_type": "scripted",
+    "pain_point": "No understanding of content attributes beyond surface-level metadata - cannot distinguish narrative complexity, tone, or perspective"
+  },
+  {
+    "name": "Recommendation Explanation Quality Analysis",
+    "description": "Analyze the quality and effectiveness of recommendation explanations to improve transparency and trust. Addresses the 42% of users reporting lower trust due to black-box collaborative filtering.",
+    "tool_metadata": {
+      "tool_id": "verizon_fios_consumer_t_explanation_quality",
+      "description": "Analyzes quality and effectiveness of recommendation explanations. Improves transparency to address 42% of users reporting lower trust in black-box recommendations, building user confidence.",
+      "tags": [
+        "analytics",
+        "explainability",
+        "trust",
+        "esql"
+      ]
+    },
+    "query": "FROM recommendation_explanations\n| STATS \n    explanation_count = COUNT(*),\n    avg_similarity = AVG(similarity_score),\n    unique_users = COUNT_DISTINCT(user_id)\n  BY reasoning_factors\n| WHERE explanation_count > 10\n| SORT avg_similarity DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "No explainability in recommendations - 42% of users report lower trust due to black-box collaborative filtering"
+  },
+  {
+    "name": "Theme Relationship Network Analysis",
+    "description": "Explore relationships between content themes to understand thematic connections. Helps identify opportunities for cross-theme recommendations and content discovery.",
+    "tool_metadata": {
+      "tool_id": "verizon_fios_consumer_t_theme_network",
+      "description": "Explores relationships between content themes to identify cross-theme recommendation opportunities. Enables sophisticated content discovery beyond static 2015 taxonomies with 3-5 day update lag.",
+      "tags": [
+        "analytics",
+        "themes",
+        "discovery",
+        "esql"
+      ]
+    },
+    "query": "FROM content_themes\n| MV_EXPAND related_themes\n| STATS \n    relationship_count = COUNT(*),\n    unique_parent_themes = COUNT_DISTINCT(parent_theme)\n  BY related_themes, emotional_tone\n| WHERE relationship_count > 5\n| SORT relationship_count DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "pain_point": "Static content taxonomies from 2015 requiring manual updates with 3-5 day lag for new content"
+  }
+]

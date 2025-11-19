@@ -1,0 +1,70 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Customer Profile\nCustomer: Ita\u00fa Unibanco\nDepartment: Customer Experience\nUse Case Category: Operations/Analytics\nInterest: Real User Monitoring & Mobile Experience\nPain Points\n\nDifficulty in defining \"satisfactory performance\": Each application and business has a unique definition of satisfactory performance, making it challenging to establish universal benchmarks based on Core Web Vitals (LCP, FID/INP, CLS).\nLack of visibility into specific user interactions: It's hard to track and map specific business interactions beyond page navigation, such as button clicks, form submissions, or custom user actions.\nInability to connect frontend navigation with backend requests: Understanding the complete user journey from frontend actions through to backend API processing via distributed tracing is a challenge.\nDifficulty in identifying drop-off points in the user journey: Without clear visualization of aggregated user journeys and session timelines, it's hard to pinpoint where users abandon processes.\nLimited insight into performance bottlenecks: Difficulty understanding which phase of page load (DNS, TCP connection, request/response, DOM processing) is causing slowness.\n\nKey Metrics\nCore Web Vitals & User-Centric Metrics\n\nLargest Contentful Paint (LCP): Measures when the largest content element becomes visible (target: <2.5s for good experience)\nInteraction to Next Paint (INP) / First Input Delay (FID): Quantifies responsiveness to user interactions (target: INP <200ms, FID <100ms)\nCumulative Layout Shift (CLS): Measures visual stability and unexpected layout shifts (target: <0.1)\nFirst Contentful Paint (FCP): Time until first content is rendered\nTotal Blocking Time (TBT): Sum of blocking time for long tasks during page load\n\nNavigation Timing Breakdown\n\nDNS Resolution Time: Duration of DNS query (domainLookupEnd - domainLookupStart)\nTCP Connection Time: Time to establish connection including TLS (connectEnd - connectStart)\nTime to First Byte (TTFB): Server response latency (responseStart - requestStart)\nResponse Download Time: Content download duration (responseEnd - responseStart)\nDOM Processing Time: HTML parsing and rendering (domComplete - domLoading)\nLoad Event Duration: Time for load event execution (loadEventEnd - loadEventStart)\n\nUser Behavior & Session Data\n\nSession ID: Groups all user actions into a session for chronological timeline analysis\nTransaction Types: Categorizes interactions (page-load, route-change, user-interaction)\nUser Interaction Actions: Custom tracking of business events like \"Clicked Transfer Funds\" or \"Submitted PIX Payment Form\"\nResource Timing: Load time of JavaScript, CSS, images, and API calls (via Resource Timing API)\n\nError & Performance Indicators\n\nJavaScript Errors: Runtime errors captured with stack traces\nLong Tasks: Tasks blocking the UI thread >50ms\nSlow API Calls: HTTP requests tracked via distributed tracing\nFailed Resources: 4xx/5xx HTTP responses for assets or API calls\n\nDistributed Tracing\n\nTrace ID & Span ID: Connects frontend RUM transactions with backend APM traces\ntraceparent Header: W3C standard for end-to-end distributed tracing\nService Maps: Visualizes request flow from browser through microservices\n\nUse Cases\n1. Core Web Vitals Monitoring & Alerting\nDefine performance thresholds based on Google's Core Web Vitals (LCP, INP/FID, CLS) and create dashboards to track these metrics by:\n\nApplication/page type (e.g., account dashboard, payment flow, investment portal)\nDevice type (mobile vs desktop)\nGeographic region\nNetwork connection type (4G, 5G, WiFi)\n\nImplementation: Use ES|QL queries to aggregate transaction.marks data (FCP, LCP) and experience metrics (CLS, INP) across sessions, filtering by transaction.name and custom labels.\n2. Mapping Customer Journeys with Custom Transactions\nInstrument banking workflows using custom transactions and user timing marks:\n\n\"Login Flow\": Capture login attempt \u2192 authentication \u2192 account dashboard\n\"PIX Transfer\": Track form open \u2192 beneficiary selection \u2192 amount entry \u2192 confirmation \u2192 success\n\"Investment Purchase\": Monitor product browse \u2192 details view \u2192 purchase \u2192 confirmation\n\nImplementation: Use the RUM Agent's custom transaction API and data-transaction-name attributes to create named transactions. Track funnel progression with ES|QL queries joining session.id across transaction sequences.\n3. Individual User Session Analysis\nFilter by specific session ID in Kibana to view a detailed chronological timeline showing:\n\nAll page loads and route changes\nUser interaction events (clicks, form submissions)\nAPI calls with response times (via distributed tracing)\nJavaScript errors with stack traces\nLong tasks that blocked the UI\nResource loading waterfall\n\nImplementation: Query transactions and spans filtered by session.id, visualized in APM UI timeline or custom Kibana dashboards.\n4. Building Aggregated Conversion Funnels\nCreate funnel visualizations to identify drop-off points:\n\nAccount opening: Homepage \u2192 Registration \u2192 Verification \u2192 First Deposit\nLoan application: Calculator \u2192 Application Form \u2192 Document Upload \u2192 Approval\nCard activation: Dashboard \u2192 Card Settings \u2192 Activation \u2192 Success\n\nImplementation: Use Kibana Lens funnel charts or ES|QL queries to count unique sessions progressing through transaction.name sequences, grouped by custom labels indicating funnel steps.\n5. Frontend-to-Backend Performance Correlation\nConnect browser performance with backend service latency using distributed tracing:\n\nIdentify which API endpoints contribute most to slow page experiences\nTrace specific user sessions from browser click \u2192 API gateway \u2192 microservices\nCorrelate frontend LCP/TBT metrics with backend transaction duration\n\nImplementation: Configure distributedTracingOrigins in RUM Agent to propagate traceparent headers. Query APM data joining RUM transactions (via trace.id) with backend spans to visualize end-to-end latency.\n6. Navigation Timing Breakdown Analysis\nDiagnose which phase of page load causes performance issues:\n\nDNS/TCP issues indicating network problems\nHigh TTFB pointing to slow backend services\nLong Response times suggesting large payloads or slow downloads\nExtended DOM Processing indicating heavy JavaScript execution or rendering\n\nImplementation: Use breakdown metrics in ES|QL queries (span.type: DNS, TCP, Request, Response, Processing, Load) to identify bottlenecks by percentile (p50, p95, p99).\n7. Long Task & JavaScript Error Correlation\nIdentify patterns between long-running JavaScript tasks and user-reported issues:\n\nTrack long tasks that block interactions during critical workflows\nCorrelate JavaScript errors with specific user journeys\nMonitor third-party script impact on performance\n\nImplementation: Query span.type: \"longtask\" and error events, grouping by transaction.name, url.full, and user_agent details to identify problematic code paths.\n8. Resource Loading Optimization\nAnalyze resource timing to optimize asset delivery:\n\nIdentify slow-loading assets (images, JS, CSS) by resource type\nTrack CDN performance and cache hit rates\nMonitor third-party resource impact\n\nImplementation: Query span.type: \"resource\" with breakdown by resource.url, http.response.status_code, and duration to identify optimization opportunities."
+    },
+    {
+      "role": "assistant",
+      "content": "Excellent! I've captured comprehensive details for Ita\u00fa Unibanco's Customer Experience team - 5 pain points around RUM & mobile experience, 8 detailed use cases covering Core Web Vitals monitoring through resource optimization, and 18 key metrics. To finalize the demo, I just need:\n\n\u2022 **Scale:** How many daily active users, sessions, or page views are you monitoring?\n\n\ud83d\udca1 Don't have all the details? Just type **'skip'** and I'll use reasonable defaults."
+    },
+    {
+      "role": "user",
+      "content": "skip"
+    },
+    {
+      "role": "assistant",
+      "content": "Perfect! I've filled in reasonable defaults:\n\n\u2022 **Scale:** 100+ team members managing 1,000+ transactions daily\n\u2022 **Metrics:** Cumulative Layout Shift (CLS) - target <0.1, Total Blocking Time (TBT), DNS Resolution Time, Long Tasks (>50ms), Load Event Duration, Response Download Time, Session ID, Slow API Calls, Time to First Byte (TTFB), DOM Processing Time, Trace ID & Span ID, First Contentful Paint (FCP), First Input Delay (FID) - target <100ms, TCP Connection Time, JavaScript Errors, Largest Contentful Paint (LCP) - target <2.5s, Interaction to Next Paint (INP) - target <200ms, Failed Resources (4xx/5xx)\n\nYou're all set! Type **'generate'** to create your custom demo module."
+    },
+    {
+      "role": "user",
+      "content": "generate"
+    }
+  ],
+  "context": {
+    "company_name": "Ita\u00fa Unibanco",
+    "department": "Customer Experience",
+    "industry": "Banking/Financial Services",
+    "pain_points": [
+      "Inability to connect frontend navigation with backend requests through distributed tracing",
+      "Difficulty in defining 'satisfactory performance' - each application and business has unique performance definitions, challenging to establish universal benchmarks based on Core Web Vitals",
+      "Limited insight into performance bottlenecks across different phases of page load (DNS, TCP, request/response, DOM processing)",
+      "Lack of visibility into specific user interactions beyond page navigation (button clicks, form submissions, custom user actions)",
+      "Difficulty in identifying drop-off points in the user journey without clear visualization of aggregated user journeys and session timelines"
+    ],
+    "use_cases": [
+      "Individual User Session Analysis - view detailed chronological timeline of page loads, user interactions, API calls, errors, and long tasks",
+      "Navigation Timing Breakdown Analysis - diagnose which phase of page load causes performance issues",
+      "Resource Loading Optimization - analyze resource timing to optimize asset delivery and CDN performance",
+      "Frontend-to-Backend Performance Correlation - connect browser performance with backend service latency using distributed tracing",
+      "Long Task & JavaScript Error Correlation - identify patterns between long-running tasks and user-reported issues",
+      "Building Aggregated Conversion Funnels - identify drop-off points in account opening, loan application, card activation flows",
+      "Core Web Vitals Monitoring & Alerting - track LCP, INP/FID, CLS by application type, device, region, and network connection",
+      "Mapping Customer Journeys with Custom Transactions - instrument banking workflows like Login Flow, PIX Transfer, Investment Purchase"
+    ],
+    "scale": "100+ team members managing 1,000+ transactions daily",
+    "metrics": [
+      "Cumulative Layout Shift (CLS) - target <0.1",
+      "Total Blocking Time (TBT)",
+      "DNS Resolution Time",
+      "Long Tasks (>50ms)",
+      "Load Event Duration",
+      "Response Download Time",
+      "Session ID",
+      "Slow API Calls",
+      "Time to First Byte (TTFB)",
+      "DOM Processing Time",
+      "Trace ID & Span ID",
+      "First Contentful Paint (FCP)",
+      "First Input Delay (FID) - target <100ms",
+      "TCP Connection Time",
+      "JavaScript Errors",
+      "Largest Contentful Paint (LCP) - target <2.5s",
+      "Interaction to Next Paint (INP) - target <200ms",
+      "Failed Resources (4xx/5xx)"
+    ],
+    "demo_type": "analytics",
+    "dataset_size_preference": "small"
+  },
+  "created_at": "2025-11-06T16:51:10.075830"
+}

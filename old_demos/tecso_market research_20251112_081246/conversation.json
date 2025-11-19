@@ -1,0 +1,45 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Customer: Tecso\nDepartment: Market Research\nUse Cases: data science - understanding customer buying behavior - who buys particular products, what's their profile, segmentation. \nData Sets: Have both online and in-store purchase history\n"
+    },
+    {
+      "role": "assistant",
+      "content": "Perfect! I've captured your customer analytics use cases for Tecso's Market Research team. To complete the demo setup, I need:\n\n\u2022 **Scale:** How many customers or transactions are we analyzing? (e.g., 100K customers, 1M transactions/month)\n\u2022 **Metrics:** What KPIs matter most? (e.g., customer lifetime value, purchase frequency, segment conversion rates)\n\u2022 **Pain Points:** What challenges are you facing? (e.g., slow queries, data silos, manual reporting)\n\n\ud83d\udca1 Don't have all the details? Just type **'skip'** and I'll use reasonable defaults."
+    },
+    {
+      "role": "user",
+      "content": "skip"
+    },
+    {
+      "role": "assistant",
+      "content": "Perfect! I've filled in reasonable defaults:\n\n\u2022 **Scale:** 100+ team members managing 1,000+ transactions daily\n\u2022 **Metrics:** user engagement, task completion rate, response time\n\nYou're all set! Type **'generate'** to create your custom demo module."
+    },
+    {
+      "role": "user",
+      "content": "generate"
+    }
+  ],
+  "context": {
+    "company_name": "Tecso",
+    "department": "Market Research",
+    "industry": "Retail",
+    "pain_points": [],
+    "use_cases": [
+      "Analysis of online and in-store purchase history",
+      "Customer profiling and segmentation",
+      "Understanding who buys particular products",
+      "Data science analysis of customer buying behavior"
+    ],
+    "scale": "100+ team members managing 1,000+ transactions daily",
+    "metrics": [
+      "user engagement",
+      "task completion rate",
+      "response time"
+    ],
+    "demo_type": "analytics",
+    "dataset_size_preference": "small"
+  },
+  "created_at": "2025-11-12T08:22:02.001500"
+}

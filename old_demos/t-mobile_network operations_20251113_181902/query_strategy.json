@@ -1,0 +1,401 @@
+{
+  "datasets": [
+    {
+      "name": "network_procedures",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "500000",
+      "description": "Core network procedure events from MME, HSS, and eNodeB nodes capturing attach, authentication, handoff, service request, and bearer establishment procedures with outcomes and failure reasons",
+      "required_fields": {
+        "@timestamp": "date",
+        "network.procedure.type": "keyword",
+        "network.procedure.outcome": "keyword",
+        "network.procedure.result_code": "keyword",
+        "network.procedure.failure_reason": "keyword",
+        "network.procedure.duration_ms": "long",
+        "network.ue.imsi": "keyword",
+        "network.ue.imsi_prefix": "keyword",
+        "network.cell.ecgi": "keyword",
+        "network.cell.source_ecgi": "keyword",
+        "network.cell.target_ecgi": "keyword",
+        "network.mme.hostname": "keyword",
+        "network.mme.pool_id": "keyword",
+        "network.hss.node_id": "keyword",
+        "network.tracking_area_code": "keyword",
+        "network.diameter.result_code": "keyword",
+        "network.diameter.command_code": "keyword",
+        "network.handoff.outcome": "keyword",
+        "network.handoff.failure_cause": "keyword",
+        "network.gtp.cause_code": "keyword",
+        "network.roaming_partner.plmn_id": "keyword"
+      },
+      "relationships": [
+        "mme_nodes",
+        "hss_nodes",
+        "cell_sites"
+      ],
+      "semantic_fields": [],
+      "cardinality_requirements": "Ensure 2000-5000 procedure events per hour per MME node. Multiple procedures per IMSI per hour. 3-5 MME nodes per pool_id for split-brain detection."
+    },
+    {
+      "name": "mme_nodes",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "50",
+      "description": "MME node inventory with pool assignments, datacenter locations, software versions, and capacity specifications",
+      "required_fields": {
+        "network.mme.hostname": "keyword",
+        "network.mme.pool_id": "keyword",
+        "network.mme.datacenter": "keyword",
+        "network.mme.software_version": "keyword",
+        "network.mme.ue_context.max_capacity": "long",
+        "network.mme.vendor": "keyword",
+        "cloud.availability_zone": "keyword"
+      },
+      "relationships": [
+        "network_procedures",
+        "mme_metrics"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "mme_metrics",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "100000",
+      "description": "Real-time MME resource utilization and context count metrics collected every 10 seconds via Metricbeat",
+      "required_fields": {
+        "@timestamp": "date",
+        "network.mme.hostname": "keyword",
+        "system.cpu.total.pct": "float",
+        "system.memory.used.pct": "float",
+        "system.memory.used.bytes": "long",
+        "network.mme.ue_context.active_count": "long",
+        "network.mme.s1ap.connected_enodeb_count": "long"
+      },
+      "relationships": [
+        "mme_nodes"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "hss_nodes",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "10",
+      "description": "HSS node inventory with database instance roles, replication configuration, and datacenter locations",
+      "required_fields": {
+        "network.hss.node_id": "keyword",
+        "network.hss.database_instance": "keyword",
+        "network.hss.datacenter": "keyword",
+        "network.hss.node_role": "keyword"
+      },
+      "relationships": [
+        "network_procedures",
+        "hss_metrics"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "hss_metrics",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "50000",
+      "description": "HSS database replication lag and Diameter transaction rate metrics",
+      "required_fields": {
+        "@timestamp": "date",
+        "network.hss.node_id": "keyword",
+        "database.hss.replication_lag_seconds": "float",
+        "network.hss.diameter.tps": "float"
+      },
+      "relationships": [
+        "hss_nodes"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "cell_sites",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "5000",
+      "description": "Cell tower and eNodeB inventory with geographic locations, vendor information, and capacity specifications",
+      "required_fields": {
+        "network.cell.ecgi": "keyword",
+        "network.enodeb.id": "keyword",
+        "network.enodeb.site_id": "keyword",
+        "network.enodeb.vendor": "keyword",
+        "network.tracking_area_code": "keyword",
+        "network.cell.frequency_band": "keyword",
+        "geo.location": "geo_point"
+      },
+      "relationships": [
+        "network_procedures",
+        "cell_metrics"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "cell_metrics",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "200000",
+      "description": "Per-cell radio KPIs including RRC connection success rate, PRB utilization, and active UE count",
+      "required_fields": {
+        "@timestamp": "date",
+        "network.cell.ecgi": "keyword",
+        "network.cell.rrc_connection_success_rate": "float",
+        "network.cell.prb_utilization_pct": "float",
+        "network.cell.active_ue_count": "long"
+      },
+      "relationships": [
+        "cell_sites"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "security_events",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "50000",
+      "description": "SS7 and Diameter security attack events from firewalls including attack types, source networks, and affected subscribers",
+      "required_fields": {
+        "@timestamp": "date",
+        "network.protocol": "keyword",
+        "network.ss7.attack_type": "keyword",
+        "network.ss7.source_gt": "keyword",
+        "network.diameter.attack_type": "keyword",
+        "network.diameter.source_host": "keyword",
+        "network.diameter.source_realm": "keyword",
+        "network.ue.imsi": "keyword",
+        "event.outcome": "keyword",
+        "geo.country_name": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    }
+  ],
+  "queries": [
+    {
+      "name": "Real-Time HSS Authentication Failure Detection with Database Correlation",
+      "pain_point": "HSS database synchronization and corruption issues manifest as mass authentication failures affecting hundreds to thousands of subscribers simultaneously. Current Oracle-based monitoring lacks visibility into subscriber authentication success rate, making it difficult to distinguish between localized issues and systemic HSS problems requiring failover.",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "network_procedures",
+        "hss_nodes",
+        "hss_metrics"
+      ],
+      "required_fields": {
+        "network_procedures": [
+          "@timestamp",
+          "network.procedure.type",
+          "network.diameter.result_code",
+          "network.ue.imsi",
+          "network.hss.node_id"
+        ],
+        "hss_nodes": [
+          "network.hss.node_id",
+          "network.hss.database_instance",
+          "network.hss.datacenter"
+        ],
+        "hss_metrics": [
+          "@timestamp",
+          "network.hss.node_id",
+          "database.hss.replication_lag_seconds"
+        ]
+      },
+      "description": "Detect mass authentication failures within 60 seconds by calculating failure rates per HSS database instance over 1-minute windows. Enriches with HSS node metadata and correlates with replication lag to identify database synchronization issues. Alerts when failure rate exceeds 5% threshold.",
+      "complexity": "high",
+      "esql_query": "FROM network_procedures | WHERE network.procedure.type == \"authentication\" AND @timestamp >= NOW() - 15 minutes | LOOKUP JOIN hss_nodes ON network.hss.node_id | EVAL minute_bucket = DATE_TRUNC(1 minute, @timestamp) | EVAL is_failure = CASE(network.diameter.result_code == \"2001\", 0, 1) | STATS total_auth = COUNT(*), failed_auth = SUM(is_failure), unique_imsi = COUNT_DISTINCT(network.ue.imsi) BY minute_bucket, network.hss.node_id, hss_nodes.database_instance, hss_nodes.datacenter | EVAL failure_rate_pct = (failed_auth * 100.0) / total_auth | WHERE failure_rate_pct > 5.0 | EVAL severity = CASE(failure_rate_pct > 20, \"CRITICAL\", failure_rate_pct > 10, \"HIGH\", \"MEDIUM\") | KEEP network.hss.node_id, severity, hss_nodes.database_instance, failure_rate_pct, unique_imsi, minute_bucket, failed_auth, total_auth | SORT failure_rate_pct DESC"
+    },
+    {
+      "name": "MME Resource Exhaustion and Context Corruption Detection",
+      "pain_point": "MME nodes experience memory leaks, CPU spikes during high-load periods, and software bugs causing UE context corruption. These issues manifest as increased service request failures with context_not_found errors, but current monitoring doesn't correlate resource utilization patterns with specific procedure failure rates.",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE",
+        "PERCENTILE"
+      ],
+      "required_datasets": [
+        "network_procedures",
+        "mme_nodes",
+        "mme_metrics"
+      ],
+      "required_fields": {
+        "network_procedures": [
+          "@timestamp",
+          "network.procedure.type",
+          "network.procedure.outcome",
+          "network.procedure.failure_reason",
+          "network.mme.hostname"
+        ],
+        "mme_nodes": [
+          "network.mme.hostname",
+          "network.mme.pool_id",
+          "network.mme.software_version"
+        ],
+        "mme_metrics": [
+          "@timestamp",
+          "network.mme.hostname",
+          "system.memory.used.pct",
+          "network.mme.ue_context.active_count"
+        ]
+      },
+      "description": "Identifies MME nodes with elevated service request failure rates correlated with high memory utilization and context_not_found errors. Uses percentile-based thresholds to detect anomalous failure patterns indicating memory corruption or software bugs.",
+      "complexity": "high",
+      "esql_query": "FROM network_procedures | WHERE network.procedure.type == \"service_request\" AND @timestamp >= NOW() - 1 hour | LOOKUP JOIN mme_nodes ON network.mme.hostname | EVAL hour_bucket = DATE_TRUNC(1 hour, @timestamp) | EVAL is_context_failure = CASE(network.procedure.failure_reason == \"context_not_found\", 1, 0) | STATS total_requests = COUNT(*), context_failures = SUM(is_context_failure), total_failures = COUNTIF(network.procedure.outcome == \"failure\") BY hour_bucket, network.mme.hostname, mme_nodes.pool_id, mme_nodes.software_version | EVAL context_failure_rate = (context_failures * 100.0) / total_requests, overall_failure_rate = (total_failures * 100.0) / total_requests | INLINESTATS p75_context_rate = PERCENTILE(context_failure_rate, 75), p90_context_rate = PERCENTILE(context_failure_rate, 90) BY mme_nodes.pool_id | WHERE context_failure_rate > p90_context_rate | EVAL anomaly_severity = CASE(context_failure_rate > p90_context_rate * 2, \"CRITICAL\", context_failure_rate > p90_context_rate * 1.5, \"HIGH\", \"MEDIUM\") | KEEP network.mme.hostname, anomaly_severity, mme_nodes.pool_id, context_failure_rate, overall_failure_rate, hour_bucket, context_failures, mme_nodes.software_version | SORT context_failure_rate DESC"
+    },
+    {
+      "name": "Cell Tower Handoff Cascade Failure Pattern Detection",
+      "pain_point": "eNodeB handoff failures create cascade effects where subscribers ping-pong between cells, exhaust handoff attempts, and experience dropped calls. Current RAN monitoring provides cell-level statistics but lacks real-time detection of handoff failure patterns across adjacent cells.",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "DATE_TRUNC",
+        "WHERE",
+        "EVAL"
+      ],
+      "required_datasets": [
+        "network_procedures",
+        "cell_sites"
+      ],
+      "required_fields": {
+        "network_procedures": [
+          "@timestamp",
+          "network.procedure.type",
+          "network.cell.source_ecgi",
+          "network.cell.target_ecgi",
+          "network.handoff.outcome",
+          "network.handoff.failure_cause",
+          "network.ue.imsi"
+        ],
+        "cell_sites": [
+          "network.cell.ecgi",
+          "network.enodeb.id",
+          "network.enodeb.vendor",
+          "network.tracking_area_code"
+        ]
+      },
+      "description": "Detects handoff failure patterns between specific cell pairs by calculating failure rates over 15-minute windows. Identifies problematic source-target cell combinations with failure rates exceeding 10%, enriched with cell site metadata for targeted RF optimization.",
+      "complexity": "medium",
+      "esql_query": "FROM network_procedures | WHERE network.procedure.type == \"handoff\" AND @timestamp >= NOW() - 2 hours | LOOKUP JOIN cell_sites ON network.cell.source_ecgi | EVAL quarter_hour = DATE_TRUNC(15 minutes, @timestamp) | STATS total_handoffs = COUNT(*), failed_handoffs = COUNTIF(network.handoff.outcome == \"failure\"), unique_subscribers = COUNT_DISTINCT(network.ue.imsi) BY quarter_hour, network.cell.source_ecgi, network.cell.target_ecgi, cell_sites.enodeb.id, cell_sites.enodeb.vendor | EVAL handoff_failure_rate = (failed_handoffs * 100.0) / total_handoffs | WHERE handoff_failure_rate > 10.0 AND total_handoffs >= 20 | EVAL impact_level = CASE(unique_subscribers > 50, \"HIGH\", unique_subscribers > 20, \"MEDIUM\", \"LOW\") | KEEP network.cell.source_ecgi, network.cell.target_ecgi, impact_level, handoff_failure_rate, unique_subscribers, quarter_hour, failed_handoffs, total_handoffs, cell_sites.enodeb.vendor | SORT handoff_failure_rate DESC, unique_subscribers DESC"
+    },
+    {
+      "name": "MME Pool Split-Brain Detection via Context Count Divergence",
+      "pain_point": "Split-brain scenarios between redundant MME pool members cause duplicate session creation attempts and service disruptions. Detection requires identifying sudden divergence in active UE context counts between MME nodes in the same pool, which current monitoring doesn't track.",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE",
+        "STD_DEV"
+      ],
+      "required_datasets": [
+        "mme_metrics",
+        "mme_nodes"
+      ],
+      "required_fields": {
+        "mme_metrics": [
+          "@timestamp",
+          "network.mme.hostname",
+          "network.mme.ue_context.active_count"
+        ],
+        "mme_nodes": [
+          "network.mme.hostname",
+          "network.mme.pool_id",
+          "network.mme.datacenter"
+        ]
+      },
+      "description": "Detects MME split-brain conditions by calculating statistical divergence in active UE context counts within MME pools. Uses standard deviation to identify when context counts diverge beyond 3 standard deviations, indicating potential split-brain requiring failover.",
+      "complexity": "high",
+      "esql_query": "FROM mme_metrics | WHERE @timestamp >= NOW() - 30 minutes | LOOKUP JOIN mme_nodes ON network.mme.hostname | EVAL five_min = DATE_TRUNC(5 minutes, @timestamp) | STATS avg_context_count = AVG(network.mme.ue_context.active_count) BY five_min, network.mme.hostname, mme_nodes.pool_id, mme_nodes.datacenter | INLINESTATS pool_avg_contexts = AVG(avg_context_count), pool_stddev = STD_DEV(avg_context_count), pool_min = MIN(avg_context_count), pool_max = MAX(avg_context_count) BY mme_nodes.pool_id, five_min | EVAL z_score = (avg_context_count - pool_avg_contexts) / COALESCE(pool_stddev, 1), context_range = pool_max - pool_min, range_pct = (context_range * 100.0) / pool_avg_contexts | WHERE ABS(z_score) > 3.0 AND range_pct > 30.0 | EVAL split_brain_severity = CASE(range_pct > 60, \"CRITICAL\", range_pct > 45, \"HIGH\", \"MEDIUM\") | KEEP network.mme.hostname, split_brain_severity, mme_nodes.pool_id, z_score, avg_context_count, five_min, pool_avg_contexts, context_range, range_pct | SORT ABS(z_score) DESC"
+    },
+    {
+      "name": "Subscriber Impact Severity Classification for Proactive Help Desk Escalation",
+      "pain_point": "Network incidents overwhelm help desk operations because the NOC lacks real-time visibility into affected subscriber counts. Current systems don't calculate unique IMSI impact across multiple failure types, preventing tiered escalation before customer reports flood support channels.",
+      "esql_features": [
+        "STATS",
+        "DATE_TRUNC",
+        "EVAL",
+        "WHERE",
+        "COUNT_DISTINCT"
+      ],
+      "required_datasets": [
+        "network_procedures"
+      ],
+      "required_fields": {
+        "network_procedures": [
+          "@timestamp",
+          "network.procedure.type",
+          "network.procedure.outcome",
+          "network.ue.imsi",
+          "network.tracking_area_code",
+          "network.procedure.failure_reason"
+        ]
+      },
+      "description": "Calculates affected subscriber counts across all procedure failure types over 5-minute windows. Classifies incident severity based on unique IMSI count thresholds (500/2000/10000) to enable tiered alerting and proactive help desk notification before ticket surges.",
+      "complexity": "medium",
+      "esql_query": "FROM network_procedures | WHERE network.procedure.outcome == \"failure\" AND @timestamp >= NOW() - 15 minutes | EVAL five_min = DATE_TRUNC(5 minutes, @timestamp) | STATS affected_subscribers = COUNT_DISTINCT(network.ue.imsi), total_failures = COUNT(*), auth_failures = COUNTIF(network.procedure.type == \"authentication\"), handoff_failures = COUNTIF(network.procedure.type == \"handoff\"), service_failures = COUNTIF(network.procedure.type == \"service_request\") BY five_min, network.tracking_area_code | EVAL impact_severity = CASE(affected_subscribers >= 10000, \"CRITICAL\", affected_subscribers >= 2000, \"HIGH\", affected_subscribers >= 500, \"MEDIUM\", \"LOW\"), primary_failure_type = CASE(auth_failures > handoff_failures AND auth_failures > service_failures, \"AUTHENTICATION\", handoff_failures > service_failures, \"HANDOFF\", \"SERVICE_REQUEST\") | WHERE impact_severity != \"LOW\" | KEEP network.tracking_area_code, impact_severity, primary_failure_type, affected_subscribers, total_failures, five_min, auth_failures, handoff_failures, service_failures | SORT affected_subscribers DESC"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "network_procedures",
+      "to": "mme_nodes",
+      "type": "many-to-one",
+      "join_field": "network.mme.hostname"
+    },
+    {
+      "from": "network_procedures",
+      "to": "hss_nodes",
+      "type": "many-to-one",
+      "join_field": "network.hss.node_id"
+    },
+    {
+      "from": "network_procedures",
+      "to": "cell_sites",
+      "type": "many-to-one",
+      "join_field": "network.cell.ecgi"
+    },
+    {
+      "from": "mme_metrics",
+      "to": "mme_nodes",
+      "type": "many-to-one",
+      "join_field": "network.mme.hostname"
+    },
+    {
+      "from": "hss_metrics",
+      "to": "hss_nodes",
+      "type": "many-to-one",
+      "join_field": "network.hss.node_id"
+    },
+    {
+      "from": "cell_metrics",
+      "to": "cell_sites",
+      "type": "many-to-one",
+      "join_field": "network.cell.ecgi"
+    }
+  ],
+  "field_mappings": {
+    "network_procedures.mme.hostname": "mme_nodes.mme.hostname",
+    "network_procedures.hss.node_id": "hss_nodes.hss.node_id",
+    "network_procedures.cell.ecgi": "cell_sites.cell.ecgi",
+    "network_procedures.cell.source_ecgi": "cell_sites.cell.ecgi",
+    "network_procedures.cell.target_ecgi": "cell_sites.cell.ecgi",
+    "mme_metrics.mme.hostname": "mme_nodes.mme.hostname",
+    "hss_metrics.hss.node_id": "hss_nodes.hss.node_id",
+    "cell_metrics.cell.ecgi": "cell_sites.cell.ecgi"
+  }
+}

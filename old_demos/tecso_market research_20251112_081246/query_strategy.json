@@ -1,0 +1,276 @@
+{
+  "datasets": [
+    {
+      "name": "purchase_transactions",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "100000+",
+      "required_fields": {
+        "transaction_id": "keyword",
+        "@timestamp": "date",
+        "customer_id": "keyword",
+        "product_id": "keyword",
+        "purchase_amount": "float",
+        "purchase_channel": "keyword",
+        "quantity": "integer",
+        "store_location": "keyword",
+        "transaction_notes": "text"
+      },
+      "relationships": [
+        "customers",
+        "products"
+      ],
+      "semantic_fields": [
+        "transaction_notes"
+      ]
+    },
+    {
+      "name": "customers",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "10000+",
+      "required_fields": {
+        "customer_id": "keyword",
+        "customer_name": "text",
+        "customer_segment": "keyword",
+        "demographic_age_group": "keyword",
+        "lifetime_value": "float",
+        "acquisition_date": "date",
+        "preferred_channel": "keyword",
+        "customer_profile_description": "text"
+      },
+      "relationships": [
+        "purchase_transactions"
+      ],
+      "semantic_fields": [
+        "customer_profile_description"
+      ]
+    },
+    {
+      "name": "products",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "5000+",
+      "required_fields": {
+        "product_id": "keyword",
+        "product_name": "text",
+        "product_category": "keyword",
+        "product_subcategory": "keyword",
+        "unit_price": "float",
+        "brand": "keyword",
+        "product_description": "text"
+      },
+      "relationships": [
+        "purchase_transactions"
+      ],
+      "semantic_fields": [
+        "product_description"
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "name": "Customer Segment Revenue Analysis with Purchase Behavior",
+      "pain_point": "Need to understand which customer segments drive the most revenue and their purchasing patterns",
+      "esql_features": [
+        "STATS",
+        "LOOKUP JOIN",
+        "EVAL",
+        "SORT"
+      ],
+      "required_datasets": [
+        "purchase_transactions",
+        "customers"
+      ],
+      "required_fields": {
+        "purchase_transactions": [
+          "customer_id",
+          "purchase_amount",
+          "@timestamp",
+          "purchase_channel"
+        ],
+        "customers": [
+          "customer_id",
+          "customer_segment",
+          "customer_name"
+        ]
+      },
+      "join_chain": [
+        "purchase_transactions -> customers"
+      ],
+      "query": "FROM purchase_transactions\n| LOOKUP JOIN customers ON customer_id\n| STATS total_revenue = SUM(purchase_amount), \n        avg_transaction = AVG(purchase_amount), \n        transaction_count = COUNT(*), \n        unique_customers = COUNT_DISTINCT(customer_id) \n  BY customers.customer_segment, purchase_channel\n| EVAL revenue_per_customer = total_revenue / unique_customers\n| SORT total_revenue DESC\n| LIMIT 20",
+      "description": "Analyzes revenue by customer segment and purchase channel, calculating key metrics like average transaction value and revenue per customer to identify high-value segments",
+      "complexity": "medium"
+    },
+    {
+      "name": "Product Category Performance with Customer Demographics",
+      "pain_point": "Understanding which products are purchased by specific demographic groups for targeted marketing",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "WHERE",
+        "EVAL"
+      ],
+      "required_datasets": [
+        "purchase_transactions",
+        "products",
+        "customers"
+      ],
+      "required_fields": {
+        "purchase_transactions": [
+          "product_id",
+          "customer_id",
+          "purchase_amount",
+          "quantity"
+        ],
+        "products": [
+          "product_id",
+          "product_category",
+          "product_name",
+          "brand"
+        ],
+        "customers": [
+          "customer_id",
+          "demographic_age_group",
+          "customer_segment"
+        ]
+      },
+      "join_chain": [
+        "purchase_transactions -> products",
+        "purchase_transactions -> customers"
+      ],
+      "query": "FROM purchase_transactions\n| LOOKUP JOIN products ON product_id\n| LOOKUP JOIN customers ON customer_id\n| WHERE customers.demographic_age_group IS NOT NULL\n| STATS total_units = SUM(quantity), \n        total_revenue = SUM(purchase_amount), \n        avg_basket_size = AVG(quantity) \n  BY products.product_category, customers.demographic_age_group\n| EVAL revenue_per_unit = total_revenue / total_units\n| SORT total_revenue DESC\n| LIMIT 30",
+      "description": "Identifies which product categories resonate with specific age demographics, enabling targeted marketing campaigns and inventory optimization",
+      "complexity": "high"
+    },
+    {
+      "name": "High-Value Customer Purchase Pattern Comparison",
+      "pain_point": "Need to compare individual customer purchase behavior against their segment average to identify upsell opportunities",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE",
+        "SORT"
+      ],
+      "required_datasets": [
+        "purchase_transactions",
+        "customers"
+      ],
+      "required_fields": {
+        "purchase_transactions": [
+          "customer_id",
+          "purchase_amount",
+          "@timestamp"
+        ],
+        "customers": [
+          "customer_id",
+          "customer_segment",
+          "customer_name",
+          "lifetime_value"
+        ]
+      },
+      "join_chain": [
+        "purchase_transactions -> customers"
+      ],
+      "query": "FROM purchase_transactions\n| LOOKUP JOIN customers ON customer_id\n| WHERE customers.lifetime_value > 1000\n| INLINESTATS segment_avg_purchase = AVG(purchase_amount) BY customers.customer_segment\n| EVAL purchase_vs_segment_avg = purchase_amount - segment_avg_purchase\n| EVAL performance_ratio = purchase_amount / segment_avg_purchase\n| WHERE performance_ratio > 1.5\n| SORT purchase_vs_segment_avg DESC\n| KEEP customer_id, customers.customer_name, customers.customer_segment, purchase_amount, segment_avg_purchase, purchase_vs_segment_avg, performance_ratio\n| LIMIT 50",
+      "description": "Identifies high-value customers whose individual purchases significantly exceed their segment average, revealing upsell and VIP engagement opportunities",
+      "complexity": "high"
+    },
+    {
+      "name": "Semantic Product Discovery for Customer Buying Patterns",
+      "pain_point": "Finding customers who buy specific product types using natural language descriptions rather than rigid category filters",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "SEMANTIC",
+        "STATS",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "purchase_transactions",
+        "products",
+        "customers"
+      ],
+      "required_fields": {
+        "purchase_transactions": [
+          "product_id",
+          "customer_id",
+          "purchase_amount",
+          "quantity"
+        ],
+        "products": [
+          "product_id",
+          "product_description",
+          "product_name",
+          "product_category"
+        ],
+        "customers": [
+          "customer_id",
+          "customer_name",
+          "customer_segment"
+        ]
+      },
+      "join_chain": [
+        "purchase_transactions -> products",
+        "purchase_transactions -> customers"
+      ],
+      "query": "FROM purchase_transactions\n| LOOKUP JOIN products ON product_id\n| LOOKUP JOIN customers ON customer_id\n| WHERE SEMANTIC(products.product_description, \"premium organic health wellness products\")\n| STATS total_spent = SUM(purchase_amount), \n        purchase_frequency = COUNT(*), \n        avg_order_value = AVG(purchase_amount) \n  BY customer_id, customers.customer_name, customers.customer_segment\n| WHERE purchase_frequency >= 3\n| SORT total_spent DESC\n| LIMIT 25",
+      "description": "Uses semantic search to identify customers who frequently purchase specific product types described in natural language, enabling precise customer profiling for targeted campaigns",
+      "complexity": "high"
+    },
+    {
+      "name": "Multi-Channel Customer Engagement Dashboard with Parameterization",
+      "pain_point": "Need a flexible view of customer engagement across online and in-store channels for different time periods",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "FORK",
+        "STATS",
+        "WHERE",
+        "DATE_TRUNC",
+        "parameterized"
+      ],
+      "required_datasets": [
+        "purchase_transactions",
+        "customers"
+      ],
+      "required_fields": {
+        "purchase_transactions": [
+          "customer_id",
+          "purchase_amount",
+          "@timestamp",
+          "purchase_channel",
+          "transaction_id"
+        ],
+        "customers": [
+          "customer_id",
+          "customer_segment",
+          "preferred_channel"
+        ]
+      },
+      "join_chain": [
+        "purchase_transactions -> customers"
+      ],
+      "query": "FROM purchase_transactions\n| WHERE @timestamp >= NOW() - ?time_range\n| LOOKUP JOIN customers ON customer_id\n| WHERE customers.customer_segment == ?segment\n| FORK\n  (STATS total_revenue = SUM(purchase_amount), \n         transaction_count = COUNT(*) \n   BY purchase_channel)\n  (EVAL day = DATE_TRUNC(1 day, @timestamp) \n   | STATS daily_revenue = SUM(purchase_amount) BY day \n   | SORT day DESC \n   | LIMIT 30)\n  (WHERE purchase_channel == \"online\" \n   | STATS online_customers = COUNT_DISTINCT(customer_id), \n          online_revenue = SUM(purchase_amount))\n  (WHERE purchase_channel == \"in-store\" \n   | STATS store_customers = COUNT_DISTINCT(customer_id), \n          store_revenue = SUM(purchase_amount))",
+      "description": "Provides a comprehensive multi-dimensional view of customer engagement across channels with flexible time ranges and segment filtering for market research analysis",
+      "complexity": "high"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "purchase_transactions",
+      "to": "customers",
+      "type": "many-to-one",
+      "join_field": "customer_id"
+    },
+    {
+      "from": "purchase_transactions",
+      "to": "products",
+      "type": "many-to-one",
+      "join_field": "product_id"
+    }
+  ],
+  "field_mappings": {
+    "purchase_transactions.customer_id": "customers.customer_id",
+    "purchase_transactions.product_id": "products.product_id"
+  }
+}

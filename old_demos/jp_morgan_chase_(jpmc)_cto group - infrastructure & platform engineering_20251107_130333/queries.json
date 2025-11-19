@@ -1,0 +1,445 @@
+[
+  {
+    "name": "Intel vs AMD Performance Baseline Comparison with Cost Analysis",
+    "description": "Establish performance baselines across identical workloads on Intel Xeon vs AMD EPYC architectures.\n            Calculate performance-per-dollar and cost-per-transaction metrics to quantify TCO differences.\n            Addresses pain point: Lack of visibility into workload characteristics by hardware platform.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_cpu_performance_baseline",
+      "description": "Compares Intel vs AMD server performance metrics. Analyzes performance-per-dollar and cost-per-transaction across workloads for TCO optimization and infrastructure planning decisions.",
+      "tags": [
+        "infrastructure",
+        "performance",
+        "cost",
+        "cpu",
+        "esql"
+      ]
+    },
+    "query": "FROM infrastructure_metrics\n| WHERE test_phase == \"Baseline\"\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| LOOKUP JOIN benchmark_definitions ON benchmark_id\n| STATS \n    avg_transaction_duration_ms = AVG(transaction.duration.us) / 1000,\n    p95_transaction_duration_ms = PERCENTILE(transaction.duration.us, 95) / 1000,\n    avg_tps = AVG(transactions_per_second),\n    avg_cpu_pct = AVG(system.cpu.total.pct),\n    avg_cost_per_hour = AVG(hourly_compute_cost_usd),\n    avg_power_watts = AVG(power_consumption_tdp_watts),\n    test_count = COUNT(*)\n  BY cpu_vendor, workload_category, benchmark_type\n| EVAL \n    performance_per_dollar = avg_tps / avg_cost_per_hour,\n    cost_per_million_transactions = (avg_cost_per_hour / avg_tps) * 1000000,\n    power_efficiency = avg_tps / avg_power_watts\n| SORT cpu_vendor, workload_category, performance_per_dollar DESC",
+    "query_type": "scripted",
+    "use_case": "Baseline Performance Comparison: Intel vs AMD",
+    "complexity": "high"
+  },
+  {
+    "name": "Application-Specific Migration Prioritization with ROI Calculation",
+    "description": "Compare each application's performance on Intel vs AMD to identify best migration candidates.\n            Calculate performance gains and cost savings to rank applications by migration value.\n            Focus on applications not yet migrated to AMD.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_migration_prioritization",
+      "description": "Identifies top migration candidates to AMD. Calculates performance gains and annual savings to prioritize applications for hardware migration with highest ROI potential.",
+      "tags": [
+        "migration",
+        "cost",
+        "optimization",
+        "planning",
+        "esql"
+      ]
+    },
+    "query": "FROM infrastructure_metrics\n| WHERE test_phase == \"Baseline\"\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| WHERE migration_status != \"Completed\"\n| STATS \n    intel_avg_tps = AVG(CASE(cpu_vendor == \"Intel\", transactions_per_second, null)),\n    amd_avg_tps = AVG(CASE(cpu_vendor == \"AMD\", transactions_per_second, null)),\n    intel_avg_cost = AVG(CASE(cpu_vendor == \"Intel\", cost_per_hour_usd, null)),\n    amd_avg_cost = AVG(CASE(cpu_vendor == \"AMD\", cost_per_hour_usd, null))\n  BY application_id, application_name, business_unit, criticality_tier\n| WHERE intel_avg_tps IS NOT NULL AND amd_avg_tps IS NOT NULL\n| EVAL \n    performance_gain_pct = ((amd_avg_tps - intel_avg_tps) / intel_avg_tps) * 100,\n    cost_reduction_pct = ((intel_avg_cost - amd_avg_cost) / intel_avg_cost) * 100,\n    annual_savings_usd = (intel_avg_cost - amd_avg_cost) * 24 * 365,\n    migration_score = (performance_gain_pct * 0.6) + (cost_reduction_pct * 0.4)\n| WHERE performance_gain_pct > 0 AND cost_reduction_pct > 0\n| SORT migration_score DESC\n| LIMIT 50",
+    "query_type": "scripted",
+    "use_case": "Application-Specific Migration Prioritization",
+    "complexity": "high"
+  },
+  {
+    "name": "Real-Time Performance Regression Detection with SLA Monitoring",
+    "description": "Detect performance regressions in real-time by aggregating transaction duration by hour.\n            Identify SLA violations and flag severity levels. Essential for catching issues during migration windows.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_sla_monitoring",
+      "description": "Monitors SLA violations and performance regressions. Detects critical issues in real-time across applications and assigns severity levels for immediate incident response.",
+      "tags": [
+        "monitoring",
+        "sla",
+        "performance",
+        "alerts",
+        "esql"
+      ]
+    },
+    "query": "FROM infrastructure_metrics\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| EVAL hour_bucket = DATE_TRUNC(1 hour, @timestamp)\n| STATS \n    avg_duration_ms = AVG(transaction.duration.us) / 1000,\n    p95_duration_ms = PERCENTILE(transaction.duration.us, 95) / 1000,\n    p99_duration_ms = PERCENTILE(transaction.duration.us, 99) / 1000,\n    error_rate_pct = (COUNT(CASE(event.outcome == \"failure\", 1, null)) / COUNT(*)) * 100,\n    avg_cpu_pct = AVG(system.cpu.total.pct)\n  BY hour_bucket, application_id, application_name, sla_target_ms, hostname, cpu_vendor\n| WHERE p95_duration_ms > sla_target_ms\n| EVAL \n    sla_violation = CASE(p95_duration_ms > sla_target_ms, \"YES\", \"NO\"),\n    severity = CASE(\n      p99_duration_ms > sla_target_ms * 2, \"CRITICAL\",\n      p95_duration_ms > sla_target_ms * 1.5, \"HIGH\",\n      \"MEDIUM\"\n    )\n| SORT hour_bucket DESC\n| LIMIT 100",
+    "query_type": "scripted",
+    "use_case": "Continuous Performance Regression Detection",
+    "complexity": "high"
+  },
+  {
+    "name": "Unified Kafka and Infrastructure Performance Correlation",
+    "description": "Correlate Kafka consumer lag and throughput with underlying infrastructure metrics to identify bottlenecks.\n            Addresses pain point: Data scattered across disparate systems with no unified view.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_kafka_correlation",
+      "description": "Correlates Kafka performance with infrastructure metrics. Identifies consumer lag issues and throughput bottlenecks across Intel and AMD platforms for streaming optimization.",
+      "tags": [
+        "kafka",
+        "streaming",
+        "infrastructure",
+        "correlation",
+        "esql"
+      ]
+    },
+    "query": "FROM kafka_metrics\n| LOOKUP JOIN compute_hosts ON host_id\n| STATS \n    avg_consumer_lag = AVG(consumer_lag),\n    max_consumer_lag = MAX(consumer_lag),\n    avg_throughput = AVG(message_throughput_per_sec),\n    avg_broker_cpu = AVG(broker_cpu_pct),\n    avg_network_in = AVG(broker_network_in_mb),\n    avg_network_out = AVG(broker_network_out_mb)\n  BY hostname, cpu_vendor, topic_name, consumer_group\n| EVAL \n    lag_severity = CASE(\n      max_consumer_lag > 50000, \"CRITICAL\",\n      max_consumer_lag > 25000, \"HIGH\",\n      \"NORMAL\"\n    ),\n    throughput_health = CASE(\n      avg_throughput < 1000, \"LOW\",\n      avg_throughput < 10000, \"MEDIUM\",\n      \"HIGH\"\n    )\n| WHERE max_consumer_lag > 10000\n| SORT max_consumer_lag DESC\n| LIMIT 50",
+    "query_type": "scripted",
+    "use_case": "Consolidate Kafka & Hive Metrics into Unified Observability",
+    "complexity": "medium"
+  },
+  {
+    "name": "Cost-Performance TCO Analysis by Business Unit",
+    "description": "Calculate comprehensive TCO including compute costs, licensing, and power consumption.\n            Compare Intel vs AMD across business units to quantify migration ROI.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_tco_analysis",
+      "description": "Analyzes total cost of ownership by business unit. Calculates comprehensive TCO including compute, power, and licensing costs for Intel vs AMD infrastructure investment decisions.",
+      "tags": [
+        "cost",
+        "tco",
+        "business",
+        "financial",
+        "esql"
+      ]
+    },
+    "query": "FROM infrastructure_metrics\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| LOOKUP JOIN cost_allocation ON cost_center\n| STATS \n    total_compute_hours = COUNT(*),\n    avg_tps = AVG(transactions_per_second),\n    total_compute_cost = SUM(cost_per_hour_usd),\n    avg_power_consumption = AVG(power_consumption_watts)\n  BY business_unit, cost_center, cpu_vendor\n| EVAL \n    annual_compute_cost = total_compute_cost * 12,\n    annual_power_cost = (avg_power_consumption * 24 * 365 * 0.12) / 1000,\n    licensing_cost = 50000,\n    total_tco_annual = annual_compute_cost + annual_power_cost + licensing_cost,\n    cost_per_million_transactions = (total_tco_annual / (avg_tps * 86400 * 365)) * 1000000\n| SORT total_tco_annual DESC",
+    "query_type": "scripted",
+    "use_case": "Cost-Performance Analysis & TCO Modeling",
+    "complexity": "high"
+  },
+  {
+    "name": "Multi-Dimensional Stress Test Analysis with FORK",
+    "description": "Simultaneously analyze multiple dimensions of stress test results: peak performance,\n            error rates under load, and resource saturation points. Identifies maximum sustainable capacity.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_stress_analysis",
+      "description": "Analyzes stress test results across dimensions. Identifies peak performance, error thresholds, and resource saturation points for capacity planning and resilience testing.",
+      "tags": [
+        "stress",
+        "capacity",
+        "testing",
+        "performance",
+        "esql"
+      ]
+    },
+    "query": "FROM infrastructure_metrics\n| WHERE test_phase == \"Stress-Test\"\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| LOOKUP JOIN benchmark_definitions ON benchmark_id\n| FORK\n  (\n    STATS \n      peak_tps = MAX(transactions_per_second),\n      avg_tps = AVG(transactions_per_second),\n      test_duration_hours = (MAX(TO_LONG(@timestamp)) - MIN(TO_LONG(@timestamp))) / 3600000\n    BY cpu_vendor, application_name, target_load_level\n    | EVAL analysis_type = \"peak_performance\"\n  ),\n  (\n    STATS \n      error_rate_pct = (COUNT(CASE(event.outcome == \"failure\", 1, null)) / COUNT(*)) * 100,\n      total_errors = COUNT(CASE(event.outcome == \"failure\", 1, null))\n    BY cpu_vendor, application_name, target_load_level\n    | WHERE error_rate_pct > 0.1\n    | EVAL analysis_type = \"error_analysis\"\n  ),\n  (\n    STATS \n      max_cpu_pct = MAX(system.cpu.total.pct),\n      max_memory_pct = MAX(system.memory.used.pct),\n      saturation_point = AVG(CASE(system.cpu.total.pct > 80, transactions_per_second, null))\n    BY cpu_vendor, application_name\n    | WHERE max_cpu_pct > 80 OR max_memory_pct > 85\n    | EVAL analysis_type = \"resource_saturation\"\n  )",
+    "query_type": "scripted",
+    "use_case": "Stress Test & Capacity Planning",
+    "complexity": "high"
+  },
+  {
+    "name": "Hive Query Performance Analysis by Architecture",
+    "description": "Analyze Hive query execution times across Intel and AMD architectures.\n            Identify slow queries and compare performance characteristics by hardware platform.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_hive_performance",
+      "description": "Analyzes Hive query performance metrics. Compares execution times between Intel and AMD platforms to identify optimization opportunities for big data workloads.",
+      "tags": [
+        "hive",
+        "bigdata",
+        "performance",
+        "analytics",
+        "esql"
+      ]
+    },
+    "query": "FROM hive_query_logs\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| STATS \n    avg_execution_ms = AVG(query_execution_time_ms),\n    p95_execution_ms = PERCENTILE(query_execution_time_ms, 95),\n    avg_data_scanned_gb = AVG(data_scanned_gb),\n    total_queries = COUNT(*)\n  BY cpu_vendor, database_name, query_type\n| EVAL \n    performance_rating = CASE(\n      p95_execution_ms < 10000, \"EXCELLENT\",\n      p95_execution_ms < 60000, \"GOOD\",\n      p95_execution_ms < 180000, \"FAIR\",\n      \"POOR\"\n    )\n| SORT p95_execution_ms DESC\n| LIMIT 50",
+    "query_type": "scripted",
+    "use_case": "Consolidate Kafka & Hive Metrics into Unified Observability",
+    "complexity": "medium"
+  },
+  {
+    "name": "Migration Budget Analysis and Cost Center Performance",
+    "description": "Track migration progress and budget utilization by cost center.\n            Compare current spend against budget and target cost reduction goals.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_budget_tracking",
+      "description": "Tracks migration budget and progress metrics. Monitors cost center performance against targets and AMD adoption rates for financial governance and planning.",
+      "tags": [
+        "budget",
+        "migration",
+        "financial",
+        "tracking",
+        "esql"
+      ]
+    },
+    "query": "FROM cost_allocation\n| EVAL \n    budget_utilization_pct = (current_spend_usd / budget_annual_usd) * 100,\n    total_hosts = intel_host_count + amd_host_count,\n    amd_adoption_pct = (TO_DOUBLE(amd_host_count) / total_hosts) * 100,\n    projected_annual_savings = current_spend_usd * (target_cost_reduction_pct / 100)\n| SORT budget_utilization_pct DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "use_case": "Cost-Performance Analysis & TCO Modeling",
+    "complexity": "low"
+  },
+  {
+    "name": "Architecture-Specific Performance Deep Dive",
+    "description": "Analyze performance metrics for a specific CPU architecture and workload type.\n            Filter by architecture (Intel/AMD) and workload category to compare results.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_architecture_analysis",
+      "description": "Analyzes performance metrics by CPU architecture and workload type. Compares Intel vs AMD performance for specific workload categories with detailed latency and resource metrics.",
+      "tags": [
+        "infrastructure",
+        "performance",
+        "architecture",
+        "workload",
+        "esql"
+      ]
+    },
+    "query": "FROM infrastructure_metrics\n| WHERE test_phase == \"Baseline\"\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| WHERE cpu_vendor == ?architecture\n| WHERE workload_category == ?workload_type\n| STATS \n    avg_tps = AVG(transactions_per_second),\n    p50_latency_ms = PERCENTILE(transaction.duration.us, 50) / 1000,\n    p95_latency_ms = PERCENTILE(transaction.duration.us, 95) / 1000,\n    p99_latency_ms = PERCENTILE(transaction.duration.us, 99) / 1000,\n    avg_cpu = AVG(system.cpu.total.pct),\n    avg_memory = AVG(system.memory.used.pct),\n    success_rate_pct = (COUNT(CASE(event.outcome == \"success\", 1, null)) / COUNT(*)) * 100\n  BY application_name, criticality_tier\n| SORT avg_tps DESC\n| LIMIT 50",
+    "query_type": "parameterized",
+    "parameters": [
+      {
+        "name": "architecture",
+        "type": "string",
+        "description": "CPU architecture to analyze",
+        "default": "AMD",
+        "allowed_values": [
+          "Intel",
+          "AMD"
+        ]
+      },
+      {
+        "name": "workload_type",
+        "type": "string",
+        "description": "Workload category to filter",
+        "default": "Trading Platform",
+        "allowed_values": [
+          "Batch Processing",
+          "Real-time Streaming",
+          "Payment Processing",
+          "Risk Analytics",
+          "Trading Platform",
+          "Data Warehouse"
+        ]
+      }
+    ],
+    "use_case": "Baseline Performance Comparison: Intel vs AMD",
+    "complexity": "medium"
+  },
+  {
+    "name": "Business Unit Migration Progress Tracker",
+    "description": "Track migration progress for a specific business unit.\n            Show application counts by migration status and calculate completion percentage.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_migration_tracker",
+      "description": "Tracks migration progress by business unit. Shows application counts by migration status and criticality for project management and executive reporting.",
+      "tags": [
+        "migration",
+        "tracking",
+        "business",
+        "progress",
+        "esql"
+      ]
+    },
+    "query": "FROM applications\n| WHERE business_unit == ?business_unit\n| LOOKUP JOIN infrastructure_metrics ON application_id\n| LOOKUP JOIN compute_hosts ON host_id\n| STATS \n    app_count = COUNT_DISTINCT(application_id),\n    avg_tps = AVG(transactions_per_second),\n    total_tests = COUNT(*)\n  BY migration_status, criticality_tier\n| SORT migration_status, criticality_tier",
+    "query_type": "parameterized",
+    "parameters": [
+      {
+        "name": "business_unit",
+        "type": "string",
+        "description": "Business unit to analyze",
+        "default": "Trading",
+        "allowed_values": [
+          "Treasury",
+          "Investment Banking",
+          "Risk Management",
+          "Retail Banking",
+          "Trading",
+          "Asset Management"
+        ]
+      }
+    ],
+    "use_case": "Application-Specific Migration Prioritization",
+    "complexity": "medium"
+  },
+  {
+    "name": "Kafka Topic Performance Deep Dive",
+    "description": "Analyze Kafka metrics for a specific topic across different architectures.\n            Compare consumer lag, throughput, and broker resource utilization.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_kafka_topic_analysis",
+      "description": "Analyzes Kafka topic performance metrics. Monitors consumer lag, throughput, and broker resources by CPU architecture for streaming platform optimization.",
+      "tags": [
+        "kafka",
+        "streaming",
+        "topic",
+        "performance",
+        "esql"
+      ]
+    },
+    "query": "FROM kafka_metrics\n| WHERE topic_name == ?topic_name\n| LOOKUP JOIN compute_hosts ON host_id\n| STATS \n    avg_lag = AVG(consumer_lag),\n    max_lag = MAX(consumer_lag),\n    p95_lag = PERCENTILE(consumer_lag, 95),\n    avg_throughput = AVG(message_throughput_per_sec),\n    avg_broker_cpu = AVG(broker_cpu_pct),\n    avg_network_in = AVG(broker_network_in_mb)\n  BY cpu_vendor, consumer_group\n| EVAL \n    lag_health = CASE(\n      max_lag < 10000, \"HEALTHY\",\n      max_lag < 50000, \"WARNING\",\n      \"CRITICAL\"\n    )\n| SORT max_lag DESC",
+    "query_type": "parameterized",
+    "parameters": [
+      {
+        "name": "topic_name",
+        "type": "string",
+        "description": "Kafka topic to analyze",
+        "default": "trades",
+        "allowed_values": [
+          "payments",
+          "trades",
+          "risk-events",
+          "market-data",
+          "customer-events",
+          "audit-logs"
+        ]
+      }
+    ],
+    "use_case": "Consolidate Kafka & Hive Metrics into Unified Observability",
+    "complexity": "medium"
+  },
+  {
+    "name": "Benchmark Type Performance Comparison",
+    "description": "Compare performance across Intel and AMD for a specific benchmark type.\n            Useful for evaluating migration candidates for specific workload patterns.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_benchmark_comparison",
+      "description": "Compares benchmark performance between Intel and AMD platforms. Evaluates specific workload patterns to identify migration candidates with performance metrics.",
+      "tags": [
+        "benchmark",
+        "performance",
+        "comparison",
+        "testing",
+        "esql"
+      ]
+    },
+    "query": "FROM infrastructure_metrics\n| WHERE test_phase == \"Baseline\"\n| LOOKUP JOIN benchmark_definitions ON benchmark_id\n| LOOKUP JOIN compute_hosts ON host_id\n| WHERE benchmark_type == ?benchmark_type\n| STATS \n    avg_tps = AVG(transactions_per_second),\n    p95_latency_ms = PERCENTILE(transaction.duration.us, 95) / 1000,\n    avg_cpu = AVG(system.cpu.total.pct),\n    avg_cost_per_hour = AVG(cost_per_hour_usd),\n    test_count = COUNT(*)\n  BY cpu_vendor, target_load_level\n| EVAL \n    performance_per_dollar = avg_tps / avg_cost_per_hour\n| SORT cpu_vendor, target_load_level",
+    "query_type": "parameterized",
+    "parameters": [
+      {
+        "name": "benchmark_type",
+        "type": "string",
+        "description": "Type of benchmark to analyze",
+        "default": "CPU-Intensive",
+        "allowed_values": [
+          "Network-Intensive",
+          "I/O-Intensive",
+          "Mixed-Workload",
+          "Memory-Intensive",
+          "CPU-Intensive"
+        ]
+      }
+    ],
+    "use_case": "Baseline Performance Comparison: Intel vs AMD",
+    "complexity": "medium"
+  },
+  {
+    "name": "Datacenter-Level Performance and Cost Analysis",
+    "description": "Analyze infrastructure performance and costs for a specific datacenter.\n            Compare Intel vs AMD deployment and identify optimization opportunities.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_datacenter_analysis",
+      "description": "Analyzes datacenter-level performance and costs. Compares Intel vs AMD deployments by location for capacity planning and cost optimization decisions.",
+      "tags": [
+        "datacenter",
+        "cost",
+        "performance",
+        "infrastructure",
+        "esql"
+      ]
+    },
+    "query": "FROM infrastructure_metrics\n| LOOKUP JOIN compute_hosts ON host_id\n| WHERE datacenter == ?datacenter\n| STATS \n    host_count = COUNT_DISTINCT(host_id),\n    avg_tps = AVG(transactions_per_second),\n    avg_cpu = AVG(system.cpu.total.pct),\n    avg_memory = AVG(system.memory.used.pct),\n    total_cost = SUM(cost_per_hour_usd),\n    avg_power_watts = AVG(power_consumption_watts)\n  BY cpu_vendor, hardware_generation\n| EVAL \n    estimated_annual_cost = total_cost * 24 * 365,\n    power_efficiency = avg_tps / avg_power_watts\n| SORT cpu_vendor, hardware_generation",
+    "query_type": "parameterized",
+    "parameters": [
+      {
+        "name": "datacenter",
+        "type": "string",
+        "description": "Datacenter location to analyze",
+        "default": "NYC-DC1",
+        "allowed_values": [
+          "CHI-DC1",
+          "DFW-DC1",
+          "SJC-DC1",
+          "NYC-DC1",
+          "NYC-DC2"
+        ]
+      }
+    ],
+    "use_case": "Cost-Performance Analysis & TCO Modeling",
+    "complexity": "medium"
+  },
+  {
+    "name": "Semantic Search for High-Risk Migration Candidates",
+    "description": "Use semantic search to identify applications with characteristics that make them\n            high-risk for migration (e.g., 'latency-sensitive real-time trading applications').\n            Enrich with current performance metrics to prioritize testing.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_migration_risk_search",
+      "description": "Uses semantic search to find high-risk migration candidates. Identifies applications by characteristics and provides AI-powered risk assessments for migration planning.",
+      "tags": [
+        "migration",
+        "risk",
+        "semantic",
+        "ai",
+        "esql"
+      ]
+    },
+    "query": "FROM applications METADATA _id\n| WHERE MATCH(application_characteristics, ?user_question)\n| WHERE migration_status == \"Not Started\" OR migration_status == \"Planning\"\n| LOOKUP JOIN infrastructure_metrics ON application_id\n| LOOKUP JOIN compute_hosts ON host_id\n| STATS \n    avg_tps = AVG(transactions_per_second),\n    avg_cpu = AVG(system.cpu.total.pct),\n    current_arch = VALUES(cpu_vendor)\n  BY application_id, application_name, criticality_tier, application_characteristics\n| SORT avg_cpu DESC\n| LIMIT 5\n| EVAL prompt = CONCAT(\"Based on these application characteristics and performance metrics, provide a migration risk assessment and recommendations: \", application_characteristics, \" Current performance: \", TO_STRING(avg_tps), \" TPS, \", TO_STRING(avg_cpu), \"% CPU on \", current_arch, \" architecture.\")\n| COMPLETION answer = prompt WITH {\"inference_id\": \"completion-vulcan\"}",
+    "query_type": "rag",
+    "parameters": [
+      {
+        "name": "user_question",
+        "type": "string",
+        "description": "Describe the application characteristics to search for",
+        "default": "compute-intensive batch processing applications with high CPU utilization"
+      }
+    ],
+    "use_case": "Application-Specific Migration Prioritization",
+    "complexity": "medium"
+  },
+  {
+    "name": "Infrastructure Anomaly Investigation with AI Analysis",
+    "description": "Search through anomaly notes to find similar infrastructure issues.\n            Use AI to provide root cause analysis and remediation recommendations.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_anomaly_investigation",
+      "description": "Investigates infrastructure anomalies using semantic search. Provides AI-powered root cause analysis and remediation recommendations for operational incidents.",
+      "tags": [
+        "anomaly",
+        "investigation",
+        "ai",
+        "operations",
+        "esql"
+      ]
+    },
+    "query": "FROM infrastructure_metrics METADATA _id\n| WHERE MATCH(anomaly_notes, ?user_question)\n| LOOKUP JOIN compute_hosts ON host_id\n| LOOKUP JOIN applications ON application_id\n| STATS \n    occurrence_count = COUNT(*),\n    avg_cpu = AVG(system.cpu.total.pct),\n    avg_memory = AVG(system.memory.used.pct),\n    affected_apps = COUNT_DISTINCT(application_id)\n  BY anomaly_notes, cpu_vendor, test_phase\n| SORT occurrence_count DESC\n| LIMIT 5\n| EVAL prompt = CONCAT(\"Analyze this infrastructure anomaly and provide root cause analysis and recommendations: \", anomaly_notes, \" Occurred \", TO_STRING(occurrence_count), \" times on \", cpu_vendor, \" during \", test_phase, \" phase. Average CPU: \", TO_STRING(avg_cpu), \"%, Memory: \", TO_STRING(avg_memory), \"%\")\n| COMPLETION answer = prompt WITH {\"inference_id\": \"completion-vulcan\"}",
+    "query_type": "rag",
+    "parameters": [
+      {
+        "name": "user_question",
+        "type": "string",
+        "description": "Describe the anomaly or issue to investigate",
+        "default": "memory pressure and high utilization"
+      }
+    ],
+    "use_case": "Continuous Performance Regression Detection",
+    "complexity": "medium"
+  },
+  {
+    "name": "Benchmark Selection Assistant with AI Recommendations",
+    "description": "Find appropriate benchmarks based on workload description using semantic search.\n            Get AI-powered recommendations on which benchmarks to use for migration validation.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_benchmark_assistant",
+      "description": "Assists with benchmark selection using semantic search. Provides AI recommendations for choosing appropriate benchmarks for migration validation and testing.",
+      "tags": [
+        "benchmark",
+        "testing",
+        "ai",
+        "recommendations",
+        "esql"
+      ]
+    },
+    "query": "FROM benchmark_definitions METADATA _id\n| WHERE MATCH(benchmark_description, ?user_question)\n| LIMIT 5\n| EVAL prompt = CONCAT(\"Based on this benchmark: \", benchmark_name, \" (\", benchmark_type, \") - \", benchmark_description, \" Target load: \", target_load_level, \", Success criteria: \", success_criteria, \" - provide recommendations on when to use this benchmark and what to look for in results.\")\n| COMPLETION answer = prompt WITH {\"inference_id\": \"completion-vulcan\"}",
+    "query_type": "rag",
+    "parameters": [
+      {
+        "name": "user_question",
+        "type": "string",
+        "description": "Describe the workload or testing scenario",
+        "default": "high-throughput streaming workload with network-intensive operations"
+      }
+    ],
+    "use_case": "Baseline Performance Comparison: Intel vs AMD",
+    "complexity": "low"
+  },
+  {
+    "name": "Host Configuration Optimization Recommendations",
+    "description": "Search for hosts with specific characteristics and get AI-powered optimization recommendations\n            for migration planning.",
+    "tool_metadata": {
+      "tool_id": "jpmc_infra_host_optimization",
+      "description": "Provides host configuration optimization recommendations. Uses semantic search to find hosts and offers AI-powered suggestions for migration and capacity planning.",
+      "tags": [
+        "host",
+        "optimization",
+        "ai",
+        "capacity",
+        "esql"
+      ]
+    },
+    "query": "FROM compute_hosts METADATA _id\n| WHERE MATCH(host_profile_description, ?user_question)\n| LIMIT 5\n| EVAL prompt = CONCAT(\"Analyze this host configuration: \", hostname, \" - \", host_profile_description, \" CPU: \", cpu_cores, \" cores, Memory: \", TO_STRING(memory_gb), \"GB, Cost: $\", TO_STRING(hourly_compute_cost_usd), \"/hr, Power: \", TO_STRING(power_consumption_tdp_watts), \"W. Provide optimization and migration recommendations.\")\n| COMPLETION answer = prompt WITH {\"inference_id\": \"completion-vulcan\"}",
+    "query_type": "rag",
+    "parameters": [
+      {
+        "name": "user_question",
+        "type": "string",
+        "description": "Describe the host characteristics to search for",
+        "default": "legacy Intel hardware scheduled for AMD migration"
+      }
+    ],
+    "use_case": "Cost-Performance Analysis & TCO Modeling",
+    "complexity": "low"
+  }
+]

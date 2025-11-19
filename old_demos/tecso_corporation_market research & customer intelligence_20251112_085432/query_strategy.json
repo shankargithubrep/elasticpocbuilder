@@ -1,0 +1,314 @@
+{
+  "datasets": [
+    {
+      "name": "customer_transactions",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "500000+",
+      "required_fields": {
+        "transaction_id": "keyword",
+        "@timestamp": "date",
+        "customer_id": "keyword",
+        "product_id": "keyword",
+        "channel": "keyword",
+        "transaction_amount": "float",
+        "payment_method": "keyword",
+        "store_location": "keyword",
+        "campaign_id": "keyword"
+      },
+      "relationships": [
+        "customers",
+        "products",
+        "campaigns"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "customers",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "50000+",
+      "required_fields": {
+        "customer_id": "keyword",
+        "customer_name": "text",
+        "customer_segment": "keyword",
+        "rfm_recency_score": "integer",
+        "rfm_frequency_score": "integer",
+        "rfm_monetary_score": "integer",
+        "rfm_segment": "keyword",
+        "lifetime_revenue": "float",
+        "predicted_clv": "float",
+        "churn_probability": "float",
+        "last_purchase_date": "date",
+        "purchase_count": "integer",
+        "preferred_channel": "keyword",
+        "channel_mix_ratio": "float",
+        "customer_behavior_profile": "text"
+      },
+      "relationships": [
+        "customer_transactions"
+      ],
+      "semantic_fields": [
+        "customer_behavior_profile"
+      ]
+    },
+    {
+      "name": "products",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "10000+",
+      "required_fields": {
+        "product_id": "keyword",
+        "product_name": "text",
+        "product_category": "keyword",
+        "product_subcategory": "keyword",
+        "unit_price": "float",
+        "product_description": "text",
+        "margin_percentage": "float"
+      },
+      "relationships": [
+        "customer_transactions"
+      ],
+      "semantic_fields": [
+        "product_description"
+      ]
+    },
+    {
+      "name": "campaigns",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "500+",
+      "required_fields": {
+        "campaign_id": "keyword",
+        "campaign_name": "text",
+        "campaign_type": "keyword",
+        "target_segment": "keyword",
+        "campaign_budget": "float",
+        "campaign_start_date": "date",
+        "campaign_end_date": "date"
+      },
+      "relationships": [
+        "customer_transactions"
+      ],
+      "semantic_fields": []
+    }
+  ],
+  "queries": [
+    {
+      "name": "Unified Customer 360 Profile with Real-Time Channel Attribution",
+      "pain_point": "No unified customer profile across touchpoints - customers appear as separate entities across systems",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "EVAL",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "customer_transactions",
+        "customers"
+      ],
+      "required_fields": {
+        "customer_transactions": [
+          "customer_id",
+          "@timestamp",
+          "channel",
+          "transaction_amount"
+        ],
+        "customers": [
+          "customer_id",
+          "customer_name",
+          "customer_segment",
+          "lifetime_revenue",
+          "predicted_clv",
+          "churn_probability",
+          "preferred_channel"
+        ]
+      },
+      "join_chain": [
+        "customer_transactions -> customers"
+      ],
+      "query": "FROM customer_transactions\n| WHERE @timestamp >= NOW() - 30 days\n| LOOKUP JOIN customers ON customer_id\n| STATS \n    recent_transaction_count = COUNT(*),\n    recent_revenue = SUM(transaction_amount),\n    online_transactions = COUNT(*) WHERE channel == \"online\",\n    instore_transactions = COUNT(*) WHERE channel == \"in-store\",\n    avg_order_value = AVG(transaction_amount)\n  BY customer_id, customers.customer_name, customers.customer_segment, customers.lifetime_revenue, customers.predicted_clv, customers.churn_probability\n| EVAL \n    channel_preference_score = (online_transactions * 1.0) / (online_transactions + instore_transactions),\n    revenue_trend = (recent_revenue / 30) * 365,\n    clv_realization_rate = (customers.lifetime_revenue / customers.predicted_clv) * 100\n| WHERE customers.customer_segment == ?segment\n| SORT customers.churn_probability DESC, customers.predicted_clv DESC\n| LIMIT 100",
+      "description": "Creates unified real-time customer profiles consolidating online and in-store activity with predictive metrics, solving fragmented cross-channel view",
+      "complexity": "high"
+    },
+    {
+      "name": "Advanced RFM Segmentation with Behavioral Anomaly Detection",
+      "pain_point": "Limited real-time customer segmentation capabilities - batch processing creates 24+ hour delays in segment updates",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE",
+        "STATS"
+      ],
+      "required_datasets": [
+        "customer_transactions",
+        "customers"
+      ],
+      "required_fields": {
+        "customer_transactions": [
+          "customer_id",
+          "@timestamp",
+          "transaction_amount"
+        ],
+        "customers": [
+          "customer_id",
+          "customer_name",
+          "rfm_segment",
+          "rfm_recency_score",
+          "rfm_frequency_score",
+          "rfm_monetary_score",
+          "purchase_count"
+        ]
+      },
+      "join_chain": [
+        "customer_transactions -> customers"
+      ],
+      "query": "FROM customer_transactions\n| WHERE @timestamp >= NOW() - 90 days\n| LOOKUP JOIN customers ON customer_id\n| STATS \n    recent_spend = SUM(transaction_amount),\n    recent_transactions = COUNT(*)\n  BY customer_id, customers.customer_name, customers.rfm_segment, customers.rfm_recency_score, customers.rfm_frequency_score, customers.rfm_monetary_score\n| INLINESTATS \n    avg_spend_by_segment = AVG(recent_spend) BY customers.rfm_segment,\n    avg_transactions_by_segment = AVG(recent_transactions) BY customers.rfm_segment\n| EVAL \n    spend_variance_pct = ((recent_spend - avg_spend_by_segment) / avg_spend_by_segment) * 100,\n    transaction_variance_pct = ((recent_transactions - avg_transactions_by_segment) / avg_transactions_by_segment) * 100,\n    rfm_composite_score = customers.rfm_recency_score + customers.rfm_frequency_score + customers.rfm_monetary_score,\n    behavior_anomaly_flag = CASE(\n      spend_variance_pct < -30 OR transaction_variance_pct < -30, \"declining_risk\",\n      spend_variance_pct > 50 AND transaction_variance_pct > 30, \"high_growth\",\n      \"normal\"\n    )\n| WHERE behavior_anomaly_flag != \"normal\"\n| SORT spend_variance_pct ASC\n| LIMIT 500",
+      "description": "Real-time RFM segmentation with inline statistical comparison to detect customers deviating from segment norms, enabling immediate intervention",
+      "complexity": "high"
+    },
+    {
+      "name": "Product Affinity Market Basket Analysis with Cross-Channel Insights",
+      "pain_point": "Insufficient behavioral pattern detection - manual analysis cannot uncover complex multi-dimensional purchasing patterns",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "EVAL",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "customer_transactions",
+        "products"
+      ],
+      "required_fields": {
+        "customer_transactions": [
+          "transaction_id",
+          "customer_id",
+          "product_id",
+          "channel",
+          "transaction_amount",
+          "@timestamp"
+        ],
+        "products": [
+          "product_id",
+          "product_name",
+          "product_category",
+          "product_subcategory"
+        ]
+      },
+      "join_chain": [
+        "customer_transactions -> products"
+      ],
+      "query": "FROM customer_transactions\n| WHERE @timestamp >= NOW() - 60 days\n| LOOKUP JOIN products ON product_id\n| STATS \n    total_purchases = COUNT(*),\n    total_revenue = SUM(transaction_amount),\n    unique_customers = COUNT_DISTINCT(customer_id),\n    online_purchases = COUNT(*) WHERE channel == \"online\",\n    instore_purchases = COUNT(*) WHERE channel == \"in-store\",\n    avg_basket_value = AVG(transaction_amount)\n  BY products.product_category, products.product_subcategory\n| EVAL \n    affinity_score = (unique_customers * 1.0 / total_purchases) * 100,\n    channel_preference = CASE(\n      online_purchases > instore_purchases * 1.5, \"online_dominant\",\n      instore_purchases > online_purchases * 1.5, \"instore_dominant\",\n      \"balanced\"\n    ),\n    revenue_per_customer = total_revenue / unique_customers\n| WHERE total_purchases >= 50\n| SORT affinity_score DESC, total_revenue DESC\n| LIMIT 50",
+      "description": "Discovers product category affinity patterns across channels with customer concentration metrics for merchandising optimization",
+      "complexity": "medium"
+    },
+    {
+      "name": "Semantic Customer Behavior Discovery for Retention Targeting",
+      "pain_point": "Churn Prediction & Proactive Retention - identify at-risk customers before they lapse",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "SEMANTIC",
+        "WHERE",
+        "EVAL",
+        "STATS"
+      ],
+      "required_datasets": [
+        "customers",
+        "customer_transactions"
+      ],
+      "required_fields": {
+        "customers": [
+          "customer_id",
+          "customer_name",
+          "customer_behavior_profile",
+          "churn_probability",
+          "predicted_clv",
+          "last_purchase_date",
+          "customer_segment"
+        ],
+        "customer_transactions": [
+          "customer_id",
+          "@timestamp",
+          "transaction_amount"
+        ]
+      },
+      "join_chain": [
+        "customers -> customer_transactions"
+      ],
+      "query": "FROM customers\n| WHERE SEMANTIC(customer_behavior_profile, \"high value customers showing declining engagement or reduced purchase frequency\")\n| WHERE churn_probability > 0.6\n| LOOKUP JOIN customer_transactions ON customer_id\n| WHERE customer_transactions.@timestamp >= NOW() - 180 days\n| STATS \n    last_transaction_date = MAX(customer_transactions.@timestamp),\n    total_recent_spend = SUM(customer_transactions.transaction_amount),\n    transaction_frequency = COUNT(*)\n  BY customer_id, customer_name, churn_probability, predicted_clv, customer_segment\n| EVAL \n    days_since_purchase = (NOW() - last_transaction_date) / 86400000,\n    retention_priority_score = (predicted_clv * churn_probability) / 1000,\n    recommended_action = CASE(\n      days_since_purchase > 60 AND predicted_clv > 5000, \"urgent_vip_outreach\",\n      days_since_purchase > 45 AND predicted_clv > 2000, \"personalized_offer\",\n      days_since_purchase > 30, \"re_engagement_campaign\",\n      \"monitor\"\n    )\n| WHERE recommended_action != \"monitor\"\n| SORT retention_priority_score DESC\n| LIMIT 200",
+      "description": "Uses semantic search to intelligently identify at-risk high-value customers with declining patterns, providing actionable retention priorities",
+      "complexity": "high"
+    },
+    {
+      "name": "Multi-Dimensional Campaign Performance with Real-Time ROI by Segment",
+      "pain_point": "Slow time-to-insight for business stakeholders - custom analyses take 1-2 weeks to deliver",
+      "esql_features": [
+        "FORK",
+        "LOOKUP JOIN",
+        "STATS",
+        "EVAL"
+      ],
+      "required_datasets": [
+        "customer_transactions",
+        "customers",
+        "campaigns"
+      ],
+      "required_fields": {
+        "customer_transactions": [
+          "transaction_id",
+          "customer_id",
+          "campaign_id",
+          "transaction_amount",
+          "@timestamp",
+          "channel"
+        ],
+        "customers": [
+          "customer_id",
+          "customer_segment",
+          "predicted_clv"
+        ],
+        "campaigns": [
+          "campaign_id",
+          "campaign_name",
+          "campaign_type",
+          "target_segment",
+          "campaign_budget"
+        ]
+      },
+      "join_chain": [
+        "customer_transactions -> customers",
+        "customer_transactions -> campaigns"
+      ],
+      "query": "FROM customer_transactions\n| WHERE @timestamp >= NOW() - 30 days AND campaign_id IS NOT NULL\n| LOOKUP JOIN customers ON customer_id\n| LOOKUP JOIN campaigns ON campaign_id\n| FORK\n  (\n    STATS \n      total_campaign_revenue = SUM(transaction_amount),\n      total_transactions = COUNT(*),\n      unique_customers = COUNT_DISTINCT(customer_id)\n    BY campaigns.campaign_id, campaigns.campaign_name, campaigns.campaign_budget, campaigns.target_segment\n    | EVAL \n        campaign_roi = ((total_campaign_revenue - campaigns.campaign_budget) / campaigns.campaign_budget) * 100,\n        revenue_per_customer = total_campaign_revenue / unique_customers,\n        conversion_rate = (unique_customers * 1.0 / 10000) * 100\n    | SORT campaign_roi DESC\n  )\n  (\n    STATS \n      segment_revenue = SUM(transaction_amount),\n      segment_customers = COUNT_DISTINCT(customer_id),\n      avg_clv = AVG(customers.predicted_clv)\n    BY customers.customer_segment, campaigns.campaign_type\n    | EVAL segment_performance_index = (segment_revenue / segment_customers) * (avg_clv / 1000)\n    | SORT segment_performance_index DESC\n  )\n  (\n    STATS \n      channel_revenue = SUM(transaction_amount),\n      channel_transactions = COUNT(*)\n    BY channel, campaigns.campaign_name\n    | EVAL avg_order_value = channel_revenue / channel_transactions\n    | SORT channel_revenue DESC\n  )",
+      "description": "Parallel multi-dimensional campaign analysis providing instant ROI, segment performance, and channel attribution without manual reconciliation",
+      "complexity": "high"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "customer_transactions",
+      "to": "customers",
+      "type": "many-to-one",
+      "join_field": "customer_id"
+    },
+    {
+      "from": "customer_transactions",
+      "to": "products",
+      "type": "many-to-one",
+      "join_field": "product_id"
+    },
+    {
+      "from": "customer_transactions",
+      "to": "campaigns",
+      "type": "many-to-one",
+      "join_field": "campaign_id"
+    }
+  ],
+  "field_mappings": {
+    "customer_transactions.customer_id": "customers.customer_id",
+    "customer_transactions.product_id": "products.product_id",
+    "customer_transactions.campaign_id": "campaigns.campaign_id"
+  }
+}

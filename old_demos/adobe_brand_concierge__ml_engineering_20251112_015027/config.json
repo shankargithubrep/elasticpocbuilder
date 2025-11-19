@@ -1,0 +1,54 @@
+{
+  "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+  "demo_type": "search",
+  "module_version": "1.0.0",
+  "generated_at": "2025-11-12T01:54:18.942621",
+  "customer_context": {
+    "company_name": "Adobe Inc.",
+    "department": "Brand Concierge AI/ML & Product Engineering",
+    "industry": "Software/SaaS - Digital Experience Platform",
+    "pain_points": [
+      "No framework for retrieval experimentation and optimization - 3-week engineering project to evaluate new embedding models",
+      "Limited context understanding across multi-turn conversations - each query to Elasticsearch is independent and stateless",
+      "No ability to combine multiple specialized retrieval strategies - engineers spend 2-3 days writing new Query DSL for new requirements",
+      "High maintenance burden for query template management - 40+ Query DSL templates requiring 1-2 weeks to update",
+      "Difficulty debugging poor retrieval results - 30-60 minutes per incident with limited visibility",
+      "Static query patterns unable to handle complex retrieval needs - 42% of AI Assistant queries require 2+ clarifying questions",
+      "Inability to reason about retrieval quality and iterate - 31% of responses rated unhelpful, 68% due to poor document retrieval"
+    ],
+    "use_cases": [
+      "Intelligent Tool Composition for Complex Queries - automatically compose multiple specialized retrieval tools for complex queries requiring different sources",
+      "Self-Optimizing Retrieval with A/B Testing Framework - enable rapid experimentation with different retrieval strategies and automatically measure quality",
+      "Adaptive Multi-Step Retrieval with Quality Assessment - replace static single-query retrieval with intelligent agents that evaluate result quality and iterate",
+      "Explainable Retrieval for Trust and Debugging - provide complete transparency into retrieval decisions for debugging and trust",
+      "Conversation-Aware Contextual Retrieval - maintain retrieval context across multi-turn conversations and refine searches based on previous results"
+    ],
+    "scale": "850+ enterprise customer accounts, 45M+ brand assets, 2.5M+ AI assistant conversations monthly, 500K+ automated asset tagging operations daily, 125,000+ daily active users",
+    "metrics": [
+      "agent.trace.completeness, debug.time_to_resolution (target: <10 minutes)",
+      "23% of queries return <3 documents indicating poor recall",
+      "agent.conversation.context_utilization, agent.conversation.turns_to_resolution (target: 3.2 to 1.8)",
+      "P95 retrieval latency: 340ms, average 4.2 documents per query",
+      "agent.tools.combination_count, agent.tools.success_rate, agent.response.source_diversity",
+      "Target: Reduce unhelpful ratings from 31% to <12%, reduce follow-ups from 42% to <20%",
+      "agent.retrieval.iteration_count, agent.retrieval.quality_improvement, agent.response.confidence_score",
+      "31% of responses rated unhelpful, 42% require 2+ follow-up queries",
+      "18% zero-result queries, 27% low-confidence results",
+      "retrieval.precision_at_3, retrieval.precision_at_5, retrieval.ndcg, retrieval.latency.p95"
+    ],
+    "demo_type": "search",
+    "dataset_size_preference": "small"
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  },
+  "query_testing": {
+    "enabled": true,
+    "queries_fixed": 0,
+    "queries_need_manual_fix": 12,
+    "total_tested": 12,
+    "tested_at": "2025-11-12T02:05:07.992700"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "mappings": {
+    "properties": {
+      "attack_signature": {
+        "type": "keyword"
+      },
+      "threat_name": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "threat_category": {
+        "type": "keyword"
+      },
+      "threat_description": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "mitigation_strategy": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "cve_references": {
+        "type": "keyword"
+      }
+    }
+  },
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "index": {
+      "mode": "lookup"
+    }
+  }
+}

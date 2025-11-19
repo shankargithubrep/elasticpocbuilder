@@ -1,0 +1,58 @@
+{
+  "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+  "demo_type": "analytics",
+  "module_version": "1.0.0",
+  "generated_at": "2025-11-12T08:57:36.640946",
+  "customer_context": {
+    "company_name": "Tecso Corporation",
+    "department": "Market Research & Customer Intelligence",
+    "industry": "Retail / Consumer Goods",
+    "pain_points": [
+      "Lack of predictive customer modeling - no forward-looking guidance on customer lifetime value or churn risk",
+      "No unified customer profile across touchpoints - customers appear as separate entities across systems",
+      "Insufficient behavioral pattern detection - manual analysis cannot uncover complex multi-dimensional purchasing patterns",
+      "Disconnected purchase data across channels - online e-commerce and in-store POS data fragmented, team spends 40-60% time on manual data reconciliation",
+      "Slow time-to-insight for business stakeholders - custom analyses take 1-2 weeks to deliver",
+      "Limited real-time customer segmentation capabilities - batch processing creates 24+ hour delays in segment updates"
+    ],
+    "use_cases": [
+      "Product Affinity & Market Basket Analysis - discover frequently purchased product combinations for merchandising optimization",
+      "Predictive Customer Lifetime Value Modeling - forecast future customer value to prioritize retention efforts",
+      "Real-Time Campaign Performance & Attribution Analysis - measure marketing campaign effectiveness across customer segments",
+      "Churn Prediction & Proactive Retention - identify at-risk customers before they lapse",
+      "Executive Market Intelligence Dashboard - provide leadership with real-time actionable insights",
+      "Customer Segment Profile & Persona Development - build detailed behavioral profiles for each customer segment",
+      "Unified Customer 360-Degree Profile Creation - consolidate online and in-store data into single real-time customer profile",
+      "Advanced Customer Segmentation with RFM Analysis - automatically segment customers using Recency, Frequency, Monetary analysis"
+    ],
+    "scale": "Multiple channels (e-commerce and in-store POS), customer base with segments including 847 Champions customers, 1,247 at-risk customers mentioned, processing daily transaction volumes",
+    "metrics": [
+      "customer.channel_mix_ratio - online vs in-store preference",
+      "customer.purchase_count - transaction frequency",
+      "transaction.volume by channel",
+      "transaction.total_amount - Average Order Value",
+      "campaign.roi - return on investment by segment",
+      "product.affinity_score - co-purchase likelihood",
+      "campaign.conversion_rate by customer segment",
+      "customer.churn_probability - ML-derived churn risk score",
+      "customer.last_purchase_date - recency metric",
+      "customer.predicted_clv - forecasted customer lifetime value",
+      "customer.lifetime_revenue - total customer spend",
+      "customer.rfm_recency_score, customer.rfm_frequency_score, customer.rfm_monetary_score"
+    ],
+    "demo_type": "analytics",
+    "dataset_size_preference": "small"
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  },
+  "query_testing": {
+    "enabled": true,
+    "queries_fixed": 0,
+    "queries_need_manual_fix": 8,
+    "total_tested": 8,
+    "tested_at": "2025-11-12T09:00:20.141424"
+  }
+}

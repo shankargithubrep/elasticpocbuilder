@@ -1,0 +1,43 @@
+{
+  "mappings": {
+    "properties": {
+      "cause_code": {
+        "type": "keyword"
+      },
+      "cause_group": {
+        "type": "keyword"
+      },
+      "cause_description": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "severity": {
+        "type": "keyword"
+      },
+      "recommended_action": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "category": {
+        "type": "keyword"
+      }
+    }
+  },
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "index": {
+      "mode": "lookup"
+    }
+  }
+}

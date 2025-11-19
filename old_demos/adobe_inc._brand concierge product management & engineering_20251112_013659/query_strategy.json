@@ -1,0 +1,415 @@
+{
+  "datasets": [
+    {
+      "name": "api_requests",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "250000000+",
+      "required_fields": {
+        "request_id": "keyword",
+        "@timestamp": "date",
+        "tenant_id": "keyword",
+        "partner_id": "keyword",
+        "endpoint": "keyword",
+        "http_status": "integer",
+        "response_time_ms": "float",
+        "region": "keyword",
+        "error_message": "text",
+        "user_id": "keyword"
+      },
+      "relationships": [
+        "tenants",
+        "api_partners"
+      ],
+      "semantic_fields": [
+        "error_message"
+      ]
+    },
+    {
+      "name": "tenants",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "850+",
+      "required_fields": {
+        "tenant_id": "keyword",
+        "tenant_name": "text",
+        "account_tier": "keyword",
+        "contract_arr": "float",
+        "renewal_date": "date",
+        "customer_success_manager": "keyword",
+        "sla_target_p95_ms": "float",
+        "industry_vertical": "keyword"
+      },
+      "relationships": [
+        "api_requests",
+        "feature_usage_events",
+        "user_sessions"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "api_partners",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "40+",
+      "required_fields": {
+        "partner_id": "keyword",
+        "partner_name": "text",
+        "integration_type": "keyword",
+        "tier": "keyword",
+        "webhook_url": "keyword",
+        "contact_email": "keyword",
+        "partnership_health_score": "float"
+      },
+      "relationships": [
+        "api_requests",
+        "webhook_deliveries"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "feature_usage_events",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "150000000+",
+      "required_fields": {
+        "event_id": "keyword",
+        "@timestamp": "date",
+        "user_id": "keyword",
+        "tenant_id": "keyword",
+        "feature_name": "keyword",
+        "feature_category": "keyword",
+        "session_id": "keyword",
+        "experiment_variant": "keyword",
+        "interaction_duration_ms": "float",
+        "conversion_event": "boolean"
+      },
+      "relationships": [
+        "tenants",
+        "ab_experiments"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "user_sessions",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "75000000+",
+      "required_fields": {
+        "session_id": "keyword",
+        "@timestamp": "date",
+        "user_id": "keyword",
+        "tenant_id": "keyword",
+        "session_duration_ms": "float",
+        "page_views": "integer",
+        "lcp_ms": "float",
+        "fid_ms": "float",
+        "bounce": "boolean",
+        "device_type": "keyword",
+        "browser": "keyword"
+      },
+      "relationships": [
+        "tenants"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "ab_experiments",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "150+",
+      "required_fields": {
+        "experiment_id": "keyword",
+        "experiment_name": "text",
+        "variant_id": "keyword",
+        "variant_name": "keyword",
+        "feature_name": "keyword",
+        "start_date": "date",
+        "target_metric": "keyword",
+        "control_baseline": "float",
+        "experiment_hypothesis": "text"
+      },
+      "relationships": [
+        "feature_usage_events"
+      ],
+      "semantic_fields": [
+        "experiment_hypothesis"
+      ]
+    },
+    {
+      "name": "webhook_deliveries",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "50000000+",
+      "required_fields": {
+        "delivery_id": "keyword",
+        "@timestamp": "date",
+        "partner_id": "keyword",
+        "tenant_id": "keyword",
+        "event_type": "keyword",
+        "http_status": "integer",
+        "retry_count": "integer",
+        "delivery_latency_ms": "float",
+        "success": "boolean"
+      },
+      "relationships": [
+        "api_partners",
+        "tenants"
+      ],
+      "semantic_fields": []
+    }
+  ],
+  "queries": [
+    {
+      "name": "Noisy Neighbor Detection with Tenant Context",
+      "pain_point": "Multi-tenant performance isolation challenges - noisy neighbor problems require manual log analysis to identify",
+      "esql_features": [
+        "STATS",
+        "LOOKUP JOIN",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "api_requests",
+        "tenants"
+      ],
+      "required_fields": {
+        "api_requests": [
+          "@timestamp",
+          "tenant_id",
+          "response_time_ms",
+          "region"
+        ],
+        "tenants": [
+          "tenant_id",
+          "tenant_name",
+          "account_tier",
+          "sla_target_p95_ms",
+          "contract_arr"
+        ]
+      },
+      "join_chain": [
+        "api_requests -> tenants"
+      ],
+      "query": "FROM api_requests\n| WHERE @timestamp > NOW() - 1 hour\n| STATS p95_latency = PERCENTILE(response_time_ms, 95), request_volume = COUNT(*) BY tenant_id\n| LOOKUP JOIN tenants ON tenant_id\n| INLINESTATS avg_p95 = AVG(p95_latency), avg_volume = AVG(request_volume)\n| EVAL latency_vs_avg_pct = ((p95_latency - avg_p95) / avg_p95) * 100\n| EVAL volume_vs_avg_pct = ((request_volume - avg_volume) / avg_volume) * 100\n| EVAL noisy_neighbor_score = (latency_vs_avg_pct * 0.4) + (volume_vs_avg_pct * 0.6)\n| EVAL sla_breach = CASE(p95_latency > tenants.sla_target_p95_ms, true, false)\n| WHERE noisy_neighbor_score > 50 OR sla_breach == true\n| EVAL revenue_impact = tenants.contract_arr / 12 / 30\n| SORT noisy_neighbor_score DESC\n| KEEP tenant_id, tenants.tenant_name, tenants.account_tier, p95_latency, tenants.sla_target_p95_ms, noisy_neighbor_score, sla_breach, revenue_impact\n| LIMIT 20",
+      "description": "Identifies tenants consuming disproportionate resources by comparing their P95 latency and request volume against the average, calculating a noisy neighbor score, and flagging SLA breaches with revenue impact",
+      "complexity": "high"
+    },
+    {
+      "name": "At-Risk Customer Early Warning System",
+      "pain_point": "No early warning system for customer health - at-risk accounts identified only 30-60 days before renewal, costing $8-12M annually in preventable churn",
+      "esql_features": [
+        "STATS",
+        "LOOKUP JOIN",
+        "EVAL",
+        "WHERE",
+        "DATE_DIFF"
+      ],
+      "required_datasets": [
+        "feature_usage_events",
+        "user_sessions",
+        "api_requests",
+        "tenants"
+      ],
+      "required_fields": {
+        "feature_usage_events": [
+          "@timestamp",
+          "tenant_id",
+          "user_id",
+          "feature_name"
+        ],
+        "user_sessions": [
+          "@timestamp",
+          "tenant_id",
+          "session_duration_ms"
+        ],
+        "api_requests": [
+          "@timestamp",
+          "tenant_id",
+          "http_status"
+        ],
+        "tenants": [
+          "tenant_id",
+          "tenant_name",
+          "renewal_date",
+          "contract_arr",
+          "customer_success_manager"
+        ]
+      },
+      "join_chain": [
+        "feature_usage_events -> tenants"
+      ],
+      "query": "FROM feature_usage_events\n| WHERE @timestamp > NOW() - 30 days\n| STATS feature_dau = COUNT_DISTINCT(user_id), feature_events = COUNT(*) BY tenant_id\n| LOOKUP JOIN tenants ON tenant_id\n| EVAL days_to_renewal = DATE_DIFF(\"day\", NOW(), tenants.renewal_date)\n| EVAL usage_trend_score = CASE(\n    feature_dau < 5, 20,\n    feature_dau < 15, 50,\n    feature_dau < 50, 70,\n    85\n  )\n| EVAL engagement_score = CASE(\n    feature_events < 100, 25,\n    feature_events < 500, 55,\n    feature_events < 2000, 75,\n    90\n  )\n| EVAL health_score = (usage_trend_score * 0.6) + (engagement_score * 0.4)\n| EVAL churn_risk_probability = CASE(\n    health_score < 40, 0.85,\n    health_score < 55, 0.65,\n    health_score < 70, 0.35,\n    0.15\n  )\n| WHERE days_to_renewal <= 90 AND days_to_renewal > 0 AND churn_risk_probability >= 0.35\n| EVAL potential_revenue_loss = tenants.contract_arr * churn_risk_probability\n| SORT churn_risk_probability DESC, potential_revenue_loss DESC\n| KEEP tenant_id, tenants.tenant_name, health_score, churn_risk_probability, days_to_renewal, tenants.contract_arr, potential_revenue_loss, tenants.customer_success_manager, feature_dau\n| LIMIT 50",
+      "description": "Calculates customer health scores based on feature usage and engagement patterns, identifies at-risk accounts 60-90 days before renewal with churn probability, and quantifies potential revenue loss for prioritization",
+      "complexity": "high"
+    },
+    {
+      "name": "API Partner Integration Health Monitoring",
+      "pain_point": "API Partner Ecosystem Health Monitoring - ensure third-party integrations operate reliably, maintain partner satisfaction, identify issues before they escalate to partner churn",
+      "esql_features": [
+        "STATS",
+        "LOOKUP JOIN",
+        "EVAL",
+        "WHERE",
+        "CHANGE_POINT"
+      ],
+      "required_datasets": [
+        "api_requests",
+        "webhook_deliveries",
+        "api_partners"
+      ],
+      "required_fields": {
+        "api_requests": [
+          "@timestamp",
+          "partner_id",
+          "http_status"
+        ],
+        "webhook_deliveries": [
+          "@timestamp",
+          "partner_id",
+          "success",
+          "retry_count"
+        ],
+        "api_partners": [
+          "partner_id",
+          "partner_name",
+          "tier",
+          "partnership_health_score"
+        ]
+      },
+      "join_chain": [
+        "api_requests -> api_partners"
+      ],
+      "query": "FROM api_requests\n| WHERE @timestamp > NOW() - 7 days AND partner_id IS NOT NULL\n| EVAL success = CASE(http_status >= 200 AND http_status < 300, 1, 0)\n| EVAL hour_bucket = DATE_TRUNC(1 hour, @timestamp)\n| STATS api_success_rate_pct = (SUM(success) / COUNT(*)) * 100, total_requests = COUNT(*) BY partner_id, hour_bucket\n| CHANGE_POINT api_success_rate_pct BY hour_bucket\n| STATS avg_success_rate = AVG(api_success_rate_pct), min_success_rate = MIN(api_success_rate_pct), degradation_events = SUM(CASE(change_point_detected == true AND api_success_rate_pct < 95, 1, 0)), total_requests_7d = SUM(total_requests) BY partner_id\n| LOOKUP JOIN api_partners ON partner_id\n| EVAL health_status = CASE(\n    avg_success_rate >= 99.5 AND degradation_events == 0, \"healthy\",\n    avg_success_rate >= 98 AND degradation_events <= 2, \"monitoring\",\n    avg_success_rate >= 95 AND degradation_events <= 5, \"at_risk\",\n    \"critical\"\n  )\n| WHERE health_status IN (\"at_risk\", \"critical\") OR degradation_events > 0\n| EVAL priority = CASE(\n    api_partners.tier == \"strategic\" AND health_status == \"critical\", 1,\n    api_partners.tier == \"strategic\" AND health_status == \"at_risk\", 2,\n    health_status == \"critical\", 3,\n    4\n  )\n| SORT priority ASC, avg_success_rate ASC\n| KEEP partner_id, api_partners.partner_name, api_partners.tier, avg_success_rate, min_success_rate, degradation_events, health_status, total_requests_7d, priority\n| LIMIT 30",
+      "description": "Monitors API partner integration health by tracking success rates over time, detecting degradation events using change point analysis, and prioritizing issues by partner tier and severity",
+      "complexity": "high"
+    },
+    {
+      "name": "A/B Experiment Performance Analysis with Semantic Discovery",
+      "pain_point": "Slow feedback loops on product releases - 4-6 weeks to understand feature impact prevents rapid iteration",
+      "esql_features": [
+        "STATS",
+        "LOOKUP JOIN",
+        "EVAL",
+        "WHERE",
+        "SEMANTIC"
+      ],
+      "required_datasets": [
+        "feature_usage_events",
+        "ab_experiments"
+      ],
+      "required_fields": {
+        "feature_usage_events": [
+          "@timestamp",
+          "experiment_variant",
+          "conversion_event",
+          "interaction_duration_ms",
+          "user_id"
+        ],
+        "ab_experiments": [
+          "variant_id",
+          "experiment_name",
+          "variant_name",
+          "control_baseline",
+          "experiment_hypothesis"
+        ]
+      },
+      "join_chain": [
+        "feature_usage_events -> ab_experiments"
+      ],
+      "query": "FROM feature_usage_events\n| WHERE @timestamp > NOW() - 7 days AND experiment_variant IS NOT NULL\n| STATS conversion_rate = (SUM(CASE(conversion_event == true, 1, 0)) / COUNT(*)) * 100, avg_interaction_ms = AVG(interaction_duration_ms), unique_users = COUNT_DISTINCT(user_id), total_interactions = COUNT(*) BY experiment_variant\n| LOOKUP JOIN ab_experiments ON experiment_variant=variant_id\n| WHERE SEMANTIC(ab_experiments.experiment_hypothesis, \"improve conversion rate checkout flow user engagement\")\n| EVAL uplift_pct = ((conversion_rate - ab_experiments.control_baseline) / ab_experiments.control_baseline) * 100\n| EVAL statistical_significance = CASE(\n    unique_users >= 1000 AND ABS(uplift_pct) >= 5, \"significant\",\n    unique_users >= 500 AND ABS(uplift_pct) >= 10, \"significant\",\n    unique_users >= 100, \"insufficient_sample\",\n    \"too_early\"\n  )\n| EVAL decision = CASE(\n    statistical_significance == \"significant\" AND uplift_pct > 5, \"ship_variant\",\n    statistical_significance == \"significant\" AND uplift_pct < -5, \"kill_variant\",\n    statistical_significance == \"insufficient_sample\", \"continue_test\",\n    \"wait_for_data\"\n  )\n| EVAL engagement_improvement_pct = ((avg_interaction_ms - 5000) / 5000) * 100\n| SORT uplift_pct DESC\n| KEEP experiment_variant, ab_experiments.experiment_name, ab_experiments.variant_name, conversion_rate, ab_experiments.control_baseline, uplift_pct, unique_users, statistical_significance, decision, engagement_improvement_pct\n| LIMIT 20",
+      "description": "Analyzes A/B experiment performance by calculating conversion rates and uplift vs control baseline, uses semantic search to find experiments related to conversion optimization, and provides go/no-go decisions based on statistical significance within 7 days",
+      "complexity": "high"
+    },
+    {
+      "name": "Real-Time Feature Adoption Funnel Analysis with Parameterization",
+      "pain_point": "Real-Time Feature Adoption Analysis & Funnel Optimization - track granular feature usage patterns and workflow conversion rates, reducing feedback loops from 4-6 weeks to 3-7 days",
+      "esql_features": [
+        "STATS",
+        "LOOKUP JOIN",
+        "EVAL",
+        "WHERE",
+        "FORK"
+      ],
+      "required_datasets": [
+        "feature_usage_events",
+        "tenants"
+      ],
+      "required_fields": {
+        "feature_usage_events": [
+          "@timestamp",
+          "tenant_id",
+          "feature_name",
+          "user_id",
+          "conversion_event"
+        ],
+        "tenants": [
+          "tenant_id",
+          "tenant_name",
+          "account_tier",
+          "industry_vertical"
+        ]
+      },
+      "join_chain": [
+        "feature_usage_events -> tenants"
+      ],
+      "query": "FROM feature_usage_events\n| WHERE @timestamp > NOW() - ?time_window AND feature_name == ?target_feature\n| LOOKUP JOIN tenants ON tenant_id\n| FORK\n  (\n    STATS total_users = COUNT_DISTINCT(user_id), total_interactions = COUNT(*) BY tenants.account_tier\n    | EVAL metric_type = \"adoption_by_tier\"\n  )\n  (\n    STATS dau = COUNT_DISTINCT(CASE(DATE_DIFF(\"day\", @timestamp, NOW()) == 0, user_id, null)), mau = COUNT_DISTINCT(user_id)\n    | EVAL stickiness = (dau / mau) * 100\n    | EVAL metric_type = \"feature_stickiness\"\n  )\n  (\n    STATS funnel_step1 = COUNT_DISTINCT(user_id), funnel_step2 = COUNT_DISTINCT(CASE(conversion_event == true, user_id, null)) BY tenants.industry_vertical\n    | EVAL conversion_rate = (funnel_step2 / funnel_step1) * 100\n    | EVAL metric_type = \"funnel_conversion_by_industry\"\n    | SORT conversion_rate DESC\n  )",
+      "description": "Provides multi-dimensional feature adoption analysis using FORK to simultaneously calculate: adoption rates by account tier, feature stickiness (DAU/MAU ratio), and funnel conversion rates by industry vertical. Parameterized for flexible time windows and feature selection",
+      "complexity": "high"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "api_requests",
+      "to": "tenants",
+      "type": "many-to-one",
+      "join_field": "tenant_id"
+    },
+    {
+      "from": "api_requests",
+      "to": "api_partners",
+      "type": "many-to-one",
+      "join_field": "partner_id"
+    },
+    {
+      "from": "feature_usage_events",
+      "to": "tenants",
+      "type": "many-to-one",
+      "join_field": "tenant_id"
+    },
+    {
+      "from": "feature_usage_events",
+      "to": "ab_experiments",
+      "type": "many-to-one",
+      "join_field": "experiment_variant=variant_id"
+    },
+    {
+      "from": "user_sessions",
+      "to": "tenants",
+      "type": "many-to-one",
+      "join_field": "tenant_id"
+    },
+    {
+      "from": "webhook_deliveries",
+      "to": "api_partners",
+      "type": "many-to-one",
+      "join_field": "partner_id"
+    },
+    {
+      "from": "webhook_deliveries",
+      "to": "tenants",
+      "type": "many-to-one",
+      "join_field": "tenant_id"
+    }
+  ],
+  "field_mappings": {
+    "api_requests.tenant_id": "tenants.tenant_id",
+    "api_requests.partner_id": "api_partners.partner_id",
+    "feature_usage_events.tenant_id": "tenants.tenant_id",
+    "feature_usage_events.experiment_variant": "ab_experiments.variant_id",
+    "user_sessions.tenant_id": "tenants.tenant_id",
+    "webhook_deliveries.partner_id": "api_partners.partner_id",
+    "webhook_deliveries.tenant_id": "tenants.tenant_id"
+  }
+}

@@ -1,0 +1,377 @@
+{
+  "datasets": [
+    {
+      "name": "mme_signaling_events",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "500000",
+      "required_fields": {
+        "event_id": "keyword",
+        "@timestamp": "date",
+        "mme_host": "keyword",
+        "cluster_id": "keyword",
+        "datacenter": "keyword",
+        "event_type": "keyword",
+        "imsi": "keyword",
+        "imei": "keyword",
+        "nas_message_type": "keyword",
+        "nas_processing_latency_ms": "float",
+        "authentication_result": "keyword",
+        "handoff_type": "keyword",
+        "handoff_result": "keyword",
+        "handoff_failure_cause": "keyword",
+        "source_enodeb_id": "keyword",
+        "target_enodeb_id": "keyword",
+        "source_cell_id": "keyword",
+        "target_cell_id": "keyword",
+        "attach_result": "keyword",
+        "tau_result": "keyword",
+        "pdn_connection_time_ms": "float",
+        "gtp_tunnel_result": "keyword",
+        "diameter_transaction_result": "keyword",
+        "s6a_interface_result": "keyword",
+        "sctp_association_id": "keyword",
+        "sctp_state": "keyword",
+        "revenue_impacting": "boolean",
+        "event_description": "text"
+      },
+      "relationships": [
+        "mme_hosts",
+        "cell_sites",
+        "subscriber_profiles"
+      ],
+      "semantic_fields": [
+        "event_description"
+      ],
+      "cardinality_requirements": "Ensure 2-5 mme_host values share the same (cluster_id, datacenter) combination for split-brain detection. Ensure handoff failures occur across multiple adjacent cell pairs for cascade analysis."
+    },
+    {
+      "name": "mme_hosts",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "50",
+      "required_fields": {
+        "mme_host": "keyword",
+        "cluster_id": "keyword",
+        "datacenter": "keyword",
+        "region": "keyword",
+        "cpu_utilization_pct": "float",
+        "memory_utilization_pct": "float",
+        "heap_used_mb": "float",
+        "heap_max_mb": "float",
+        "thread_pool_active": "integer",
+        "thread_pool_max": "integer",
+        "sctp_association_count": "integer",
+        "software_version": "keyword",
+        "last_restart_time": "date",
+        "operational_status": "keyword",
+        "host_description": "text"
+      },
+      "relationships": [
+        "mme_signaling_events"
+      ],
+      "semantic_fields": [
+        "host_description"
+      ]
+    },
+    {
+      "name": "cell_sites",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "500",
+      "required_fields": {
+        "cell_id": "keyword",
+        "enodeb_id": "keyword",
+        "cell_name": "text",
+        "cluster_id": "keyword",
+        "datacenter": "keyword",
+        "region": "keyword",
+        "technology": "keyword",
+        "frequency_band": "keyword",
+        "prb_utilization_dl_pct": "float",
+        "prb_utilization_ul_pct": "float",
+        "operational_status": "keyword",
+        "latitude": "float",
+        "longitude": "float",
+        "neighbor_cell_ids": "keyword",
+        "cell_description": "text"
+      },
+      "relationships": [
+        "mme_signaling_events"
+      ],
+      "semantic_fields": [
+        "cell_description"
+      ]
+    },
+    {
+      "name": "subscriber_profiles",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "10000",
+      "required_fields": {
+        "imsi": "keyword",
+        "subscriber_tier": "keyword",
+        "roaming_status": "keyword",
+        "home_network": "keyword",
+        "device_type": "keyword",
+        "fraud_risk_score": "float",
+        "lifetime_value_usd": "float",
+        "account_status": "keyword",
+        "last_known_location": "keyword",
+        "subscriber_behavior_profile": "text"
+      },
+      "relationships": [
+        "mme_signaling_events"
+      ],
+      "semantic_fields": [
+        "subscriber_behavior_profile"
+      ]
+    },
+    {
+      "name": "ss7_diameter_events",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "200000",
+      "required_fields": {
+        "event_id": "keyword",
+        "@timestamp": "date",
+        "protocol": "keyword",
+        "message_type": "keyword",
+        "source_network": "keyword",
+        "destination_network": "keyword",
+        "imsi": "keyword",
+        "msisdn": "keyword",
+        "originating_address": "keyword",
+        "transaction_result": "keyword",
+        "anomaly_score": "float",
+        "is_suspicious": "boolean",
+        "attack_category": "keyword",
+        "cluster_id": "keyword",
+        "datacenter": "keyword",
+        "event_pattern_description": "text"
+      },
+      "relationships": [
+        "subscriber_profiles"
+      ],
+      "semantic_fields": [
+        "event_pattern_description"
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "name": "Proactive Subscriber-Impacting Incident Detection with 5-15 Minute Early Warning",
+      "pain_point": "Reactive incident response overwhelming help desk operations - lack of predictive alerting causes customer-reported issues to flood help desk before engineering awareness",
+      "esql_features": [
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "PERCENTILE",
+        "COUNT_DISTINCT",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "mme_signaling_events"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "@timestamp",
+          "imsi",
+          "attach_result",
+          "tau_result",
+          "gtp_tunnel_result",
+          "cluster_id",
+          "datacenter",
+          "revenue_impacting"
+        ]
+      },
+      "description": "Detect subscriber-impacting incidents 5-15 minutes before help desk call spikes by identifying clusters with 500+ unique IMSIs experiencing service failures within 1-hour windows, using adaptive percentile-based thresholds",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_events | WHERE attach_result == \"FAILURE\" OR tau_result == \"FAILURE\" OR gtp_tunnel_result == \"FAILURE\" | EVAL time_bucket = DATE_TRUNC(1 hour, @timestamp) | STATS unique_imsi_count = COUNT_DISTINCT(imsi), total_failures = COUNT(*), revenue_impacting_failures = COUNT(*) WHERE revenue_impacting == true BY time_bucket, cluster_id, datacenter | INLINESTATS p75_imsi = PERCENTILE(unique_imsi_count, 75), p90_imsi = PERCENTILE(unique_imsi_count, 90) BY cluster_id | EVAL severity = CASE(unique_imsi_count >= 1000, \"CRITICAL\", unique_imsi_count >= 500, \"HIGH\", unique_imsi_count >= p90_imsi, \"MEDIUM\", \"LOW\") | WHERE unique_imsi_count >= 500 | KEEP cluster_id, datacenter, severity, unique_imsi_count, total_failures, time_bucket, revenue_impacting_failures | SORT unique_imsi_count DESC | LIMIT 20"
+    },
+    {
+      "name": "MME Resource Exhaustion and Memory Leak Detection Before Failover",
+      "pain_point": "MME software bugs and resource exhaustion impacting subscriber capacity - memory leaks and CPU exhaustion degrade performance before failover",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "INLINESTATS",
+        "EVAL",
+        "STD_DEV",
+        "WHERE",
+        "CASE"
+      ],
+      "required_datasets": [
+        "mme_signaling_events",
+        "mme_hosts"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "@timestamp",
+          "mme_host",
+          "nas_processing_latency_ms",
+          "cluster_id"
+        ],
+        "mme_hosts": [
+          "mme_host",
+          "cpu_utilization_pct",
+          "memory_utilization_pct",
+          "heap_used_mb",
+          "heap_max_mb",
+          "thread_pool_active",
+          "thread_pool_max",
+          "operational_status"
+        ]
+      },
+      "description": "Identify MME hosts showing signs of resource exhaustion through statistical analysis of CPU/memory utilization combined with NAS message processing latency degradation, detecting memory leaks before they trigger failover events",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_events | STATS avg_nas_latency = AVG(nas_processing_latency_ms), p95_nas_latency = PERCENTILE(nas_processing_latency_ms, 95) BY mme_host, cluster_id | LOOKUP JOIN mme_hosts ON mme_host | EVAL heap_utilization_pct = (mme_hosts.heap_used_mb / mme_hosts.heap_max_mb) * 100, thread_pool_utilization_pct = (mme_hosts.thread_pool_active / mme_hosts.thread_pool_max) * 100 | INLINESTATS avg_cpu = AVG(mme_hosts.cpu_utilization_pct), stddev_cpu = STD_DEV(mme_hosts.cpu_utilization_pct), avg_memory = AVG(mme_hosts.memory_utilization_pct), stddev_memory = STD_DEV(mme_hosts.memory_utilization_pct) BY cluster_id | EVAL cpu_z_score = (mme_hosts.cpu_utilization_pct - avg_cpu) / COALESCE(stddev_cpu, 1), memory_z_score = (mme_hosts.memory_utilization_pct - avg_memory) / COALESCE(stddev_memory, 1) | WHERE cpu_z_score > 2.5 OR memory_z_score > 2.5 OR heap_utilization_pct > 85 OR thread_pool_utilization_pct > 90 | EVAL risk_level = CASE(cpu_z_score > 3 AND memory_z_score > 3, \"CRITICAL_FAILOVER_IMMINENT\", cpu_z_score > 2.5 OR memory_z_score > 2.5, \"HIGH_DEGRADATION\", \"MODERATE\") | KEEP mme_host, cluster_id, risk_level, cpu_z_score, memory_z_score, avg_nas_latency, p95_nas_latency, heap_utilization_pct, thread_pool_utilization_pct | SORT cpu_z_score DESC | LIMIT 15"
+    },
+    {
+      "name": "Cell Tower Handoff Cascade Failure Analysis with Adjacent Cell Impact",
+      "pain_point": "Dropped calls and interrupted data sessions during mobility events - handoff failures between eNodeBs and gNodeBs especially in high-mobility scenarios",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "DATE_TRUNC",
+        "WHERE",
+        "EVAL",
+        "COUNT_DISTINCT"
+      ],
+      "required_datasets": [
+        "mme_signaling_events",
+        "cell_sites"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "@timestamp",
+          "handoff_result",
+          "handoff_failure_cause",
+          "source_cell_id",
+          "target_cell_id",
+          "imsi",
+          "cluster_id"
+        ],
+        "cell_sites": [
+          "cell_id",
+          "cell_name",
+          "enodeb_id",
+          "technology",
+          "operational_status",
+          "neighbor_cell_ids",
+          "region"
+        ]
+      },
+      "description": "Identify handoff cascade failures by analyzing failure patterns across adjacent cell pairs, detecting when failures propagate through neighbor cells and categorizing root causes to pinpoint problematic cell tower configurations",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_events | WHERE handoff_result == \"FAILURE\" | EVAL time_bucket = DATE_TRUNC(1 hour, @timestamp) | STATS handoff_failure_count = COUNT(*), unique_imsi_affected = COUNT_DISTINCT(imsi), failure_causes = VALUES(handoff_failure_cause) BY time_bucket, source_cell_id, target_cell_id, cluster_id | LOOKUP JOIN cell_sites ON source_cell_id = cell_sites.cell_id | EVAL source_cell_name = cell_sites.cell_name, source_enodeb = cell_sites.enodeb_id, source_technology = cell_sites.technology | DROP cell_sites.cell_id, cell_sites.cell_name, cell_sites.enodeb_id, cell_sites.technology | LOOKUP JOIN cell_sites ON target_cell_id = cell_sites.cell_id | EVAL target_cell_name = cell_sites.cell_name, target_enodeb = cell_sites.enodeb_id, target_technology = cell_sites.technology | WHERE handoff_failure_count >= 20 | EVAL handoff_pair = CONCAT(source_cell_name, \" -> \", target_cell_name), technology_pair = CONCAT(source_technology, \" -> \", target_technology) | KEEP source_cell_id, target_cell_id, handoff_pair, technology_pair, handoff_failure_count, unique_imsi_affected, time_bucket, failure_causes | SORT handoff_failure_count DESC | LIMIT 25"
+    },
+    {
+      "name": "SS7 Signaling Attack and Roaming Fraud Detection via Behavioral Analysis",
+      "pain_point": "SS7 signaling attacks and rogue network access attempts - vulnerable to location tracking, SMS interception, and fraudulent roaming attacks",
+      "esql_features": [
+        "SEMANTIC",
+        "LOOKUP JOIN",
+        "STATS",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE",
+        "PERCENTILE"
+      ],
+      "required_datasets": [
+        "ss7_diameter_events",
+        "subscriber_profiles"
+      ],
+      "required_fields": {
+        "ss7_diameter_events": [
+          "@timestamp",
+          "protocol",
+          "message_type",
+          "source_network",
+          "imsi",
+          "anomaly_score",
+          "is_suspicious",
+          "attack_category",
+          "cluster_id",
+          "event_pattern_description"
+        ],
+        "subscriber_profiles": [
+          "imsi",
+          "subscriber_tier",
+          "roaming_status",
+          "fraud_risk_score",
+          "account_status",
+          "subscriber_behavior_profile"
+        ]
+      },
+      "description": "Detect SS7/Diameter signaling attacks through semantic pattern matching of suspicious message sequences combined with subscriber behavioral analysis, identifying location tracking attempts, SMS interception, and fraudulent roaming before financial impact",
+      "complexity": "high",
+      "esql_query": "FROM ss7_diameter_events | WHERE SEMANTIC(event_pattern_description, \"location tracking attempts SMS interception unauthorized roaming fraudulent authentication\") OR is_suspicious == true OR anomaly_score > 0.7 | STATS attack_event_count = COUNT(*), unique_attack_types = COUNT_DISTINCT(attack_category), avg_anomaly_score = AVG(anomaly_score), suspicious_networks = VALUES(source_network) BY imsi, cluster_id | LOOKUP JOIN subscriber_profiles ON imsi | EVAL combined_risk_score = (avg_anomaly_score * 0.6) + (subscriber_profiles.fraud_risk_score * 0.4) | INLINESTATS p90_risk = PERCENTILE(combined_risk_score, 90) | WHERE attack_event_count >= 3 OR combined_risk_score >= p90_risk | EVAL threat_level = CASE(combined_risk_score > 0.85, \"CRITICAL_BLOCK_IMMEDIATELY\", combined_risk_score > 0.7, \"HIGH_INVESTIGATE\", \"MEDIUM_MONITOR\") | KEEP imsi, threat_level, combined_risk_score, attack_event_count, unique_attack_types, subscriber_profiles.subscriber_tier, subscriber_profiles.roaming_status, suspicious_networks | SORT combined_risk_score DESC | LIMIT 20"
+    },
+    {
+      "name": "Core Network Split-Brain Detection and Signaling Storm Prevention",
+      "pain_point": "Core network split-brain scenarios and signaling storms - network partitions create duplicate authoritative instances causing signaling floods",
+      "esql_features": [
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "COUNT_DISTINCT",
+        "WHERE",
+        "STD_DEV"
+      ],
+      "required_datasets": [
+        "mme_signaling_events"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "@timestamp",
+          "mme_host",
+          "cluster_id",
+          "datacenter",
+          "event_type",
+          "sctp_association_id",
+          "sctp_state",
+          "imsi"
+        ]
+      },
+      "description": "Detect core network split-brain conditions by identifying multiple MME hosts in the same cluster simultaneously processing conflicting state for the same subscribers, combined with SCTP association churn patterns indicating network partitions before region-wide signaling storms occur",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_events | EVAL time_bucket = DATE_TRUNC(1 hour, @timestamp) | STATS unique_mme_hosts = COUNT_DISTINCT(mme_host), event_count = COUNT(*), unique_subscribers = COUNT_DISTINCT(imsi), sctp_state_changes = COUNT(*) WHERE sctp_state IN (\"ESTABLISHED\", \"CLOSED\", \"SHUTDOWN_PENDING\") BY time_bucket, cluster_id, datacenter | INLINESTATS avg_events = AVG(event_count), stddev_events = STD_DEV(event_count), p95_events = PERCENTILE(event_count, 95) BY cluster_id | EVAL event_z_score = (event_count - avg_events) / COALESCE(stddev_events, 1), events_per_host = event_count / unique_mme_hosts | WHERE unique_mme_hosts >= 2 AND (event_z_score > 3 OR sctp_state_changes > 100) | EVAL split_brain_risk = CASE(unique_mme_hosts >= 3 AND event_z_score > 4, \"CRITICAL_PARTITION_DETECTED\", unique_mme_hosts >= 2 AND event_z_score > 3, \"HIGH_SPLIT_BRAIN_LIKELY\", \"MODERATE_MONITOR\") | KEEP cluster_id, datacenter, split_brain_risk, unique_mme_hosts, event_z_score, event_count, sctp_state_changes, time_bucket | SORT event_z_score DESC | LIMIT 15"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "mme_signaling_events",
+      "to": "mme_hosts",
+      "type": "many-to-one",
+      "join_field": "mme_host"
+    },
+    {
+      "from": "mme_signaling_events",
+      "to": "cell_sites",
+      "type": "many-to-one",
+      "join_field": "source_cell_id",
+      "note": "Also joins on target_cell_id for handoff analysis"
+    },
+    {
+      "from": "mme_signaling_events",
+      "to": "subscriber_profiles",
+      "type": "many-to-one",
+      "join_field": "imsi"
+    },
+    {
+      "from": "ss7_diameter_events",
+      "to": "subscriber_profiles",
+      "type": "many-to-one",
+      "join_field": "imsi"
+    }
+  ],
+  "field_mappings": {
+    "mme_signaling_events.mme_host": "mme_hosts.mme_host",
+    "mme_signaling_events.source_cell_id": "cell_sites.cell_id",
+    "mme_signaling_events.target_cell_id": "cell_sites.cell_id",
+    "mme_signaling_events.imsi": "subscriber_profiles.imsi",
+    "ss7_diameter_events.imsi": "subscriber_profiles.imsi"
+  }
+}

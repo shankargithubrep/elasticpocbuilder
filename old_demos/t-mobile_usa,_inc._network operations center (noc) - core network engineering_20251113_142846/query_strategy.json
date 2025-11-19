@@ -1,0 +1,450 @@
+{
+  "datasets": [
+    {
+      "name": "mme_signaling_events",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "500000",
+      "description": "High-frequency signaling events from MME interfaces (S1-MME, S6a, S10, S11) capturing attach requests, authentication, session establishment, and handoffs. Data spans 90 days with 500K events across 50 MME hosts in 10 markets.",
+      "required_fields": {
+        "@timestamp": "date",
+        "event_id": "keyword",
+        "mme_host": "keyword",
+        "cluster_id": "keyword",
+        "datacenter": "keyword",
+        "interface_type": "keyword",
+        "message_type": "keyword",
+        "imsi": "keyword",
+        "plmn_id": "keyword",
+        "transaction_id": "keyword",
+        "outcome": "keyword",
+        "duration_ms": "long",
+        "retry_count": "integer",
+        "error_code": "keyword",
+        "enodeb_id": "keyword",
+        "tracking_area": "keyword",
+        "subscriber_tier": "keyword",
+        "roaming_partner": "keyword",
+        "messages_per_second": "float",
+        "thread_pool_queue_depth": "integer",
+        "memory_rss_bytes": "long",
+        "signaling_storm_score": "float",
+        "event_description": "text"
+      },
+      "relationships": [
+        "mme_infrastructure",
+        "subscriber_profiles",
+        "roaming_partners"
+      ],
+      "semantic_fields": [
+        "event_description"
+      ],
+      "cardinality_requirements": "Ensure 3-5 mme_host values share the same (cluster_id, datacenter) combination for split-brain detection. Multiple IMSI values per roaming_partner for anomaly detection. High cardinality on transaction_id for duplicate detection."
+    },
+    {
+      "name": "mme_infrastructure",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "150",
+      "description": "MME infrastructure inventory with host details, capacity, software versions, and cluster configurations. Includes 50 MME hosts across 10 markets with 2-5 hosts per cluster.",
+      "required_fields": {
+        "mme_host": "keyword",
+        "cluster_id": "keyword",
+        "datacenter": "keyword",
+        "market_name": "keyword",
+        "software_version": "keyword",
+        "max_subscribers": "integer",
+        "current_load_pct": "float",
+        "cpu_cores": "integer",
+        "memory_total_gb": "float",
+        "cluster_role": "keyword",
+        "last_restart": "date",
+        "maintenance_window": "keyword",
+        "vendor": "keyword",
+        "host_description": "text"
+      },
+      "relationships": [
+        "mme_signaling_events"
+      ],
+      "semantic_fields": [
+        "host_description"
+      ]
+    },
+    {
+      "name": "subscriber_profiles",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "5000",
+      "description": "Subscriber profile data including service tier, churn risk scoring, incident history, and SLA entitlements. Represents 5000 subscribers with varying service levels and incident patterns.",
+      "required_fields": {
+        "imsi": "keyword",
+        "subscriber_id": "keyword",
+        "subscriber_tier": "keyword",
+        "home_market": "keyword",
+        "service_availability_pct": "float",
+        "churn_risk_score": "float",
+        "incident_count_30d": "integer",
+        "last_incident_date": "date",
+        "sla_target_pct": "float",
+        "lifetime_value": "float",
+        "account_age_days": "integer",
+        "roaming_enabled": "boolean",
+        "subscriber_profile_text": "text"
+      },
+      "relationships": [
+        "mme_signaling_events"
+      ],
+      "semantic_fields": [
+        "subscriber_profile_text"
+      ]
+    },
+    {
+      "name": "roaming_partners",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200",
+      "description": "Roaming partner network configurations including PLMN mappings, APN settings, authentication baselines, and security profiles. Covers 200 international roaming agreements.",
+      "required_fields": {
+        "plmn_id": "keyword",
+        "partner_name": "keyword",
+        "country_code": "keyword",
+        "roaming_type": "keyword",
+        "apn_configuration": "text",
+        "baseline_auth_success_rate": "float",
+        "baseline_daily_volume": "integer",
+        "security_risk_level": "keyword",
+        "agreement_status": "keyword",
+        "last_config_change": "date",
+        "partner_description": "text"
+      },
+      "relationships": [
+        "mme_signaling_events"
+      ],
+      "semantic_fields": [
+        "partner_description",
+        "apn_configuration"
+      ]
+    },
+    {
+      "name": "cell_site_inventory",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "8000",
+      "description": "Cell site (eNodeB) inventory with location, capacity, neighbor relationships, and operational status. Includes 8000 cell sites with coverage areas and handoff configurations.",
+      "required_fields": {
+        "enodeb_id": "keyword",
+        "site_name": "keyword",
+        "tracking_area": "keyword",
+        "market_name": "keyword",
+        "latitude": "float",
+        "longitude": "float",
+        "max_prb_utilization": "float",
+        "neighbor_sites": "keyword",
+        "coverage_radius_m": "integer",
+        "site_type": "keyword",
+        "operational_status": "keyword",
+        "last_alarm": "date",
+        "site_description": "text"
+      },
+      "relationships": [
+        "mme_signaling_events"
+      ],
+      "semantic_fields": [
+        "site_description"
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "name": "Real-Time Split-Brain Detection Using Multi-Host Cluster Anomaly",
+      "pain_point": "Split-brain conditions and signaling storm detection - Current monitoring lacks real-time correlation to detect split-brain scenarios where multiple MME/HSS instances believe they are active, resulting in duplicate IMSI registrations and signaling storms affecting 500-2,000 subscribers with 15-30 minute detection delays",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "COUNT_DISTINCT",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "mme_signaling_events",
+        "mme_infrastructure"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "@timestamp",
+          "mme_host",
+          "cluster_id",
+          "datacenter",
+          "imsi",
+          "message_type",
+          "signaling_storm_score"
+        ],
+        "mme_infrastructure": [
+          "mme_host",
+          "cluster_id",
+          "datacenter",
+          "market_name",
+          "cluster_role"
+        ]
+      },
+      "description": "Detects split-brain conditions by identifying clusters where multiple MME hosts simultaneously claim active status, indicated by duplicate IMSI registrations across hosts within 60 seconds. Uses statistical baseline per cluster to flag abnormal multi-host activity patterns.",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_events | WHERE @timestamp >= NOW() - 1 hour AND message_type == \"ATTACH_REQUEST\" | EVAL time_bucket = DATE_TRUNC(1 minute, @timestamp) | STATS unique_hosts = COUNT_DISTINCT(mme_host), duplicate_imsi_count = COUNT(*), avg_storm_score = AVG(signaling_storm_score) BY time_bucket, cluster_id, datacenter | LOOKUP JOIN mme_infrastructure ON cluster_id | WHERE unique_hosts >= 2 | INLINESTATS baseline_hosts = AVG(unique_hosts), p95_hosts = PERCENTILE(unique_hosts, 95) BY cluster_id | EVAL split_brain_severity = CASE(unique_hosts >= 4, \"CRITICAL\", unique_hosts >= 3, \"HIGH\", \"MEDIUM\") | WHERE unique_hosts > baseline_hosts | KEEP cluster_id, split_brain_severity, unique_hosts, duplicate_imsi_count, avg_storm_score, mme_infrastructure.market_name, time_bucket, baseline_hosts | SORT duplicate_imsi_count DESC | LIMIT 20"
+    },
+    {
+      "name": "Proactive MME Resource Exhaustion Detection with Gradual Degradation Patterns",
+      "pain_point": "MME software stability and resource exhaustion - Memory leaks consume resources over 7-14 days leading to crashes affecting 50,000-150,000 subscribers per MME, with 5-minute SNMP polling failing to capture gradual degradation patterns",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "STD_DEV",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "mme_signaling_events",
+        "mme_infrastructure"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "@timestamp",
+          "mme_host",
+          "memory_rss_bytes",
+          "thread_pool_queue_depth",
+          "duration_ms"
+        ],
+        "mme_infrastructure": [
+          "mme_host",
+          "market_name",
+          "software_version",
+          "memory_total_gb",
+          "max_subscribers"
+        ]
+      },
+      "description": "Identifies gradual resource degradation patterns indicating memory leaks or thread pool exhaustion before service-affecting failures. Uses statistical z-score analysis on 4-hour intervals to detect abnormal memory growth and queue depth trends over 7-14 day periods.",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_events | WHERE @timestamp >= NOW() - 14 days | EVAL time_bucket = DATE_TRUNC(4 hours, @timestamp) | STATS avg_memory_mb = AVG(memory_rss_bytes) / 1048576, avg_queue_depth = AVG(thread_pool_queue_depth), avg_latency_ms = AVG(duration_ms) BY time_bucket, mme_host | LOOKUP JOIN mme_infrastructure ON mme_host | INLINESTATS baseline_memory = AVG(avg_memory_mb), stddev_memory = STD_DEV(avg_memory_mb), baseline_queue = AVG(avg_queue_depth), stddev_queue = STD_DEV(avg_queue_depth) BY mme_host | EVAL memory_z_score = (avg_memory_mb - baseline_memory) / COALESCE(stddev_memory, 1), queue_z_score = (avg_queue_depth - baseline_queue) / COALESCE(stddev_queue, 1), memory_pct_used = (avg_memory_mb / (mme_infrastructure.memory_total_gb * 1024)) * 100 | WHERE memory_z_score > 2.5 OR queue_z_score > 2.5 | EVAL exhaustion_severity = CASE(memory_z_score > 4 OR memory_pct_used > 85, \"CRITICAL\", memory_z_score > 3 OR memory_pct_used > 75, \"HIGH\", \"MEDIUM\") | KEEP mme_host, exhaustion_severity, memory_z_score, memory_pct_used, avg_queue_depth, mme_infrastructure.market_name, mme_infrastructure.software_version, time_bucket | SORT memory_z_score DESC | LIMIT 25"
+    },
+    {
+      "name": "SS7 Diameter Security Threat Detection with Roaming Partner Baseline Anomaly",
+      "pain_point": "SS7 and Diameter security threat detection - Security monitoring tools operate independently from subscriber behavior analytics, preventing real-time detection of location tracking, SMS interception, and fraud attempts",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "mme_signaling_events",
+        "roaming_partners"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "@timestamp",
+          "plmn_id",
+          "message_type",
+          "outcome",
+          "imsi",
+          "error_code"
+        ],
+        "roaming_partners": [
+          "plmn_id",
+          "partner_name",
+          "country_code",
+          "baseline_auth_success_rate",
+          "baseline_daily_volume",
+          "security_risk_level"
+        ]
+      },
+      "description": "Detects SS7 and Diameter security attacks by comparing roaming partner authentication patterns against ML-derived baselines. Identifies location tracking attempts, abnormal authentication failures, and suspicious traffic volume spikes per PLMN.",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_events | WHERE @timestamp >= NOW() - 24 hours AND roaming_partner IS NOT NULL | EVAL time_bucket = DATE_TRUNC(1 hour, @timestamp) | STATS hourly_volume = COUNT(*), auth_failures = COUNT(*) WHERE outcome == \"FAILURE\", unique_imsi = COUNT_DISTINCT(imsi) BY time_bucket, plmn_id | LOOKUP JOIN roaming_partners ON plmn_id | EVAL auth_failure_rate = (auth_failures / hourly_volume) * 100, volume_vs_baseline = ((hourly_volume - roaming_partners.baseline_daily_volume / 24) / (roaming_partners.baseline_daily_volume / 24)) * 100 | INLINESTATS p90_volume = PERCENTILE(hourly_volume, 90), p90_failure_rate = PERCENTILE(auth_failure_rate, 90) BY plmn_id | WHERE auth_failure_rate > roaming_partners.baseline_auth_success_rate * 2 OR volume_vs_baseline > 150 | EVAL threat_severity = CASE(auth_failure_rate > 50 OR volume_vs_baseline > 300, \"CRITICAL\", auth_failure_rate > 30 OR volume_vs_baseline > 200, \"HIGH\", \"MEDIUM\") | KEEP plmn_id, threat_severity, auth_failure_rate, volume_vs_baseline, unique_imsi, roaming_partners.partner_name, roaming_partners.country_code, roaming_partners.security_risk_level, time_bucket | SORT auth_failure_rate DESC | LIMIT 20"
+    },
+    {
+      "name": "Signaling Storm Early Warning with Multi-Metric Acceleration Detection",
+      "pain_point": "Signaling storm early warning and automated mitigation - Detect abnormal signaling message acceleration patterns before cascade using multi-metric anomaly detection across Diameter and GTP-C interfaces",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "STD_DEV",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "mme_signaling_events",
+        "mme_infrastructure",
+        "cell_site_inventory"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "@timestamp",
+          "mme_host",
+          "interface_type",
+          "message_type",
+          "retry_count",
+          "enodeb_id",
+          "signaling_storm_score"
+        ],
+        "mme_infrastructure": [
+          "mme_host",
+          "cluster_id",
+          "market_name"
+        ],
+        "cell_site_inventory": [
+          "enodeb_id",
+          "site_name",
+          "tracking_area",
+          "neighbor_sites"
+        ]
+      },
+      "description": "Detects signaling storm precursors by identifying abnormal message retry acceleration and duplicate transaction patterns across Diameter S6a and GTP-C S11 interfaces. Uses statistical z-score on 5-minute intervals to flag cascade risks before affecting 2,000+ subscribers.",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_events | WHERE @timestamp >= NOW() - 2 hours | EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp) | STATS msg_rate = COUNT(*), avg_retries = AVG(retry_count), high_retry_count = COUNT(*) WHERE retry_count > 3, avg_storm_score = AVG(signaling_storm_score) BY time_bucket, mme_host, interface_type | LOOKUP JOIN mme_infrastructure ON mme_host | INLINESTATS baseline_rate = AVG(msg_rate), stddev_rate = STD_DEV(msg_rate), baseline_retries = AVG(avg_retries), stddev_retries = STD_DEV(avg_retries) BY mme_host, interface_type | EVAL rate_z_score = (msg_rate - baseline_rate) / COALESCE(stddev_rate, 1), retry_z_score = (avg_retries - baseline_retries) / COALESCE(stddev_retries, 1), acceleration_indicator = rate_z_score + retry_z_score | WHERE rate_z_score > 3 OR retry_z_score > 3 | EVAL storm_severity = CASE(acceleration_indicator > 8, \"CRITICAL\", acceleration_indicator > 6, \"HIGH\", \"MEDIUM\") | KEEP mme_host, storm_severity, rate_z_score, retry_z_score, msg_rate, high_retry_count, mme_infrastructure.market_name, interface_type, time_bucket | SORT acceleration_indicator DESC | LIMIT 25"
+    },
+    {
+      "name": "Subscriber Churn Risk Analysis with Incident History and Service Availability Correlation",
+      "pain_point": "Extended outages driving customer churn - Subscribers with 3+ disruptions in 30 days have 40-60% higher churn probability, with no per-subscriber service availability tracking",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "WHERE",
+        "EVAL"
+      ],
+      "required_datasets": [
+        "mme_signaling_events",
+        "subscriber_profiles"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "@timestamp",
+          "imsi",
+          "outcome",
+          "message_type"
+        ],
+        "subscriber_profiles": [
+          "imsi",
+          "subscriber_id",
+          "subscriber_tier",
+          "churn_risk_score",
+          "incident_count_30d",
+          "service_availability_pct",
+          "sla_target_pct",
+          "lifetime_value"
+        ]
+      },
+      "description": "Identifies high-value subscribers at elevated churn risk by correlating recent service failures with incident history and SLA compliance. Flags subscribers with 3+ disruptions in 30 days who are below SLA targets for proactive retention intervention.",
+      "complexity": "medium",
+      "esql_query": "FROM mme_signaling_events | WHERE @timestamp >= NOW() - 30 days AND outcome == \"FAILURE\" | STATS recent_failures = COUNT(*), failure_types = COUNT_DISTINCT(message_type) BY imsi | LOOKUP JOIN subscriber_profiles ON imsi | WHERE subscriber_profiles.incident_count_30d >= 3 OR recent_failures >= 5 | EVAL sla_violation = subscriber_profiles.service_availability_pct < subscriber_profiles.sla_target_pct, churn_risk_level = CASE(subscriber_profiles.churn_risk_score > 0.6 AND sla_violation, \"CRITICAL\", subscriber_profiles.churn_risk_score > 0.4, \"HIGH\", \"MEDIUM\"), revenue_at_risk = subscriber_profiles.lifetime_value * subscriber_profiles.churn_risk_score | WHERE churn_risk_level IN (\"CRITICAL\", \"HIGH\") | KEEP imsi, churn_risk_level, subscriber_profiles.churn_risk_score, recent_failures, subscriber_profiles.service_availability_pct, subscriber_profiles.subscriber_tier, revenue_at_risk, subscriber_profiles.incident_count_30d, sla_violation | SORT revenue_at_risk DESC | LIMIT 50"
+    },
+    {
+      "name": "Semantic Search for Similar Split-Brain and Signaling Storm Incident Patterns",
+      "pain_point": "Cell tower handoff cascade failures and split-brain conditions - Difficulty identifying similar historical incident patterns to accelerate root cause analysis and reduce MTTR from 6-12 hours to 2-3 hours",
+      "esql_features": [
+        "SEMANTIC",
+        "LOOKUP JOIN",
+        "WHERE",
+        "EVAL"
+      ],
+      "required_datasets": [
+        "mme_signaling_events",
+        "mme_infrastructure"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "event_id",
+          "mme_host",
+          "cluster_id",
+          "message_type",
+          "outcome",
+          "error_code",
+          "event_description"
+        ],
+        "mme_infrastructure": [
+          "mme_host",
+          "market_name",
+          "software_version"
+        ]
+      },
+      "description": "Uses semantic search to find historically similar split-brain and signaling storm incidents based on natural language description of symptoms. Enables rapid pattern matching for root cause analysis and accelerates MTTR by surfacing relevant past incidents.",
+      "complexity": "medium",
+      "esql_query": "FROM mme_signaling_events | WHERE SEMANTIC(event_description, \"multiple MME hosts claiming active status with duplicate subscriber registrations and authentication failures\") | LOOKUP JOIN mme_infrastructure ON mme_host | WHERE outcome == \"FAILURE\" | EVAL incident_pattern = CONCAT(message_type, \" - \", error_code, \" - \", mme_infrastructure.market_name) | KEEP event_id, mme_host, incident_pattern, message_type, error_code, mme_infrastructure.market_name, mme_infrastructure.software_version | LIMIT 15"
+    },
+    {
+      "name": "Cell Tower Handoff Cascade Failure Root Cause Correlation",
+      "pain_point": "Radio equipment failure impact correlation - Delays in identifying root cause cell sites extend MTTR from 2-3 hours to 6-12 hours during cascade failures affecting 2,000-5,000 subscribers",
+      "esql_features": [
+        "LOOKUP JOIN",
+        "STATS",
+        "DATE_TRUNC",
+        "WHERE",
+        "EVAL",
+        "COUNT_DISTINCT"
+      ],
+      "required_datasets": [
+        "mme_signaling_events",
+        "cell_site_inventory"
+      ],
+      "required_fields": {
+        "mme_signaling_events": [
+          "@timestamp",
+          "enodeb_id",
+          "message_type",
+          "outcome",
+          "imsi",
+          "tracking_area"
+        ],
+        "cell_site_inventory": [
+          "enodeb_id",
+          "site_name",
+          "tracking_area",
+          "market_name",
+          "neighbor_sites",
+          "operational_status"
+        ]
+      },
+      "description": "Identifies root cause cell sites triggering cascade handoff failures by analyzing failure concentration patterns and neighbor site relationships. Correlates handoff failures across tracking areas to pinpoint originating tower within 5 minutes.",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_events | WHERE @timestamp >= NOW() - 1 hour AND message_type IN (\"HANDOFF_REQUEST\", \"HANDOFF_FAILURE\") AND outcome == \"FAILURE\" | EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp) | STATS failure_count = COUNT(*), affected_subscribers = COUNT_DISTINCT(imsi) BY time_bucket, enodeb_id, tracking_area | LOOKUP JOIN cell_site_inventory ON enodeb_id | WHERE failure_count >= 20 | EVAL cascade_severity = CASE(affected_subscribers > 1000, \"CRITICAL\", affected_subscribers > 500, \"HIGH\", \"MEDIUM\"), neighbor_impact = CONCAT(\"Neighbors: \", cell_site_inventory.neighbor_sites) | KEEP enodeb_id, cascade_severity, failure_count, affected_subscribers, cell_site_inventory.site_name, cell_site_inventory.market_name, neighbor_impact, time_bucket | SORT affected_subscribers DESC | LIMIT 20"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "mme_signaling_events",
+      "to": "mme_infrastructure",
+      "type": "many-to-one",
+      "join_field": "mme_host"
+    },
+    {
+      "from": "mme_signaling_events",
+      "to": "subscriber_profiles",
+      "type": "many-to-one",
+      "join_field": "imsi"
+    },
+    {
+      "from": "mme_signaling_events",
+      "to": "roaming_partners",
+      "type": "many-to-one",
+      "join_field": "plmn_id"
+    },
+    {
+      "from": "mme_signaling_events",
+      "to": "cell_site_inventory",
+      "type": "many-to-one",
+      "join_field": "enodeb_id"
+    }
+  ],
+  "field_mappings": {
+    "mme_signaling_events.mme_host": "mme_infrastructure.mme_host",
+    "mme_signaling_events.imsi": "subscriber_profiles.imsi",
+    "mme_signaling_events.plmn_id": "roaming_partners.plmn_id",
+    "mme_signaling_events.enodeb_id": "cell_site_inventory.enodeb_id"
+  }
+}

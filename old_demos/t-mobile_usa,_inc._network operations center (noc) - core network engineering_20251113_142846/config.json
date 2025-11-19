@@ -1,0 +1,57 @@
+{
+  "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+  "demo_type": "analytics",
+  "module_version": "1.0.0",
+  "generated_at": "2025-11-13T14:33:44.672808",
+  "customer_context": {
+    "company_name": "T-Mobile USA, Inc.",
+    "department": "Network Operations Center (NOC) - Core Network Engineering",
+    "industry": "Telecommunications / Mobile Network Operator",
+    "pain_points": [
+      "Revenue loss and SLA violations - Current monthly aggregated reporting fails to capture true subscriber experience during transient failures, preventing proactive SLA violation management",
+      "International roaming configuration errors - Misconfigured roaming agreements and APN mapping errors discovered through customer complaints rather than proactive monitoring",
+      "Cell tower handoff cascade failures - Single tower failures affecting 500-1,500 subscribers trigger cascading handoff failures impacting additional 2,000-5,000 subscribers with 10-20 minute propagation delays",
+      "Split-brain conditions and signaling storm detection - Current monitoring lacks real-time correlation to detect split-brain scenarios where multiple MME/HSS instances believe they are active, resulting in duplicate IMSI registrations and signaling storms affecting 500-2,000 subscribers with 15-30 minute detection delays",
+      "MME software stability and resource exhaustion - Memory leaks consume resources over 7-14 days leading to crashes affecting 50,000-150,000 subscribers per MME, with 5-minute SNMP polling failing to capture gradual degradation patterns",
+      "SS7 and Diameter security threat detection - Security monitoring tools operate independently from subscriber behavior analytics, preventing real-time detection of location tracking, SMS interception, and fraud attempts",
+      "HSS database synchronization and corruption issues - Periodic synchronization failures between primary and standby nodes cause authentication failures and service entitlement issues, with 2-6 hour delays to identify affected IMSI ranges",
+      "Extended outages driving customer churn - Subscribers with 3+ disruptions in 30 days have 40-60% higher churn probability, with no per-subscriber service availability tracking",
+      "Radio equipment failure impact correlation - Delays in identifying root cause cell sites extend MTTR from 2-3 hours to 6-12 hours"
+    ],
+    "use_cases": [
+      "SS7/Diameter Security Threat Detection and Roaming Partner Anomaly Analysis - Detect security attacks and distinguish from legitimate roaming traffic using ML baselines per roaming partner PLMN",
+      "Real-Time Detection of Core Network Split-Brain Conditions - Identify split-brain scenarios where multiple MME/HSS instances claim active status within 60 seconds using anomaly detection on signaling rates and cluster state",
+      "Signaling Storm Early Warning and Automated Mitigation - Detect abnormal signaling message acceleration patterns before cascade using multi-metric anomaly detection across Diameter and GTP-C interfaces",
+      "Proactive MME Resource Exhaustion Detection and Capacity Planning - Identify gradual resource degradation patterns (memory leaks, thread pool exhaustion) before service-affecting failures"
+    ],
+    "scale": "2-5 MME hosts per market, 50,000-150,000 subscribers per MME, 50+ cell sites affected per incident, 10,000+ signaling messages per second during storms, 500-2,000 subscribers impacted per split-brain event",
+    "metrics": [
+      "telecom.mme.thread_pool.queue_depth - Worker thread utilization and message queue backlog",
+      "oracle.replication.lag.seconds - HSS database replication lag between primary and standby",
+      "telecom.sla.availability.actual.pct - Per-customer SLA compliance tracking",
+      "telecom.mme.signaling.storm.score - Abnormal message retry patterns and duplicate transactions",
+      "telecom.gtpc.tunnel.establishment.outcome - S11 Create Session Request/Response success rate",
+      "telecom.enodeb.availability.status - Cell site operational status and alarms",
+      "telecom.ss7.attack.classification - SS7 attack types (location tracking, SMS interception, fraud)",
+      "telecom.subscriber.churn.risk_score - ML-based churn probability incorporating incident history",
+      "telecom.diameter.roaming.plmn - Per-roaming-partner authentication success rates",
+      "telecom.cell.prb.utilization.pct - Physical resource block utilization per cell",
+      "telecom.hss.authentication.outcome - Authentication vector generation failures and causes",
+      "telecom.diameter.transaction.duration.ms - S6a authentication transaction latency between MME and HSS",
+      "telecom.subscriber.service.availability.pct - Per-subscriber service availability over 30 days",
+      "system.process.memory.rss.bytes - MME process memory utilization",
+      "telecom.mme.signaling.messages_per_second - S1-MME, S6a, S10, S11 interface message rates by type",
+      "telecom.call.outcome - Voice call drop rate by geographic area",
+      "telecom.handoff.outcome - X2/Xn and S1/NG handoff success rates",
+      "telecom.mme.attach.outcome - Subscriber attach attempts and outcomes by tracking area"
+    ],
+    "demo_type": "analytics",
+    "dataset_size_preference": "medium",
+    "use_enhanced_generation": false
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  }
+}

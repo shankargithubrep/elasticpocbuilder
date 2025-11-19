@@ -1,0 +1,6 @@
+mme_host,mme_pool,datacenter,region,software_version,capacity_tier,primary_backup,max_subscribers
+mme-01.tmobile.net,POOL_1,DC-West,Southwest,v5.3.0,Tier3,Backup,750000
+mme-02.tmobile.net,POOL_1,DC-East,West,v5.2.1,Tier2,Backup,1000000
+mme-03.tmobile.net,POOL_2,DC-West,Midwest,v5.2.3,Tier1,Primary,500000
+mme-04.tmobile.net,POOL_2,DC-East,West,v5.2.1,Tier2,Primary,1000000
+mme-05.tmobile.net,POOL_3,DC-West,Northeast,v5.2.3,Tier3,Primary,750000

@@ -1,0 +1,6 @@
+mme_host,datacenter,region,software_version,capacity_subscribers,deployment_date,hardware_model,cluster_id
+mme-01.tmobile.net,DC-Seattle,West,MME-5.1.8,61235,2023-02-13 11:31:49.946567,Huawei ME60,cluster-1
+mme-02.tmobile.net,DC-Dallas,Central,MME-5.2.3,57873,2022-07-28 11:31:49.946609,Ericsson SGSN-MME,cluster-2
+mme-03.tmobile.net,DC-Atlanta,Southeast,MME-5.2.3,49743,2022-07-22 11:31:49.946631,Huawei ME60,cluster-1
+mme-04.tmobile.net,DC-Chicago,Midwest,MME-5.2.3,34284,2024-02-12 11:31:49.946650,Nokia Flexi NS,cluster-2
+mme-05.tmobile.net,DC-Denver,Mountain,MME-5.2.3,45156,2022-03-01 11:31:49.946670,Cisco ASR5500,cluster-1

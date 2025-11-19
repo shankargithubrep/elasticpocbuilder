@@ -1,0 +1,154 @@
+[
+  {
+    "name": "Cell Tower Cascade Failure Detection with Z-Score Analysis",
+    "description": "Detects abnormal spike patterns in cell ID failures using statistical z-score analysis across 5-minute intervals to identify cascade failures before they escalate",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_cell_cascade_detection",
+      "description": "Detects cell tower cascade failures using z-score analysis. Identifies abnormal failure spikes across 5-minute intervals to prevent mass service disruption before escalation.",
+      "tags": [
+        "network",
+        "infrastructure",
+        "cascade-failure",
+        "analytics",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_failures\n| EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)\n| STATS \n    failure_count = COUNT(*), \n    unique_imsi = COUNT_DISTINCT(imsi) \n  BY time_bucket, current_cell_id\n| LOOKUP JOIN cell_tower_reference ON current_cell_id == cell_id\n| INLINESTATS \n    avg_failures = AVG(failure_count), \n    stddev_failures = STD_DEV(failure_count), \n    p95_failures = PERCENTILE(failure_count, 95) \n  BY region\n| EVAL z_score = (failure_count - avg_failures) / COALESCE(stddev_failures, 1)\n| WHERE z_score > 3 AND failure_count >= 200\n| EVAL severity = CASE(\n    z_score > 5, \"CRITICAL\", \n    z_score > 4, \"HIGH\", \n    \"MEDIUM\"\n  )\n| KEEP \n    current_cell_id, \n    severity, \n    cell_name, \n    z_score, \n    failure_count, \n    time_bucket, \n    unique_imsi, \n    equipment_type\n| SORT z_score DESC\n| LIMIT 50",
+    "query_type": "scripted",
+    "pain_point": "Cell tower handoff cascade failures causing mass service disruption",
+    "complexity": "high"
+  },
+  {
+    "name": "IMSI Influx Anomaly Detection for Security Threats",
+    "description": "Identifies unusual subscriber influx patterns by detecting statistical anomalies in unique IMSI counts per MME host to catch security attacks early",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_imsi_anomaly_detection",
+      "description": "Identifies unusual subscriber influx patterns using statistical anomaly detection. Catches SS7 attacks, rogue networks, and roaming misconfigurations early by analyzing IMSI patterns per MME host.",
+      "tags": [
+        "security",
+        "threat-detection",
+        "roaming",
+        "analytics",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_failures\n| EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)\n| STATS \n    unique_imsi_count = COUNT_DISTINCT(imsi), \n    roaming_imsi = COUNT_DISTINCT(imsi) WHERE roaming_flag == true \n  BY time_bucket, mme_host\n| LOOKUP JOIN mme_host_inventory ON mme_host\n| INLINESTATS \n    avg_imsi = AVG(unique_imsi_count), \n    stddev_imsi = STD_DEV(unique_imsi_count), \n    baseline_imsi = PERCENTILE(unique_imsi_count, 50) \n  BY datacenter\n| EVAL z_score = (unique_imsi_count - avg_imsi) / COALESCE(stddev_imsi, 1)\n| EVAL pct_deviation = ((unique_imsi_count - baseline_imsi) / baseline_imsi) * 100\n| WHERE z_score > 3 AND unique_imsi_count > 400\n| EVAL threat_level = CASE(\n    z_score > 5, \"CRITICAL_ATTACK\", \n    z_score > 4, \"HIGH_RISK\", \n    \"SUSPICIOUS\"\n  )\n| KEEP \n    mme_host, \n    threat_level, \n    datacenter, \n    z_score, \n    unique_imsi_count, \n    time_bucket, \n    roaming_imsi, \n    pct_deviation\n| SORT z_score DESC",
+    "query_type": "scripted",
+    "pain_point": "Rogue network attempts, SS7 attacks, and international roaming configuration errors",
+    "complexity": "high"
+  },
+  {
+    "name": "HSS Mass Authentication Failure Detection",
+    "description": "Detects mass authentication failures indicating HSS problems by analyzing failure rates and response time anomalies across MME hosts",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_hss_failure_detection",
+      "description": "Detects HSS database corruption and synchronization issues. Analyzes authentication failure rates and response times to identify mass failures affecting subscriber authentication.",
+      "tags": [
+        "hss",
+        "authentication",
+        "database",
+        "performance",
+        "esql"
+      ]
+    },
+    "query": "FROM subscriber_authentication_events\n| EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)\n| STATS \n    total_attempts = COUNT(*), \n    failed_attempts = COUNT(*) WHERE auth_result == \"FAILURE\", \n    avg_response_time = AVG(response_time_ms), \n    affected_subscribers = COUNT_DISTINCT(imsi) \n  BY time_bucket, mme_host\n| LOOKUP JOIN mme_host_inventory ON mme_host\n| EVAL failure_rate = (TO_DOUBLE(failed_attempts) / total_attempts) * 100\n| INLINESTATS \n    baseline_failure_rate = AVG(failure_rate), \n    stddev_failure_rate = STD_DEV(failure_rate) \n  BY datacenter\n| EVAL z_score = (failure_rate - baseline_failure_rate) / COALESCE(stddev_failure_rate, 1)\n| WHERE (failure_rate > 15 AND affected_subscribers > 500) OR z_score > 4\n| EVAL severity = CASE(\n    failure_rate > 50, \"CRITICAL_HSS_OUTAGE\", \n    failure_rate > 30, \"HIGH_HSS_DEGRADATION\", \n    \"MEDIUM_HSS_ISSUE\"\n  )\n| KEEP \n    mme_host, \n    severity, \n    software_version, \n    failure_rate, \n    affected_subscribers, \n    time_bucket, \n    avg_response_time, \n    z_score\n| SORT failure_rate DESC",
+    "query_type": "scripted",
+    "pain_point": "HSS database corruption or synchronization issues affecting subscriber authentication",
+    "complexity": "medium"
+  },
+  {
+    "name": "MME Split-Brain and Signaling Storm Detection",
+    "description": "Multi-dimensional analysis detecting split-brain scenarios by identifying simultaneous high error rates across multiple MME hosts with correlated failure patterns",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_splitbrain_detection",
+      "description": "Detects core network split-brain conditions and signaling storms. Multi-dimensional analysis identifies simultaneous high error rates across MME hosts to prevent extended outages.",
+      "tags": [
+        "core-network",
+        "split-brain",
+        "signaling-storm",
+        "critical",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_failures\n| EVAL time_bucket = DATE_TRUNC(1 minute, @timestamp)\n| STATS \n    error_rate = COUNT(*), \n    unique_procedures = COUNT_DISTINCT(procedure_type), \n    affected_cells = COUNT_DISTINCT(current_cell_id), \n    affected_imsi = COUNT_DISTINCT(imsi) \n  BY time_bucket, mme_host\n| LOOKUP JOIN mme_host_inventory ON mme_host\n| INLINESTATS \n    avg_error_rate = AVG(error_rate), \n    stddev_error_rate = STD_DEV(error_rate), \n    max_error_rate = MAX(error_rate) \n  BY datacenter\n| EVAL z_score = (error_rate - avg_error_rate) / COALESCE(stddev_error_rate, 1)\n| EVAL capacity_pct = (TO_DOUBLE(error_rate) / max_capacity) * 100\n| WHERE z_score > 4 AND error_rate > 1000 AND unique_procedures > 5\n| EVAL condition_type = CASE(\n    affected_cells > 100 AND capacity_pct > 80, \"SPLIT_BRAIN_CRITICAL\", \n    error_rate > 5000, \"SIGNALING_STORM\", \n    \"SEVERE_OVERLOAD\"\n  )\n| KEEP \n    mme_host, \n    condition_type, \n    datacenter, \n    z_score, \n    error_rate, \n    time_bucket, \n    affected_imsi, \n    affected_cells\n| SORT error_rate DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "Core network split-brain conditions and signaling storms causing extended outages",
+    "complexity": "high"
+  },
+  {
+    "name": "Handoff Failure Pattern Analysis by Region",
+    "description": "Analyzes handoff failures between cell towers grouped by region to identify geographic patterns and infrastructure weaknesses",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_handoff_analysis",
+      "description": "Analyzes handoff failure patterns across regions. Identifies geographic infrastructure weaknesses and cell tower configuration issues causing dropped calls during mobility.",
+      "tags": [
+        "handoff",
+        "mobility",
+        "regional",
+        "infrastructure",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_failures\n| WHERE procedure_type == \"HANDOVER\"\n| LOOKUP JOIN cell_tower_reference ON current_cell_id == cell_id\n| STATS \n    handoff_failures = COUNT(*),\n    unique_subscribers = COUNT_DISTINCT(imsi),\n    error_types = COUNT_DISTINCT(error_code)\n  BY region, equipment_type\n| EVAL failure_rate_per_subscriber = TO_DOUBLE(handoff_failures) / unique_subscribers\n| WHERE handoff_failures > 50\n| SORT handoff_failures DESC\n| LIMIT 30",
+    "query_type": "scripted",
+    "pain_point": "Radio equipment failure and cell tower handoff cascade failures",
+    "complexity": "medium"
+  },
+  {
+    "name": "MME Resource Exhaustion Monitoring",
+    "description": "Monitors MME hosts for signs of resource exhaustion by analyzing error patterns, failure reasons, and load distribution",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_mme_resource_monitor",
+      "description": "Monitors MME software bugs, memory leaks, and resource exhaustion. Analyzes error patterns and load distribution to detect capacity issues before service degradation.",
+      "tags": [
+        "mme",
+        "resource-exhaustion",
+        "capacity",
+        "performance",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_failures\n| WHERE error_code IN (\"S1AP_TIMEOUT\", \"EMM_CAUSE_17\", \"EMM_CAUSE_18\")\n| EVAL time_bucket = DATE_TRUNC(10 minutes, @timestamp)\n| STATS \n    timeout_count = COUNT(*),\n    affected_procedures = COUNT_DISTINCT(procedure_type),\n    affected_cells = COUNT_DISTINCT(current_cell_id),\n    affected_imsi = COUNT_DISTINCT(imsi)\n  BY time_bucket, mme_host\n| LOOKUP JOIN mme_host_inventory ON mme_host\n| EVAL load_pct = (TO_DOUBLE(timeout_count) / max_capacity) * 100\n| WHERE timeout_count > 100\n| EVAL status = CASE(\n    load_pct > 80, \"CRITICAL_OVERLOAD\",\n    load_pct > 60, \"HIGH_LOAD\",\n    \"MODERATE_LOAD\"\n  )\n| KEEP \n    mme_host,\n    status,\n    software_version,\n    datacenter,\n    timeout_count,\n    load_pct,\n    affected_imsi,\n    time_bucket\n| SORT timeout_count DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "pain_point": "MME software bugs, memory leaks, and resource exhaustion",
+    "complexity": "medium"
+  },
+  {
+    "name": "Authentication Pattern Anomaly by Roaming Partner",
+    "description": "Tracks unusual authentication patterns from roaming partners to detect configuration errors and potential security issues",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_roaming_auth_anomaly",
+      "description": "Tracks unusual subscriber authentication patterns from roaming partners. Detects international roaming configuration errors and potential security threats early.",
+      "tags": [
+        "roaming",
+        "authentication",
+        "security",
+        "international",
+        "esql"
+      ]
+    },
+    "query": "FROM subscriber_authentication_events\n| WHERE roaming_partner != \"None\"\n| EVAL time_bucket = DATE_TRUNC(15 minutes, @timestamp)\n| STATS\n    auth_attempts = COUNT(*),\n    failures = COUNT(*) WHERE auth_result == \"FAILURE\",\n    timeouts = COUNT(*) WHERE auth_result == \"TIMEOUT\",\n    avg_response = AVG(response_time_ms),\n    unique_imsi = COUNT_DISTINCT(imsi)\n  BY time_bucket, roaming_partner\n| EVAL failure_rate = (TO_DOUBLE(failures) / auth_attempts) * 100\n| EVAL timeout_rate = (TO_DOUBLE(timeouts) / auth_attempts) * 100\n| WHERE failure_rate > 10 OR timeout_rate > 5\n| EVAL risk_level = CASE(\n    failure_rate > 30, \"HIGH_RISK\",\n    timeout_rate > 15, \"HIGH_RISK\",\n    failure_rate > 20, \"MEDIUM_RISK\",\n    \"LOW_RISK\"\n  )\n| KEEP\n    roaming_partner,\n    risk_level,\n    failure_rate,\n    timeout_rate,\n    auth_attempts,\n    unique_imsi,\n    avg_response,\n    time_bucket\n| SORT failure_rate DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "International roaming configuration errors and security attacks",
+    "complexity": "medium"
+  },
+  {
+    "name": "Cell Tower Equipment Type Failure Analysis",
+    "description": "Compares failure rates across different cell tower equipment types to identify hardware-specific issues and maintenance needs",
+    "tool_metadata": {
+      "tool_id": "t-mobile_network_op_equipment_failure_analysis",
+      "description": "Compares failure rates across cell tower equipment types. Identifies hardware-specific issues, maintenance needs, and equipment reliability problems.",
+      "tags": [
+        "equipment",
+        "hardware",
+        "reliability",
+        "maintenance",
+        "esql"
+      ]
+    },
+    "query": "FROM mme_signaling_failures\n| LOOKUP JOIN cell_tower_reference ON current_cell_id == cell_id\n| STATS\n    total_failures = COUNT(*),\n    unique_cells = COUNT_DISTINCT(current_cell_id),\n    unique_imsi = COUNT_DISTINCT(imsi),\n    error_types = COUNT_DISTINCT(error_code)\n  BY equipment_type, maintenance_status\n| EVAL failures_per_cell = TO_DOUBLE(total_failures) / unique_cells\n| WHERE total_failures > 100\n| SORT failures_per_cell DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "pain_point": "Radio equipment failure and infrastructure reliability issues",
+    "complexity": "low"
+  }
+]

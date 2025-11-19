@@ -1,0 +1,278 @@
+{
+  "tested_at": "2025-11-13T13:31:48.861426",
+  "total_queries": 10,
+  "successfully_fixed": 0,
+  "needs_manual_fix": 10,
+  "queries": [
+    {
+      "name": "Semantic Content Discovery - Thematic Similarity",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"complex family dynamics with moral ambiguity and redemption arc\")\n  AND availability == \"On-demand\"\n| KEEP content_id, _score, title, themes, genre, narrative_complexity, tone\n| SORT _score DESC\n| LIMIT 15"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog\n| WHERE narrative_complexity IN (\"Complex\", \"Very Complex\")\n  AND tone IN (\"Gritty\", \"Dark\", \"Intense\")\n| EVAL theme_match = CASE(\n    themes LIKE \"*Family dynamics*\" OR themes LIKE \"*Moral ambiguity*\" OR themes LIKE \"*Redemption arc*\", 1, 0)\n| WHERE theme_match == 1\n| KEEP content_id, title, themes, genre, narrative_complexity, tone\n| SORT narrative_complexity DESC, tone DESC\n| LIMIT 15"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog\n| WHERE narrative_complexity IN (\"Complex\", \"Very Complex\")\n  AND tone IN (\"Gritty\", \"Dark\", \"Intense\")\n  AND (themes LIKE \"*Family dynamics*\" OR themes LIKE \"*Moral ambiguity*\" OR themes LIKE \"*Redemption arc*\")\n| KEEP content_id, title, themes, genre, narrative_complexity, tone\n| SORT narrative_complexity DESC, tone DESC\n| LIMIT 15"
+        }
+      ],
+      "original_esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"complex family dynamics with moral ambiguity and redemption arc\")\n  AND availability == \"On-demand\"\n| KEEP content_id, _score, title, themes, genre, narrative_complexity, tone\n| SORT _score DESC\n| LIMIT 15",
+      "final_esql": null
+    },
+    {
+      "name": "Weighted Hybrid Search - Balancing Semantic and Exact Match",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"psychological thriller mystery\", {\"boost\": 0.75})\n   OR MATCH(title, \"psychological thriller mystery\", {\"boost\": 0.25})\n| KEEP content_id, _score, title, description, tone, narrative_complexity, genre\n| SORT _score DESC\n| LIMIT 20"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"psychological thriller mystery\") OR MATCH(title, \"psychological thriller mystery\")\n| KEEP content_id, _score, title, description, tone, narrative_complexity, genre\n| SORT _score DESC\n| LIMIT 20"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog METADATA _score\n| WHERE genre == \"Mystery\" OR genre == \"Thriller\" OR tone == \"Dark\" OR tone == \"Suspenseful\"\n| KEEP content_id, _score, title, description, tone, narrative_complexity, genre\n| SORT _score DESC\n| LIMIT 20"
+        }
+      ],
+      "original_esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"psychological thriller mystery\", {\"boost\": 0.75})\n   OR MATCH(title, \"psychological thriller mystery\", {\"boost\": 0.25})\n| KEEP content_id, _score, title, description, tone, narrative_complexity, genre\n| SORT _score DESC\n| LIMIT 20",
+      "final_esql": null
+    },
+    {
+      "name": "Fuzzy Search for Typo-Tolerant Content Discovery",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(cast, \"Bennedict Cumberbatch\", {\"fuzziness\": \"AUTO\"})\n   OR MATCH(director, \"Christofer Nolan\", {\"fuzziness\": \"AUTO\"})\n| KEEP content_id, _score, title, cast, director, genre, release_year\n| SORT _score DESC\n| LIMIT 25"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(cast, \"Bennedict Cumberbatch\", {\"fuzziness\": \"AUTO\"})\n   OR MATCH(director, \"Christofer Nolan\", {\"fuzziness\": \"AUTO\"})\n| KEEP content_id, _score, title, cast, director, genre, release_year\n| SORT _score DESC\n| LIMIT 25"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(cast, \"Bennedict Cumberbatch\", {\"fuzziness\": \"AUTO\"})\n   OR MATCH(director, \"Christofer Nolan\", {\"fuzziness\": \"AUTO\"})\n| KEEP content_id, _score, title, cast, director, genre, release_year\n| SORT _score DESC\n| LIMIT 25"
+        }
+      ],
+      "original_esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(cast, \"Bennedict Cumberbatch\", {\"fuzziness\": \"AUTO\"})\n   OR MATCH(director, \"Christofer Nolan\", {\"fuzziness\": \"AUTO\"})\n| KEEP content_id, _score, title, cast, director, genre, release_year\n| SORT _score DESC\n| LIMIT 25",
+      "final_esql": null
+    },
+    {
+      "name": "Cold Start Content Discovery - Thematic Expansion",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_themes METADATA _score\n| WHERE MATCH(theme_description, \"coming of age self discovery identity\")\n| MV_EXPAND related_themes\n| LOOKUP JOIN content_catalog ON related_themes == themes\n| KEEP content_id, _score, title, theme_name, related_themes, genre, narrative_complexity\n| SORT _score DESC\n| LIMIT 12"
+        },
+        {
+          "attempt": 2,
+          "error": "BadRequestError(400, 'verification_exception', 'Found 1 problem\\nline 4:34: Unknown column [related_themes] in right side of join')",
+          "esql": "FROM content_themes METADATA _score\n| WHERE MATCH(theme_description, \"coming of age\")\n| MV_EXPAND related_themes\n| LOOKUP JOIN content_catalog ON related_themes\n| KEEP content_id, _score, title, theme_name, related_themes, genre, narrative_complexity\n| SORT _score DESC\n| LIMIT 12"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_themes METADATA _score\n| WHERE MATCH(theme_description, \"coming of age\")\n| MV_EXPAND related_themes\n| LOOKUP JOIN content_catalog ON related_themes == themes\n| KEEP content_id, _score, title, theme_name, related_themes, genre, narrative_complexity\n| SORT _score DESC\n| LIMIT 12"
+        }
+      ],
+      "original_esql": "FROM content_themes METADATA _score\n| WHERE MATCH(theme_description, \"coming of age self discovery identity\")\n| MV_EXPAND related_themes\n| LOOKUP JOIN content_catalog ON related_themes == themes\n| KEEP content_id, _score, title, theme_name, related_themes, genre, narrative_complexity\n| SORT _score DESC\n| LIMIT 12",
+      "final_esql": null
+    },
+    {
+      "name": "Multi-Term Precision Search with Minimum Match Threshold",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"female protagonist action adventure strong character development\", {\n    \"operator\": \"OR\",\n    \"minimum_should_match\": 3\n  })\n| KEEP content_id, _score, title, description, themes, subgenres, cast\n| SORT _score DESC\n| LIMIT 20"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"female protagonist action adventure strong character development\", {\n    \"operator\": \"OR\"\n  })\n| KEEP content_id, _score, title, description, themes, subgenres, cast\n| SORT _score DESC\n| LIMIT 20"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"action adventure character\")\n| KEEP content_id, _score, title, description, themes, subgenres, cast\n| SORT _score DESC\n| LIMIT 20"
+        }
+      ],
+      "original_esql": "FROM content_catalog METADATA _score\n| WHERE MATCH(description, \"female protagonist action adventure strong character development\", {\n    \"operator\": \"OR\",\n    \"minimum_should_match\": 3\n  })\n| KEEP content_id, _score, title, description, themes, subgenres, cast\n| SORT _score DESC\n| LIMIT 20",
+      "final_esql": null
+    },
+    {
+      "name": "User Preference Analysis with Theme Affinity",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM user_preferences\n| WHERE profile_maturity == \"Cold Start\"\n| MV_EXPAND liked_themes\n| STATS \n    user_count = COUNT_DISTINCT(user_id),\n    avg_sessions = AVG(session_count),\n    theme_popularity = COUNT(*)\n  BY liked_themes\n| WHERE user_count > 5\n| SORT theme_popularity DESC\n| LIMIT 20"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM user_preferences\n| WHERE profile_maturity == \"Cold Start\"\n| MV_EXPAND liked_themes\n| STATS \n    user_count = COUNT_DISTINCT(user_id),\n    avg_sessions = AVG(session_count),\n    theme_popularity = COUNT(*)\n  BY liked_themes\n| WHERE user_count >= 3\n| SORT theme_popularity DESC\n| LIMIT 20"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM user_preferences\n| WHERE profile_maturity == \"Cold Start\"\n| MV_EXPAND liked_themes\n| STATS \n    user_count = COUNT_DISTINCT(user_id),\n    avg_sessions = AVG(session_count),\n    theme_popularity = COUNT(*)\n  BY liked_themes\n| WHERE user_count >= 3\n| SORT theme_popularity DESC\n| LIMIT 20"
+        }
+      ],
+      "original_esql": "FROM user_preferences\n| WHERE profile_maturity == \"Cold Start\"\n| MV_EXPAND liked_themes\n| STATS \n    user_count = COUNT_DISTINCT(user_id),\n    avg_sessions = AVG(session_count),\n    theme_popularity = COUNT(*)\n  BY liked_themes\n| WHERE user_count > 5\n| SORT theme_popularity DESC\n| LIMIT 20",
+      "final_esql": null
+    },
+    {
+      "name": "Negative Signal Detection - Skip and Dismissal Patterns",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM viewing_history\n| WHERE skipped == true OR dismissed == true\n| WHERE completion_percentage < 0.2\n| STATS \n    skip_count = COUNT(*),\n    avg_watch_duration = AVG(watch_duration_seconds),\n    unique_users = COUNT_DISTINCT(user_id)\n  BY content_id\n| WHERE skip_count > 10\n| LOOKUP JOIN content_catalog ON content_id\n| KEEP content_id, title, genre, themes, skip_count, avg_watch_duration, unique_users\n| SORT skip_count DESC\n| LIMIT 25"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM viewing_history\n| WHERE skipped == true OR dismissed == true\n| WHERE completion_percentage < 0.2\n| STATS \n    skip_count = COUNT(*),\n    avg_watch_duration = AVG(watch_duration_seconds),\n    unique_users = COUNT_DISTINCT(user_id)\n  BY content_id\n| WHERE skip_count > 5\n| LOOKUP JOIN content_catalog ON content_id\n| KEEP content_id, title, genre, themes, skip_count, avg_watch_duration, unique_users\n| SORT skip_count DESC\n| LIMIT 25"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM viewing_history\n| WHERE event_type IN (\"skip\", \"dismiss\")\n| WHERE completion_percentage < 0.2\n| STATS \n    skip_count = COUNT(*),\n    avg_watch_duration = AVG(watch_duration_seconds),\n    unique_users = COUNT_DISTINCT(user_id)\n  BY content_id\n| WHERE skip_count > 5\n| LOOKUP JOIN content_catalog ON content_id\n| KEEP content_id, title, genre, themes, skip_count, avg_watch_duration, unique_users\n| SORT skip_count DESC\n| LIMIT 25"
+        }
+      ],
+      "original_esql": "FROM viewing_history\n| WHERE skipped == true OR dismissed == true\n| WHERE completion_percentage < 0.2\n| STATS \n    skip_count = COUNT(*),\n    avg_watch_duration = AVG(watch_duration_seconds),\n    unique_users = COUNT_DISTINCT(user_id)\n  BY content_id\n| WHERE skip_count > 10\n| LOOKUP JOIN content_catalog ON content_id\n| KEEP content_id, title, genre, themes, skip_count, avg_watch_duration, unique_users\n| SORT skip_count DESC\n| LIMIT 25",
+      "final_esql": null
+    },
+    {
+      "name": "Content Performance by Narrative Complexity",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM viewing_history\n| WHERE completion_percentage > 0.7\n| LOOKUP JOIN content_catalog ON content_id\n| STATS \n    view_count = COUNT(*),\n    avg_completion = AVG(completion_percentage),\n    avg_rating = AVG(rating_given),\n    unique_viewers = COUNT_DISTINCT(user_id)\n  BY narrative_complexity, genre\n| WHERE view_count > 20\n| EVAL engagement_score = TO_DOUBLE(avg_completion) * avg_rating\n| SORT engagement_score DESC\n| LIMIT 30"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM viewing_history\n| WHERE completion_percentage > 0.7\n| LOOKUP JOIN content_catalog ON content_id\n| STATS \n    view_count = COUNT(*),\n    avg_completion = AVG(completion_percentage),\n    avg_rating = AVG(rating_given),\n    unique_viewers = COUNT_DISTINCT(user_id)\n  BY narrative_complexity, genre\n| WHERE view_count > 20\n| EVAL engagement_score = TO_DOUBLE(avg_completion) * avg_rating\n| SORT engagement_score DESC\n| LIMIT 30"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM viewing_history\n| WHERE completion_percentage > 0.7\n| LOOKUP JOIN content_catalog ON content_id\n| STATS \n    view_count = COUNT(*),\n    avg_completion = AVG(completion_percentage),\n    avg_rating = AVG(rating_given),\n    unique_viewers = COUNT_DISTINCT(user_id)\n  BY narrative_complexity, genre\n| WHERE view_count > 20\n| EVAL engagement_score = TO_DOUBLE(avg_completion) * avg_rating\n| SORT engagement_score DESC\n| LIMIT 30"
+        }
+      ],
+      "original_esql": "FROM viewing_history\n| WHERE completion_percentage > 0.7\n| LOOKUP JOIN content_catalog ON content_id\n| STATS \n    view_count = COUNT(*),\n    avg_completion = AVG(completion_percentage),\n    avg_rating = AVG(rating_given),\n    unique_viewers = COUNT_DISTINCT(user_id)\n  BY narrative_complexity, genre\n| WHERE view_count > 20\n| EVAL engagement_score = TO_DOUBLE(avg_completion) * avg_rating\n| SORT engagement_score DESC\n| LIMIT 30",
+      "final_esql": null
+    },
+    {
+      "name": "Recommendation Explanation Quality Analysis",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM recommendation_explanations\n| STATS \n    explanation_count = COUNT(*),\n    avg_similarity = AVG(similarity_score),\n    unique_users = COUNT_DISTINCT(user_id)\n  BY reasoning_factors\n| WHERE explanation_count > 10\n| SORT avg_similarity DESC\n| LIMIT 20"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM recommendation_explanations\n| MV_EXPAND preference_match_themes\n| STATS \n    explanation_count = COUNT(*),\n    avg_similarity = AVG(similarity_score),\n    unique_users = COUNT_DISTINCT(user_id)\n  BY preference_match_themes\n| WHERE explanation_count > 5\n| SORT avg_similarity DESC\n| LIMIT 20"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM recommendation_explanations\n| MV_EXPAND preference_match_themes\n| STATS \n    explanation_count = COUNT(*),\n    avg_similarity = AVG(similarity_score),\n    unique_users = COUNT_DISTINCT(user_id)\n  BY preference_match_themes\n| WHERE explanation_count > 5\n| SORT avg_similarity DESC\n| LIMIT 20"
+        }
+      ],
+      "original_esql": "FROM recommendation_explanations\n| STATS \n    explanation_count = COUNT(*),\n    avg_similarity = AVG(similarity_score),\n    unique_users = COUNT_DISTINCT(user_id)\n  BY reasoning_factors\n| WHERE explanation_count > 10\n| SORT avg_similarity DESC\n| LIMIT 20",
+      "final_esql": null
+    },
+    {
+      "name": "Theme Relationship Network Analysis",
+      "was_fixed": false,
+      "needs_manual_fix": true,
+      "fix_attempts": 3,
+      "original_error": "Query returned 0 results (constraints may be too restrictive)",
+      "final_error": "Query returned 0 results (constraints may be too restrictive)",
+      "fix_history": [
+        {
+          "attempt": 1,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_themes\n| MV_EXPAND related_themes\n| STATS \n    relationship_count = COUNT(*),\n    unique_parent_themes = COUNT_DISTINCT(parent_theme)\n  BY related_themes, emotional_tone\n| WHERE relationship_count > 5\n| SORT relationship_count DESC\n| LIMIT 25"
+        },
+        {
+          "attempt": 2,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_themes\n| MV_EXPAND related_themes\n| STATS \n    relationship_count = COUNT(*),\n    unique_parent_themes = COUNT_DISTINCT(parent_theme)\n  BY related_themes, emotional_tone\n| WHERE relationship_count > 5\n| SORT relationship_count DESC\n| LIMIT 25"
+        },
+        {
+          "attempt": 3,
+          "error": "Query returned 0 results (constraints may be too restrictive)",
+          "esql": "FROM content_themes\n| MV_EXPAND related_themes\n| STATS \n    relationship_count = COUNT(*),\n    unique_parent_themes = COUNT_DISTINCT(parent_theme)\n  BY related_themes, emotional_tone\n| WHERE relationship_count > 5\n| SORT relationship_count DESC\n| LIMIT 25"
+        }
+      ],
+      "original_esql": "FROM content_themes\n| MV_EXPAND related_themes\n| STATS \n    relationship_count = COUNT(*),\n    unique_parent_themes = COUNT_DISTINCT(parent_theme)\n  BY related_themes, emotional_tone\n| WHERE relationship_count > 5\n| SORT relationship_count DESC\n| LIMIT 25",
+      "final_esql": null
+    }
+  ]
+}

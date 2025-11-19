@@ -1,0 +1,262 @@
+[
+  {
+    "name": "Customer Segment Revenue Analysis with Purchase Behavior",
+    "description": "Analyzes revenue by customer segment and purchase channel, calculating key metrics like average transaction value and revenue per customer to identify high-value segments",
+    "tool_metadata": {
+      "tool_id": "tecso_market_res_segment_revenue",
+      "description": "Analyzes revenue by customer segment and purchase channel. Identifies high-value segments with transaction metrics and revenue per customer for targeted marketing strategies.",
+      "tags": [
+        "analytics",
+        "revenue",
+        "segmentation",
+        "esql",
+        "customer"
+      ]
+    },
+    "query": "FROM purchase_transactions\n| LOOKUP JOIN customers ON customer_id\n| STATS \n    total_revenue = SUM(purchase_amount), \n    avg_transaction = AVG(purchase_amount), \n    transaction_count = COUNT(*), \n    unique_customers = COUNT_DISTINCT(customer_id) \n  BY customer_segment, purchase_channel\n| EVAL revenue_per_customer = total_revenue / unique_customers\n| SORT total_revenue DESC\n| LIMIT 20",
+    "query_type": "scripted",
+    "pain_point": "Need to understand which customer segments drive the most revenue and their purchasing patterns"
+  },
+  {
+    "name": "Product Category Performance with Customer Demographics",
+    "description": "Identifies which product categories resonate with specific age demographics, enabling targeted marketing campaigns and inventory optimization",
+    "tool_metadata": {
+      "tool_id": "tecso_market_res_category_demographics",
+      "description": "Identifies product categories by age demographics. Shows which products resonate with specific age groups for targeted campaigns and inventory planning.",
+      "tags": [
+        "analytics",
+        "demographics",
+        "products",
+        "esql",
+        "targeting"
+      ]
+    },
+    "query": "FROM purchase_transactions\n| LOOKUP JOIN products ON product_id\n| LOOKUP JOIN customers ON customer_id\n| WHERE demographic_age_group IS NOT NULL\n| STATS \n    total_units = SUM(quantity), \n    total_revenue = SUM(purchase_amount), \n    avg_basket_size = AVG(quantity) \n  BY product_category, demographic_age_group\n| EVAL revenue_per_unit = total_revenue / total_units\n| SORT total_revenue DESC\n| LIMIT 30",
+    "query_type": "scripted",
+    "pain_point": "Understanding which products are purchased by specific demographic groups for targeted marketing"
+  },
+  {
+    "name": "High-Value Customer Purchase Pattern Comparison",
+    "description": "Identifies high-value customers whose individual purchases significantly exceed their segment average, revealing upsell and VIP engagement opportunities",
+    "tool_metadata": {
+      "tool_id": "tecso_market_res_high_value_patterns",
+      "description": "Identifies high-value customers exceeding segment averages. Reveals upsell opportunities and VIP customers for personalized engagement strategies.",
+      "tags": [
+        "analytics",
+        "customer",
+        "upsell",
+        "esql",
+        "vip"
+      ]
+    },
+    "query": "FROM purchase_transactions\n| LOOKUP JOIN customers ON customer_id\n| WHERE lifetime_value > 1000\n| INLINESTATS segment_avg_purchase = AVG(purchase_amount) BY customer_segment\n| EVAL purchase_vs_segment_avg = purchase_amount - segment_avg_purchase\n| EVAL performance_ratio = purchase_amount / segment_avg_purchase\n| WHERE performance_ratio > 1.5\n| SORT purchase_vs_segment_avg DESC\n| KEEP customer_id, customer_name, customer_segment, purchase_amount, segment_avg_purchase, purchase_vs_segment_avg, performance_ratio\n| LIMIT 50",
+    "query_type": "scripted",
+    "pain_point": "Need to compare individual customer purchase behavior against their segment average to identify upsell opportunities"
+  },
+  {
+    "name": "Multi-Channel Performance Overview",
+    "description": "Provides comprehensive view of purchase activity across all channels with revenue and customer metrics",
+    "tool_metadata": {
+      "tool_id": "tecso_market_res_channel_performance",
+      "description": "Analyzes purchase performance across online, mobile, and in-store channels. Compares revenue, transactions, and customer engagement by channel.",
+      "tags": [
+        "analytics",
+        "channel",
+        "performance",
+        "esql",
+        "omnichannel"
+      ]
+    },
+    "query": "FROM purchase_transactions\n| STATS \n    total_revenue = SUM(purchase_amount),\n    transaction_count = COUNT(*),\n    avg_transaction = AVG(purchase_amount),\n    unique_customers = COUNT_DISTINCT(customer_id)\n  BY purchase_channel\n| EVAL revenue_per_customer = total_revenue / unique_customers\n| SORT total_revenue DESC",
+    "query_type": "scripted",
+    "pain_point": "Need visibility into channel performance and customer engagement patterns"
+  },
+  {
+    "name": "Top Selling Products by Revenue",
+    "description": "Identifies best-selling products with revenue and volume metrics for inventory and merchandising decisions",
+    "tool_metadata": {
+      "tool_id": "tecso_market_res_top_products",
+      "description": "Identifies top-selling products by revenue and volume. Provides insights for inventory management and merchandising strategies.",
+      "tags": [
+        "analytics",
+        "products",
+        "revenue",
+        "esql",
+        "merchandising"
+      ]
+    },
+    "query": "FROM purchase_transactions\n| LOOKUP JOIN products ON product_id\n| STATS \n    total_revenue = SUM(purchase_amount),\n    total_units = SUM(quantity),\n    transaction_count = COUNT(*),\n    avg_price = AVG(purchase_amount)\n  BY product_name, product_category, brand\n| EVAL revenue_per_transaction = total_revenue / transaction_count\n| SORT total_revenue DESC\n| LIMIT 25",
+    "query_type": "scripted",
+    "pain_point": "Need to identify best-selling products for inventory and merchandising optimization"
+  },
+  {
+    "name": "Customer Lifetime Value Distribution by Segment",
+    "description": "Analyzes lifetime value distribution across customer segments to identify most valuable cohorts",
+    "tool_metadata": {
+      "tool_id": "tecso_market_res_ltv_distribution",
+      "description": "Analyzes customer lifetime value distribution by segment. Identifies most valuable customer cohorts for retention and growth strategies.",
+      "tags": [
+        "analytics",
+        "customer",
+        "ltv",
+        "esql",
+        "segmentation"
+      ]
+    },
+    "query": "FROM customers\n| STATS \n    customer_count = COUNT(*),\n    avg_ltv = AVG(lifetime_value),\n    total_ltv = SUM(lifetime_value),\n    min_ltv = MIN(lifetime_value),\n    max_ltv = MAX(lifetime_value)\n  BY customer_segment, preferred_channel\n| EVAL ltv_per_customer = total_ltv / customer_count\n| SORT total_ltv DESC",
+    "query_type": "scripted",
+    "pain_point": "Understanding customer value distribution across segments for strategic planning"
+  },
+  {
+    "name": "Customer Segment Deep Dive with Time Range",
+    "description": "Analyzes specific customer segment performance over a custom time period with channel breakdown",
+    "tool_metadata": {
+      "tool_id": "tecso_market_res_segment_deep_dive",
+      "description": "Analyzes specific customer segment performance over custom time periods. Provides detailed channel breakdown and purchase metrics for strategic segment management.",
+      "tags": [
+        "analytics",
+        "segmentation",
+        "parameterized",
+        "esql",
+        "customer"
+      ]
+    },
+    "query": "FROM purchase_transactions\n| WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date\n| LOOKUP JOIN customers ON customer_id\n| WHERE customer_segment == ?segment\n| STATS \n    total_revenue = SUM(purchase_amount),\n    transaction_count = COUNT(*),\n    avg_transaction = AVG(purchase_amount),\n    unique_customers = COUNT_DISTINCT(customer_id)\n  BY purchase_channel\n| EVAL revenue_per_customer = total_revenue / unique_customers\n| SORT total_revenue DESC",
+    "query_type": "parameterized",
+    "parameters": [
+      {
+        "name": "start_date",
+        "type": "date",
+        "description": "Start date for analysis period",
+        "required": true
+      },
+      {
+        "name": "end_date",
+        "type": "date",
+        "description": "End date for analysis period",
+        "required": true
+      },
+      {
+        "name": "segment",
+        "type": "keyword",
+        "description": "Customer segment to analyze (e.g., Premium, Standard, Budget, VIP)",
+        "required": true
+      }
+    ],
+    "pain_point": "Need flexible analysis of specific customer segments over custom time periods"
+  },
+  {
+    "name": "Product Category Performance by Demographics",
+    "description": "Analyzes specific product category performance across demographic groups with time filtering",
+    "tool_metadata": {
+      "tool_id": "tecso_market_res_category_analysis",
+      "description": "Analyzes product category performance by age demographics over custom periods. Identifies target demographics for category-specific marketing campaigns.",
+      "tags": [
+        "analytics",
+        "products",
+        "demographics",
+        "parameterized",
+        "esql"
+      ]
+    },
+    "query": "FROM purchase_transactions\n| WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date\n| LOOKUP JOIN products ON product_id\n| LOOKUP JOIN customers ON customer_id\n| WHERE product_category == ?category\n| WHERE demographic_age_group IS NOT NULL\n| STATS \n    total_revenue = SUM(purchase_amount),\n    total_units = SUM(quantity),\n    avg_basket_size = AVG(quantity),\n    unique_customers = COUNT_DISTINCT(customer_id)\n  BY demographic_age_group, purchase_channel\n| EVAL revenue_per_customer = total_revenue / unique_customers\n| SORT total_revenue DESC",
+    "query_type": "parameterized",
+    "parameters": [
+      {
+        "name": "start_date",
+        "type": "date",
+        "description": "Start date for analysis period",
+        "required": true
+      },
+      {
+        "name": "end_date",
+        "type": "date",
+        "description": "End date for analysis period",
+        "required": true
+      },
+      {
+        "name": "category",
+        "type": "keyword",
+        "description": "Product category to analyze (e.g., Electronics, Clothing, Home & Garden)",
+        "required": true
+      }
+    ],
+    "pain_point": "Understanding demographic preferences for specific product categories"
+  },
+  {
+    "name": "Channel Performance Comparison with Filters",
+    "description": "Compares performance across purchase channels with flexible segment and time filtering",
+    "tool_metadata": {
+      "tool_id": "tecso_market_res_channel_comparison",
+      "description": "Compares online, mobile, and in-store channel performance with segment filters. Provides insights for omnichannel strategy optimization.",
+      "tags": [
+        "analytics",
+        "channel",
+        "comparison",
+        "parameterized",
+        "esql"
+      ]
+    },
+    "query": "FROM purchase_transactions\n| WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date\n| LOOKUP JOIN customers ON customer_id\n| WHERE customer_segment == ?segment\n| STATS \n    total_revenue = SUM(purchase_amount),\n    transaction_count = COUNT(*),\n    avg_transaction = AVG(purchase_amount),\n    total_units = SUM(quantity),\n    unique_customers = COUNT_DISTINCT(customer_id)\n  BY purchase_channel\n| EVAL revenue_per_customer = total_revenue / unique_customers\n| EVAL units_per_transaction = TO_DOUBLE(total_units) / transaction_count\n| SORT total_revenue DESC",
+    "query_type": "parameterized",
+    "parameters": [
+      {
+        "name": "start_date",
+        "type": "date",
+        "description": "Start date for analysis period",
+        "required": true
+      },
+      {
+        "name": "end_date",
+        "type": "date",
+        "description": "End date for analysis period",
+        "required": true
+      },
+      {
+        "name": "segment",
+        "type": "keyword",
+        "description": "Customer segment to filter (e.g., Premium, Standard, Budget, VIP)",
+        "required": true
+      }
+    ],
+    "pain_point": "Need flexible comparison of channel performance across customer segments"
+  },
+  {
+    "name": "Brand Performance Analysis by Customer Segment",
+    "description": "Analyzes specific brand performance across customer segments with time filtering",
+    "tool_metadata": {
+      "tool_id": "tecso_market_res_brand_performance",
+      "description": "Analyzes brand performance across customer segments over custom periods. Identifies which segments prefer specific brands for partnership strategies.",
+      "tags": [
+        "analytics",
+        "brand",
+        "segmentation",
+        "parameterized",
+        "esql"
+      ]
+    },
+    "query": "FROM purchase_transactions\n| WHERE @timestamp >= ?start_date AND @timestamp <= ?end_date\n| LOOKUP JOIN products ON product_id\n| LOOKUP JOIN customers ON customer_id\n| WHERE brand == ?brand\n| STATS \n    total_revenue = SUM(purchase_amount),\n    total_units = SUM(quantity),\n    transaction_count = COUNT(*),\n    unique_customers = COUNT_DISTINCT(customer_id)\n  BY customer_segment, purchase_channel\n| EVAL revenue_per_customer = total_revenue / unique_customers\n| EVAL avg_transaction = total_revenue / transaction_count\n| SORT total_revenue DESC",
+    "query_type": "parameterized",
+    "parameters": [
+      {
+        "name": "start_date",
+        "type": "date",
+        "description": "Start date for analysis period",
+        "required": true
+      },
+      {
+        "name": "end_date",
+        "type": "date",
+        "description": "End date for analysis period",
+        "required": true
+      },
+      {
+        "name": "brand",
+        "type": "keyword",
+        "description": "Brand to analyze (e.g., TechPro, ActiveLife, BeautyGlow)",
+        "required": true
+      }
+    ],
+    "pain_point": "Understanding brand performance across different customer segments"
+  }
+]

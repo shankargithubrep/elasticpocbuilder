@@ -1,0 +1,38 @@
+{
+  "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+  "demo_type": "analytics",
+  "module_version": "1.0.0",
+  "generated_at": "2025-11-12T08:15:56.054855",
+  "customer_context": {
+    "company_name": "Tecso",
+    "department": "Market Research",
+    "industry": "Retail",
+    "pain_points": [],
+    "use_cases": [
+      "Analysis of online and in-store purchase history",
+      "Customer profiling and segmentation",
+      "Understanding who buys particular products",
+      "Data science analysis of customer buying behavior"
+    ],
+    "scale": "100+ team members managing 1,000+ transactions daily",
+    "metrics": [
+      "user engagement",
+      "task completion rate",
+      "response time"
+    ],
+    "demo_type": "analytics",
+    "dataset_size_preference": "small"
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  },
+  "query_testing": {
+    "enabled": true,
+    "queries_fixed": 0,
+    "queries_need_manual_fix": 10,
+    "total_tested": 10,
+    "tested_at": "2025-11-12T08:19:37.595903"
+  }
+}

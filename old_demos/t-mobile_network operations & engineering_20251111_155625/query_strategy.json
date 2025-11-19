@@ -1,0 +1,587 @@
+{
+  "datasets": [
+    {
+      "name": "network_cell_performance",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "500000000+",
+      "description": "Real-time cell site performance metrics from RAN elements (eNodeB/gNodeB) including radio quality, PRB utilization, and procedure success rates",
+      "required_fields": {
+        "@timestamp": "date",
+        "event_id": "keyword",
+        "cell_id": "keyword",
+        "enodeb_id": "keyword",
+        "network.radio.rsrp_dbm": "float",
+        "network.radio.rsrq_db": "float",
+        "network.radio.sinr_db": "float",
+        "network.cell.prb_utilization_dl_pct": "float",
+        "network.cell.prb_utilization_ul_pct": "float",
+        "network.rrc.connection_success_rate": "float",
+        "network.handover.success_rate": "float",
+        "network.procedure.attach_success_rate": "float",
+        "network.voice.call_drop_rate": "float",
+        "network.data.session_drop_rate": "float",
+        "network.imsi_count": "long",
+        "vendor": "keyword",
+        "region": "keyword",
+        "technology": "keyword"
+      },
+      "relationships": [
+        "cell_site_inventory",
+        "vendor_equipment"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "cell_site_inventory",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "50000+",
+      "description": "Cell site master data including location, capacity, vendor, technology, and operational characteristics",
+      "required_fields": {
+        "cell_id": "keyword",
+        "enodeb_id": "keyword",
+        "cell_name": "text",
+        "site_id": "keyword",
+        "latitude": "float",
+        "longitude": "float",
+        "region": "keyword",
+        "market": "keyword",
+        "vendor": "keyword",
+        "technology": "keyword",
+        "capacity_tier": "keyword",
+        "max_subscribers": "integer",
+        "backhaul_type": "keyword",
+        "noc_team": "keyword",
+        "deployment_date": "date",
+        "cell_characteristics": "text"
+      },
+      "relationships": [
+        "network_cell_performance",
+        "network_incidents"
+      ],
+      "semantic_fields": [
+        "cell_characteristics"
+      ]
+    },
+    {
+      "name": "subscriber_sessions",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "1000000000+",
+      "description": "Individual subscriber session events with IMSI correlation across RAN, core network, and transport domains",
+      "required_fields": {
+        "@timestamp": "date",
+        "session_id": "keyword",
+        "imsi": "keyword",
+        "cell_id": "keyword",
+        "mme_id": "keyword",
+        "apn": "keyword",
+        "subscriber.experience.score": "float",
+        "network.transport.latency_ms": "float",
+        "network.transport.packet_loss_pct": "float",
+        "network.procedure.type": "keyword",
+        "network.procedure.success": "boolean",
+        "network.procedure.failure_cause": "keyword",
+        "network.auth.result": "keyword",
+        "session_duration_sec": "long",
+        "data_volume_mb": "float",
+        "handover_count": "integer",
+        "session_description": "text"
+      },
+      "relationships": [
+        "cell_site_inventory",
+        "subscriber_profiles"
+      ],
+      "semantic_fields": [
+        "session_description"
+      ]
+    },
+    {
+      "name": "subscriber_profiles",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "100000000+",
+      "description": "Subscriber master data including plan type, device, usage patterns, and value segmentation",
+      "required_fields": {
+        "imsi": "keyword",
+        "subscriber_id": "keyword",
+        "plan_type": "keyword",
+        "device_model": "keyword",
+        "device_capability": "keyword",
+        "subscriber_segment": "keyword",
+        "lifetime_value": "float",
+        "avg_monthly_usage_gb": "float",
+        "activation_date": "date",
+        "churn_risk_score": "float",
+        "subscriber_behavior_profile": "text"
+      },
+      "relationships": [
+        "subscriber_sessions"
+      ],
+      "semantic_fields": [
+        "subscriber_behavior_profile"
+      ]
+    },
+    {
+      "name": "network_incidents",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "10000000+",
+      "description": "Network incident records with MTTD/MTTR tracking, root cause analysis, and multi-domain correlation",
+      "required_fields": {
+        "@timestamp": "date",
+        "incident_id": "keyword",
+        "cell_id": "keyword",
+        "enodeb_id": "keyword",
+        "severity": "keyword",
+        "incident_type": "keyword",
+        "affected_subscribers": "integer",
+        "incident.mttd_minutes": "float",
+        "incident.mttr_minutes": "float",
+        "root_cause": "keyword",
+        "resolution_action": "text",
+        "detection_method": "keyword",
+        "noc_team": "keyword",
+        "vendor": "keyword",
+        "region": "keyword",
+        "incident_description": "text",
+        "resolved": "boolean"
+      },
+      "relationships": [
+        "cell_site_inventory"
+      ],
+      "semantic_fields": [
+        "incident_description",
+        "resolution_action"
+      ]
+    },
+    {
+      "name": "ml_anomaly_scores",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "50000000+",
+      "description": "ML-generated anomaly detection results for network metrics with typical vs actual comparisons",
+      "required_fields": {
+        "@timestamp": "date",
+        "cell_id": "keyword",
+        "metric_name": "keyword",
+        "ml.anomaly_score": "float",
+        "actual_value": "float",
+        "typical_value": "float",
+        "deviation_pct": "float",
+        "anomaly_severity": "keyword",
+        "detection_rule": "keyword",
+        "region": "keyword"
+      },
+      "relationships": [
+        "cell_site_inventory"
+      ],
+      "semantic_fields": []
+    },
+    {
+      "name": "vendor_equipment",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "5000+",
+      "description": "Vendor equipment catalog with performance baselines, known issues, and optimization parameters",
+      "required_fields": {
+        "vendor": "keyword",
+        "equipment_model": "keyword",
+        "technology": "keyword",
+        "software_version": "keyword",
+        "baseline_prb_utilization": "float",
+        "baseline_connection_success_rate": "float",
+        "known_issues": "text",
+        "optimization_recommendations": "text"
+      },
+      "relationships": [
+        "network_cell_performance"
+      ],
+      "semantic_fields": [
+        "known_issues",
+        "optimization_recommendations"
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "name": "Real-Time Cell Site Degradation Detection with Multi-Domain Enrichment",
+      "pain_point": "Reactive troubleshooting driven by subscriber complaints rather than proactive detection with average MTTR of 2-4 hours for cell site issues. Extended MTTD requiring manual correlation across vendor-specific EMS, OSS platforms adding 15-30 minutes.",
+      "esql_features": [
+        "STATS",
+        "LOOKUP JOIN",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "network_cell_performance",
+        "cell_site_inventory",
+        "ml_anomaly_scores"
+      ],
+      "required_fields": {
+        "network_cell_performance": [
+          "@timestamp",
+          "cell_id",
+          "network.rrc.connection_success_rate",
+          "network.cell.prb_utilization_dl_pct",
+          "network.voice.call_drop_rate",
+          "network.imsi_count"
+        ],
+        "cell_site_inventory": [
+          "cell_id",
+          "cell_name",
+          "region",
+          "market",
+          "vendor",
+          "noc_team",
+          "capacity_tier"
+        ],
+        "ml_anomaly_scores": [
+          "cell_id",
+          "ml.anomaly_score",
+          "metric_name",
+          "actual_value",
+          "typical_value"
+        ]
+      },
+      "join_chain": [
+        "network_cell_performance -> cell_site_inventory",
+        "network_cell_performance -> ml_anomaly_scores"
+      ],
+      "query": "FROM network_cell_performance\n| WHERE @timestamp >= NOW() - 15 minutes\n| STATS avg_connection_success = AVG(network.rrc.connection_success_rate),\n        avg_prb_util = AVG(network.cell.prb_utilization_dl_pct),\n        avg_call_drop = AVG(network.voice.call_drop_rate),\n        latest_imsi_count = MAX(network.imsi_count) BY cell_id\n| LOOKUP JOIN cell_site_inventory ON cell_id\n| LOOKUP JOIN ml_anomaly_scores ON cell_id\n| WHERE ml_anomaly_scores.ml.anomaly_score > 75 OR avg_connection_success < 95 OR avg_call_drop > 2\n| INLINESTATS region_avg_success = AVG(avg_connection_success) BY cell_site_inventory.region\n| EVAL degradation_vs_region = region_avg_success - avg_connection_success\n| EVAL alert_priority = CASE(\n    ml_anomaly_scores.ml.anomaly_score > 90 AND degradation_vs_region > 5, \"CRITICAL\",\n    ml_anomaly_scores.ml.anomaly_score > 75 OR degradation_vs_region > 3, \"HIGH\",\n    \"MEDIUM\"\n  )\n| WHERE alert_priority IN (\"CRITICAL\", \"HIGH\")\n| KEEP cell_id, cell_site_inventory.cell_name, cell_site_inventory.region, cell_site_inventory.vendor, cell_site_inventory.noc_team, avg_connection_success, avg_call_drop, ml_anomaly_scores.ml.anomaly_score, degradation_vs_region, alert_priority\n| SORT ml_anomaly_scores.ml.anomaly_score DESC\n| LIMIT 50",
+      "description": "Proactively identifies cell sites experiencing performance degradation in real-time using ML anomaly scores combined with KPI thresholds. Enriches with site metadata and compares performance against regional baselines to prioritize NOC response, reducing MTTD from 30+ minutes to under 5 minutes.",
+      "complexity": "high"
+    },
+    {
+      "name": "Subscriber-Centric IMSI Journey Root Cause Analysis",
+      "pain_point": "Fragmented subscriber experience visibility across network domains requiring manual correlation across vendor-specific EMS, OSS platforms, and RAN analytics tools adding 15-30 minutes to MTTD. Inability to correlate network events with subscriber behavior patterns requiring hours of manual log analysis.",
+      "esql_features": [
+        "WHERE",
+        "LOOKUP JOIN",
+        "STATS",
+        "EVAL",
+        "SORT"
+      ],
+      "required_datasets": [
+        "subscriber_sessions",
+        "subscriber_profiles",
+        "cell_site_inventory"
+      ],
+      "required_fields": {
+        "subscriber_sessions": [
+          "@timestamp",
+          "imsi",
+          "cell_id",
+          "subscriber.experience.score",
+          "network.procedure.type",
+          "network.procedure.success",
+          "network.procedure.failure_cause",
+          "network.transport.latency_ms",
+          "handover_count"
+        ],
+        "subscriber_profiles": [
+          "imsi",
+          "subscriber_id",
+          "plan_type",
+          "subscriber_segment",
+          "churn_risk_score",
+          "device_model"
+        ],
+        "cell_site_inventory": [
+          "cell_id",
+          "cell_name",
+          "region",
+          "vendor"
+        ]
+      },
+      "join_chain": [
+        "subscriber_sessions -> subscriber_profiles",
+        "subscriber_sessions -> cell_site_inventory"
+      ],
+      "query": "FROM subscriber_sessions\n| WHERE @timestamp >= NOW() - 1 hour AND imsi == ?imsi_parameter\n| LOOKUP JOIN subscriber_profiles ON imsi\n| LOOKUP JOIN cell_site_inventory ON cell_id\n| EVAL procedure_status = CASE(network.procedure.success == true, \"SUCCESS\", \"FAILED\")\n| EVAL latency_category = CASE(\n    network.transport.latency_ms < 50, \"EXCELLENT\",\n    network.transport.latency_ms < 100, \"GOOD\",\n    network.transport.latency_ms < 200, \"FAIR\",\n    \"POOR\"\n  )\n| STATS session_count = COUNT(*),\n        avg_experience = AVG(subscriber.experience.score),\n        failed_procedures = COUNT_IF(network.procedure.success == false),\n        total_handovers = SUM(handover_count),\n        avg_latency = AVG(network.transport.latency_ms),\n        unique_cells = COUNT_DISTINCT(cell_id) BY imsi, subscriber_profiles.subscriber_segment, subscriber_profiles.plan_type, subscriber_profiles.churn_risk_score, network.procedure.failure_cause\n| EVAL failure_impact_score = failed_procedures * 10 + (100 - avg_experience)\n| SORT failure_impact_score DESC\n| LIMIT 100",
+      "description": "Provides complete end-to-end visibility into individual subscriber network experience by correlating all session events across cells, procedures, and transport metrics. Parameterized by IMSI to enable rapid troubleshooting with enriched subscriber profile context and failure cause analysis.",
+      "complexity": "medium",
+      "parameters": [
+        "imsi_parameter"
+      ]
+    },
+    {
+      "name": "Proactive Capacity Saturation Detection with Forecasting Indicators",
+      "pain_point": "Insufficient real-time analytics for high-cardinality network data with 15-60 minute delays in detecting emerging problems using batch processing. Proactive Network Capacity Planning & Congestion Management use case.",
+      "esql_features": [
+        "STATS",
+        "DATE_TRUNC",
+        "LOOKUP JOIN",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "network_cell_performance",
+        "cell_site_inventory"
+      ],
+      "required_fields": {
+        "network_cell_performance": [
+          "@timestamp",
+          "cell_id",
+          "network.cell.prb_utilization_dl_pct",
+          "network.cell.prb_utilization_ul_pct",
+          "network.imsi_count"
+        ],
+        "cell_site_inventory": [
+          "cell_id",
+          "cell_name",
+          "region",
+          "capacity_tier",
+          "max_subscribers",
+          "vendor",
+          "technology"
+        ]
+      },
+      "join_chain": [
+        "network_cell_performance -> cell_site_inventory"
+      ],
+      "query": "FROM network_cell_performance\n| WHERE @timestamp >= NOW() - 24 hours\n| EVAL hour = DATE_TRUNC(1 hour, @timestamp)\n| STATS avg_prb_dl = AVG(network.cell.prb_utilization_dl_pct),\n        max_prb_dl = MAX(network.cell.prb_utilization_dl_pct),\n        avg_prb_ul = AVG(network.cell.prb_utilization_ul_pct),\n        avg_imsi = AVG(network.imsi_count),\n        max_imsi = MAX(network.imsi_count) BY cell_id, hour\n| LOOKUP JOIN cell_site_inventory ON cell_id\n| INLINESTATS capacity_tier_avg_prb = AVG(avg_prb_dl) BY cell_site_inventory.capacity_tier\n| EVAL subscriber_capacity_pct = (max_imsi / cell_site_inventory.max_subscribers) * 100\n| EVAL prb_vs_tier_avg = avg_prb_dl - capacity_tier_avg_prb\n| EVAL congestion_risk_score = (avg_prb_dl * 0.5) + (subscriber_capacity_pct * 0.3) + (prb_vs_tier_avg * 0.2)\n| WHERE congestion_risk_score > 70 OR avg_prb_dl > 80 OR subscriber_capacity_pct > 85\n| EVAL risk_level = CASE(\n    congestion_risk_score > 85, \"CRITICAL_CAPACITY\",\n    congestion_risk_score > 75, \"HIGH_RISK\",\n    \"MODERATE_RISK\"\n  )\n| STATS latest_hour = MAX(hour),\n        avg_congestion_score = AVG(congestion_risk_score),\n        peak_prb_utilization = MAX(max_prb_dl),\n        peak_subscriber_pct = MAX(subscriber_capacity_pct) BY cell_id, cell_site_inventory.cell_name, cell_site_inventory.region, cell_site_inventory.capacity_tier, cell_site_inventory.vendor, risk_level\n| SORT avg_congestion_score DESC\n| LIMIT 100",
+      "description": "Identifies cells approaching capacity limits by analyzing PRB utilization and subscriber concentration trends over 24 hours. Compares each cell against capacity tier baselines to calculate congestion risk scores, enabling proactive traffic optimization and capacity expansion planning.",
+      "complexity": "high"
+    },
+    {
+      "name": "Intelligent Incident Pattern Discovery with Semantic Root Cause Search",
+      "pain_point": "Extended MTTR due to manual root cause analysis workflows adding 30-90 minutes per incident across multiple logins and interfaces. Automated Network Event Correlation & Root Cause Inference use case.",
+      "esql_features": [
+        "WHERE",
+        "SEMANTIC",
+        "LOOKUP JOIN",
+        "STATS",
+        "EVAL"
+      ],
+      "required_datasets": [
+        "network_incidents",
+        "cell_site_inventory",
+        "vendor_equipment"
+      ],
+      "required_fields": {
+        "network_incidents": [
+          "@timestamp",
+          "incident_id",
+          "cell_id",
+          "severity",
+          "incident_type",
+          "affected_subscribers",
+          "incident.mttd_minutes",
+          "incident.mttr_minutes",
+          "root_cause",
+          "incident_description",
+          "resolution_action",
+          "vendor"
+        ],
+        "cell_site_inventory": [
+          "cell_id",
+          "cell_name",
+          "region",
+          "vendor",
+          "technology"
+        ],
+        "vendor_equipment": [
+          "vendor",
+          "equipment_model",
+          "known_issues",
+          "optimization_recommendations"
+        ]
+      },
+      "join_chain": [
+        "network_incidents -> cell_site_inventory",
+        "network_incidents -> vendor_equipment"
+      ],
+      "query": "FROM network_incidents\n| WHERE @timestamp >= NOW() - 30 days\n| WHERE SEMANTIC(incident_description, \"radio frequency interference degradation signal quality handover failure\")\n| LOOKUP JOIN cell_site_inventory ON cell_id\n| LOOKUP JOIN vendor_equipment ON vendor\n| STATS incident_count = COUNT(*),\n        avg_mttd = AVG(incident.mttd_minutes),\n        avg_mttr = AVG(incident.mttr_minutes),\n        total_affected_subs = SUM(affected_subscribers),\n        common_root_causes = VALUES(root_cause) BY cell_site_inventory.region, cell_site_inventory.vendor, incident_type\n| EVAL resolution_efficiency = avg_mttd + avg_mttr\n| WHERE incident_count > 5\n| SORT incident_count DESC, resolution_efficiency DESC\n| LIMIT 50",
+      "description": "Uses semantic search to discover incident patterns with similar root causes across the network, even when described differently. Identifies regional and vendor-specific failure signatures to enable automated correlation and reduce manual root cause analysis time from 30-90 minutes to under 5 minutes.",
+      "complexity": "high"
+    },
+    {
+      "name": "Multi-Dimensional NOC Performance Benchmarking Dashboard",
+      "pain_point": "Lack of standardized KPIs and metrics framework across NOC teams with inconsistent definitions and incompatible dashboards preventing enterprise-wide benchmarking. Network Operations Command Center Unified Dashboard use case.",
+      "esql_features": [
+        "FORK",
+        "STATS",
+        "LOOKUP JOIN",
+        "EVAL",
+        "WHERE"
+      ],
+      "required_datasets": [
+        "network_incidents",
+        "cell_site_inventory",
+        "network_cell_performance"
+      ],
+      "required_fields": {
+        "network_incidents": [
+          "@timestamp",
+          "incident_id",
+          "cell_id",
+          "severity",
+          "incident.mttd_minutes",
+          "incident.mttr_minutes",
+          "noc_team",
+          "resolved"
+        ],
+        "cell_site_inventory": [
+          "cell_id",
+          "region",
+          "noc_team",
+          "vendor"
+        ],
+        "network_cell_performance": [
+          "@timestamp",
+          "cell_id",
+          "network.cell.availability_pct"
+        ]
+      },
+      "join_chain": [
+        "network_incidents -> cell_site_inventory"
+      ],
+      "query": "FROM network_incidents\n| WHERE @timestamp >= NOW() - 7 days\n| LOOKUP JOIN cell_site_inventory ON cell_id\n| FORK\n  (STATS total_incidents = COUNT(*),\n          critical_incidents = COUNT_IF(severity == \"CRITICAL\"),\n          avg_mttd = AVG(incident.mttd_minutes),\n          avg_mttr = AVG(incident.mttr_minutes),\n          resolution_rate_pct = (COUNT_IF(resolved == true) / COUNT(*)) * 100 BY cell_site_inventory.noc_team\n   | EVAL kpi_type = \"incident_metrics\")\n  (STATS incidents_by_vendor = COUNT(*),\n          vendor_avg_mttr = AVG(incident.mttr_minutes) BY cell_site_inventory.vendor\n   | EVAL kpi_type = \"vendor_performance\")\n  (STATS regional_incidents = COUNT(*),\n          regional_avg_mttd = AVG(incident.mttd_minutes) BY cell_site_inventory.region\n   | EVAL kpi_type = \"regional_metrics\")",
+      "description": "Provides unified NOC performance dashboard with standardized KPIs across teams, vendors, and regions using FORK to calculate multiple metric dimensions in parallel. Enables executive leadership to benchmark NOC efficiency and identify improvement opportunities across 15+ regional teams.",
+      "complexity": "high"
+    },
+    {
+      "name": "Subscriber Churn Risk Correlation with Network Experience",
+      "pain_point": "Inability to correlate network events with subscriber behavior patterns requiring hours of manual log analysis across disparate systems. Subscriber-Centric Experience Monitoring use case.",
+      "esql_features": [
+        "STATS",
+        "LOOKUP JOIN",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE",
+        "SEMANTIC"
+      ],
+      "required_datasets": [
+        "subscriber_sessions",
+        "subscriber_profiles",
+        "cell_site_inventory"
+      ],
+      "required_fields": {
+        "subscriber_sessions": [
+          "@timestamp",
+          "imsi",
+          "cell_id",
+          "subscriber.experience.score",
+          "network.procedure.success",
+          "session_duration_sec"
+        ],
+        "subscriber_profiles": [
+          "imsi",
+          "subscriber_segment",
+          "churn_risk_score",
+          "lifetime_value",
+          "subscriber_behavior_profile"
+        ],
+        "cell_site_inventory": [
+          "cell_id",
+          "region",
+          "vendor"
+        ]
+      },
+      "join_chain": [
+        "subscriber_sessions -> subscriber_profiles",
+        "subscriber_sessions -> cell_site_inventory"
+      ],
+      "query": "FROM subscriber_sessions\n| WHERE @timestamp >= NOW() - 7 days\n| LOOKUP JOIN subscriber_profiles ON imsi\n| LOOKUP JOIN cell_site_inventory ON cell_id\n| WHERE subscriber_profiles.churn_risk_score > 70\n| WHERE SEMANTIC(subscriber_profiles.subscriber_behavior_profile, \"high value subscribers experiencing poor network quality frequent failures\")\n| STATS avg_experience = AVG(subscriber.experience.score),\n        session_count = COUNT(*),\n        failure_rate = (COUNT_IF(network.procedure.success == false) / COUNT(*)) * 100,\n        avg_session_duration = AVG(session_duration_sec),\n        unique_cells = COUNT_DISTINCT(cell_id) BY imsi, subscriber_profiles.subscriber_segment, subscriber_profiles.lifetime_value, subscriber_profiles.churn_risk_score\n| INLINESTATS segment_avg_experience = AVG(avg_experience) BY subscriber_profiles.subscriber_segment\n| EVAL experience_gap = segment_avg_experience - avg_experience\n| EVAL retention_priority_score = (subscriber_profiles.churn_risk_score * 0.4) + (experience_gap * 0.3) + (failure_rate * 0.3)\n| WHERE retention_priority_score > 50\n| SORT retention_priority_score DESC\n| LIMIT 100",
+      "description": "Identifies high-value subscribers at churn risk by correlating poor network experience with subscriber behavior profiles using semantic search. Calculates retention priority scores based on churn risk, experience gaps vs segment peers, and failure rates to enable proactive retention interventions.",
+      "complexity": "high"
+    },
+    {
+      "name": "Anomaly-Driven Change Point Detection for Emerging Network Degradation",
+      "pain_point": "Insufficient real-time analytics for high-cardinality network data with 15-60 minute delays in detecting emerging problems. Intelligent Anomaly Detection for Emerging Network Patterns use case.",
+      "esql_features": [
+        "STATS",
+        "DATE_TRUNC",
+        "LOOKUP JOIN",
+        "CHANGE_POINT",
+        "WHERE",
+        "EVAL"
+      ],
+      "required_datasets": [
+        "network_cell_performance",
+        "cell_site_inventory"
+      ],
+      "required_fields": {
+        "network_cell_performance": [
+          "@timestamp",
+          "cell_id",
+          "network.rrc.connection_success_rate",
+          "network.imsi_count"
+        ],
+        "cell_site_inventory": [
+          "cell_id",
+          "cell_name",
+          "region",
+          "vendor",
+          "technology"
+        ]
+      },
+      "join_chain": [
+        "network_cell_performance -> cell_site_inventory"
+      ],
+      "query": "FROM network_cell_performance\n| WHERE @timestamp >= NOW() - 48 hours AND region == ?region_parameter\n| EVAL hour = DATE_TRUNC(1 hour, @timestamp)\n| STATS avg_connection_success = AVG(network.rrc.connection_success_rate),\n        imsi_count = AVG(network.imsi_count) BY cell_id, hour\n| LOOKUP JOIN cell_site_inventory ON cell_id\n| CHANGE_POINT avg_connection_success BY hour\n| WHERE change_point_detected == true\n| EVAL anomaly_imsi_churn_rate_pct = ((imsi_count - LAG(imsi_count, 1)) / LAG(imsi_count, 1)) * 100\n| WHERE anomaly_imsi_churn_rate_pct < -20 OR avg_connection_success < 95\n| KEEP cell_id, cell_site_inventory.cell_name, cell_site_inventory.region, cell_site_inventory.vendor, hour, avg_connection_success, anomaly_imsi_churn_rate_pct, change_point_detected\n| SORT hour DESC\n| LIMIT 100",
+      "description": "Detects statistically significant change points in connection success rates combined with IMSI churn analysis to identify emerging degradation patterns. Parameterized by region to enable focused analysis, reducing detection time from 15-60 minutes to under 5 minutes for emerging problems.",
+      "complexity": "high",
+      "parameters": [
+        "region_parameter"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from": "network_cell_performance",
+      "to": "cell_site_inventory",
+      "type": "many-to-one",
+      "join_field": "cell_id"
+    },
+    {
+      "from": "subscriber_sessions",
+      "to": "cell_site_inventory",
+      "type": "many-to-one",
+      "join_field": "cell_id"
+    },
+    {
+      "from": "subscriber_sessions",
+      "to": "subscriber_profiles",
+      "type": "many-to-one",
+      "join_field": "imsi"
+    },
+    {
+      "from": "network_incidents",
+      "to": "cell_site_inventory",
+      "type": "many-to-one",
+      "join_field": "cell_id"
+    },
+    {
+      "from": "ml_anomaly_scores",
+      "to": "cell_site_inventory",
+      "type": "many-to-one",
+      "join_field": "cell_id"
+    },
+    {
+      "from": "network_cell_performance",
+      "to": "vendor_equipment",
+      "type": "many-to-one",
+      "join_field": "vendor"
+    },
+    {
+      "from": "network_incidents",
+      "to": "vendor_equipment",
+      "type": "many-to-one",
+      "join_field": "vendor"
+    }
+  ],
+  "field_mappings": {
+    "network_cell_performance.cell_id": "cell_site_inventory.cell_id",
+    "subscriber_sessions.cell_id": "cell_site_inventory.cell_id",
+    "subscriber_sessions.imsi": "subscriber_profiles.imsi",
+    "network_incidents.cell_id": "cell_site_inventory.cell_id",
+    "ml_anomaly_scores.cell_id": "cell_site_inventory.cell_id",
+    "network_cell_performance.vendor": "vendor_equipment.vendor",
+    "network_incidents.vendor": "vendor_equipment.vendor"
+  }
+}

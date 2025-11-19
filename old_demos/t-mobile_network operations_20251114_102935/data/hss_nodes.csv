@@ -1,0 +1,21 @@
+hss_node,node_role,datacenter,region,database_type,replication_master,max_tps_capacity,deployment_date
+hss-dc-01,backup,dc-dallas,northwest,PostgreSQL,hss-dc-02,5000,2022-04-24 10:39:16.875275
+hss-dc-02,secondary,dc-seattle,northwest,PostgreSQL,hss-dc-09,15000,2022-05-24 10:39:16.875275
+hss-dc-03,backup,dc-seattle,northeast,MySQL Cluster,hss-dc-09,20000,2022-06-23 10:39:16.875275
+hss-dc-04,primary,dc-atlanta,central,Oracle RAC,hss-dc-03,15000,2022-07-23 10:39:16.875275
+hss-dc-05,primary,dc-seattle,central,Oracle RAC,hss-dc-03,20000,2022-08-22 10:39:16.875275
+hss-dc-06,secondary,dc-atlanta,central,Oracle RAC,hss-dc-06,15000,2022-09-21 10:39:16.875275
+hss-dc-07,primary,dc-dallas,southeast,PostgreSQL,hss-dc-02,20000,2022-10-21 10:39:16.875275
+hss-dc-08,secondary,dc-seattle,southeast,Oracle RAC,hss-dc-01,15000,2022-11-20 10:39:16.875275
+hss-dc-09,primary,dc-chicago,northeast,Oracle RAC,hss-dc-03,10000,2022-12-20 10:39:16.875275
+hss-dc-10,secondary,dc-dallas,northwest,Oracle RAC,hss-dc-07,5000,2023-01-19 10:39:16.875275
+hss-dc-11,primary,dc-seattle,central,Oracle RAC,hss-dc-07,5000,2023-02-18 10:39:16.875275
+hss-dc-12,backup,dc-chicago,southeast,Oracle RAC,hss-dc-04,15000,2023-03-20 10:39:16.875275
+hss-dc-13,secondary,dc-dallas,southwest,PostgreSQL,hss-dc-07,10000,2023-04-19 10:39:16.875275
+hss-dc-14,primary,dc-atlanta,central,PostgreSQL,hss-dc-09,20000,2023-05-19 10:39:16.875275
+hss-dc-15,backup,dc-newyork,southwest,Oracle RAC,hss-dc-08,5000,2023-06-18 10:39:16.875275
+hss-dc-16,secondary,dc-atlanta,northeast,Oracle RAC,hss-dc-04,20000,2023-07-18 10:39:16.875275
+hss-dc-17,backup,dc-chicago,southeast,MySQL Cluster,hss-dc-05,5000,2023-08-17 10:39:16.875275
+hss-dc-18,backup,dc-seattle,southwest,MySQL Cluster,hss-dc-08,10000,2023-09-16 10:39:16.875275
+hss-dc-19,primary,dc-newyork,central,PostgreSQL,hss-dc-04,5000,2023-10-16 10:39:16.875275
+hss-dc-20,secondary,dc-seattle,central,PostgreSQL,hss-dc-03,10000,2023-11-15 10:39:16.875275

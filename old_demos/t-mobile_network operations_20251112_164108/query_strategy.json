@@ -1,0 +1,309 @@
+{
+  "datasets": [
+    {
+      "name": "mme_signaling_failures",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "100000+",
+      "required_fields": {
+        "failure_id": "keyword",
+        "@timestamp": "date",
+        "mme_host": "keyword",
+        "imsi": "keyword",
+        "current_cell_id": "keyword",
+        "target_cell_id": "keyword",
+        "procedure_type": "keyword",
+        "error_code": "keyword",
+        "failure_reason": "text",
+        "attach_type": "keyword",
+        "tracking_area_code": "keyword",
+        "roaming_flag": "boolean",
+        "country_code": "keyword"
+      },
+      "relationships": [
+        "cell_tower_reference",
+        "mme_host_inventory"
+      ],
+      "semantic_fields": [
+        "failure_reason"
+      ]
+    },
+    {
+      "name": "cell_tower_reference",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "5000+",
+      "required_fields": {
+        "cell_id": "keyword",
+        "cell_name": "text",
+        "tower_location": "geo_point",
+        "region": "keyword",
+        "equipment_type": "keyword",
+        "capacity": "integer",
+        "installation_date": "date",
+        "maintenance_status": "keyword",
+        "neighbor_cells": "keyword",
+        "tower_description": "text"
+      },
+      "relationships": [
+        "mme_signaling_failures"
+      ],
+      "semantic_fields": [
+        "tower_description"
+      ]
+    },
+    {
+      "name": "mme_host_inventory",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "50+",
+      "required_fields": {
+        "mme_host": "keyword",
+        "datacenter": "keyword",
+        "software_version": "keyword",
+        "hardware_model": "keyword",
+        "memory_gb": "integer",
+        "cpu_cores": "integer",
+        "max_capacity": "integer",
+        "deployment_date": "date",
+        "host_description": "text"
+      },
+      "relationships": [
+        "mme_signaling_failures"
+      ],
+      "semantic_fields": [
+        "host_description"
+      ]
+    },
+    {
+      "name": "subscriber_authentication_events",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "500000+",
+      "required_fields": {
+        "event_id": "keyword",
+        "@timestamp": "date",
+        "imsi": "keyword",
+        "auth_result": "keyword",
+        "hss_response_code": "keyword",
+        "mme_host": "keyword",
+        "cell_id": "keyword",
+        "authentication_type": "keyword",
+        "roaming_partner": "keyword",
+        "response_time_ms": "integer",
+        "retry_count": "integer"
+      },
+      "relationships": [
+        "mme_host_inventory",
+        "cell_tower_reference"
+      ],
+      "semantic_fields": []
+    }
+  ],
+  "queries": [
+    {
+      "name": "Cell Tower Cascade Failure Detection with Z-Score Analysis",
+      "pain_point": "Cell tower handoff cascade failures causing mass service disruption",
+      "esql_features": [
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "STD_DEV",
+        "LOOKUP JOIN",
+        "KEEP"
+      ],
+      "required_datasets": [
+        "mme_signaling_failures",
+        "cell_tower_reference"
+      ],
+      "required_fields": {
+        "mme_signaling_failures": [
+          "@timestamp",
+          "current_cell_id",
+          "failure_id",
+          "error_code"
+        ],
+        "cell_tower_reference": [
+          "cell_id",
+          "cell_name",
+          "region",
+          "equipment_type"
+        ]
+      },
+      "description": "Detects abnormal spike patterns in cell ID failures using statistical z-score analysis across 5-minute intervals to identify cascade failures before they escalate",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_failures | WHERE @timestamp >= NOW() - 2 hours | EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp) | STATS failure_count = COUNT(*), unique_imsi = COUNT_DISTINCT(imsi) BY time_bucket, current_cell_id | LOOKUP JOIN cell_tower_reference ON current_cell_id=cell_id | INLINESTATS avg_failures = AVG(failure_count), stddev_failures = STD_DEV(failure_count), p95_failures = PERCENTILE(failure_count, 95) BY cell_tower_reference.region | EVAL z_score = (failure_count - avg_failures) / COALESCE(stddev_failures, 1) | WHERE z_score > 3 AND failure_count >= 200 | EVAL severity = CASE(z_score > 5, \"CRITICAL\", z_score > 4, \"HIGH\", \"MEDIUM\") | KEEP current_cell_id, severity, cell_tower_reference.cell_name, z_score, failure_count, time_bucket, unique_imsi, cell_tower_reference.equipment_type | SORT z_score DESC | LIMIT 50"
+    },
+    {
+      "name": "IMSI Influx Anomaly Detection for Security Threats",
+      "pain_point": "Rogue network attempts, SS7 attacks, and international roaming configuration errors",
+      "esql_features": [
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "PERCENTILE",
+        "LOOKUP JOIN",
+        "KEEP"
+      ],
+      "required_datasets": [
+        "mme_signaling_failures",
+        "mme_host_inventory"
+      ],
+      "required_fields": {
+        "mme_signaling_failures": [
+          "@timestamp",
+          "imsi",
+          "mme_host",
+          "roaming_flag",
+          "country_code",
+          "error_code"
+        ],
+        "mme_host_inventory": [
+          "mme_host",
+          "datacenter",
+          "software_version"
+        ]
+      },
+      "description": "Identifies unusual subscriber influx patterns by detecting statistical anomalies in unique IMSI counts per MME host to catch security attacks early",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_failures | WHERE @timestamp >= NOW() - 1 hour | EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp) | STATS unique_imsi_count = COUNT_DISTINCT(imsi), roaming_imsi = COUNT_DISTINCT(imsi) WHERE roaming_flag == true BY time_bucket, mme_host | LOOKUP JOIN mme_host_inventory ON mme_host | INLINESTATS avg_imsi = AVG(unique_imsi_count), stddev_imsi = STD_DEV(unique_imsi_count), baseline_imsi = PERCENTILE(unique_imsi_count, 50) BY mme_host_inventory.datacenter | EVAL z_score = (unique_imsi_count - avg_imsi) / COALESCE(stddev_imsi, 1), pct_deviation = ((unique_imsi_count - baseline_imsi) / baseline_imsi) * 100 | WHERE z_score > 3 AND unique_imsi_count > 400 | EVAL threat_level = CASE(z_score > 5, \"CRITICAL_ATTACK\", z_score > 4, \"HIGH_RISK\", \"SUSPICIOUS\") | KEEP mme_host, threat_level, mme_host_inventory.datacenter, z_score, unique_imsi_count, time_bucket, roaming_imsi, pct_deviation | SORT z_score DESC"
+    },
+    {
+      "name": "HSS Mass Authentication Failure Detection",
+      "pain_point": "HSS database corruption or synchronization issues affecting subscriber authentication",
+      "esql_features": [
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "LOOKUP JOIN",
+        "KEEP"
+      ],
+      "required_datasets": [
+        "subscriber_authentication_events",
+        "mme_host_inventory"
+      ],
+      "required_fields": {
+        "subscriber_authentication_events": [
+          "@timestamp",
+          "auth_result",
+          "hss_response_code",
+          "mme_host",
+          "imsi",
+          "response_time_ms"
+        ],
+        "mme_host_inventory": [
+          "mme_host",
+          "datacenter",
+          "software_version"
+        ]
+      },
+      "description": "Detects mass authentication failures indicating HSS problems by analyzing failure rates and response time anomalies across MME hosts",
+      "complexity": "medium",
+      "esql_query": "FROM subscriber_authentication_events | WHERE @timestamp >= NOW() - 30 minutes | EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp) | STATS total_attempts = COUNT(*), failed_attempts = COUNT(*) WHERE auth_result == \"FAILURE\", avg_response_time = AVG(response_time_ms), affected_subscribers = COUNT_DISTINCT(imsi) BY time_bucket, mme_host | LOOKUP JOIN mme_host_inventory ON mme_host | EVAL failure_rate = (failed_attempts / total_attempts) * 100 | INLINESTATS baseline_failure_rate = AVG(failure_rate), stddev_failure_rate = STD_DEV(failure_rate) BY mme_host_inventory.datacenter | EVAL z_score = (failure_rate - baseline_failure_rate) / COALESCE(stddev_failure_rate, 1) | WHERE (failure_rate > 15 AND affected_subscribers > 500) OR z_score > 4 | EVAL severity = CASE(failure_rate > 50, \"CRITICAL_HSS_OUTAGE\", failure_rate > 30, \"HIGH_HSS_DEGRADATION\", \"MEDIUM_HSS_ISSUE\") | KEEP mme_host, severity, mme_host_inventory.software_version, failure_rate, affected_subscribers, time_bucket, avg_response_time, z_score | SORT failure_rate DESC"
+    },
+    {
+      "name": "MME Split-Brain and Signaling Storm Detection",
+      "pain_point": "Core network split-brain conditions and signaling storms causing extended outages",
+      "esql_features": [
+        "STATS",
+        "DATE_TRUNC",
+        "INLINESTATS",
+        "EVAL",
+        "LOOKUP JOIN",
+        "FORK",
+        "KEEP"
+      ],
+      "required_datasets": [
+        "mme_signaling_failures",
+        "mme_host_inventory"
+      ],
+      "required_fields": {
+        "mme_signaling_failures": [
+          "@timestamp",
+          "mme_host",
+          "procedure_type",
+          "error_code",
+          "imsi",
+          "current_cell_id"
+        ],
+        "mme_host_inventory": [
+          "mme_host",
+          "datacenter",
+          "software_version",
+          "max_capacity"
+        ]
+      },
+      "description": "Multi-dimensional analysis detecting split-brain scenarios by identifying simultaneous high error rates across multiple MME hosts with correlated failure patterns",
+      "complexity": "high",
+      "esql_query": "FROM mme_signaling_failures | WHERE @timestamp >= NOW() - 15 minutes | EVAL time_bucket = DATE_TRUNC(1 minute, @timestamp) | STATS error_rate = COUNT(*), unique_procedures = COUNT_DISTINCT(procedure_type), affected_cells = COUNT_DISTINCT(current_cell_id), affected_imsi = COUNT_DISTINCT(imsi) BY time_bucket, mme_host | LOOKUP JOIN mme_host_inventory ON mme_host | INLINESTATS avg_error_rate = AVG(error_rate), stddev_error_rate = STD_DEV(error_rate), max_error_rate = MAX(error_rate) BY mme_host_inventory.datacenter | EVAL z_score = (error_rate - avg_error_rate) / COALESCE(stddev_error_rate, 1), capacity_pct = (error_rate / mme_host_inventory.max_capacity) * 100 | WHERE z_score > 4 AND error_rate > 1000 AND unique_procedures > 5 | EVAL condition_type = CASE(affected_cells > 100 AND capacity_pct > 80, \"SPLIT_BRAIN_CRITICAL\", error_rate > 5000, \"SIGNALING_STORM\", \"SEVERE_OVERLOAD\") | KEEP mme_host, condition_type, mme_host_inventory.datacenter, z_score, error_rate, time_bucket, affected_imsi, affected_cells | SORT error_rate DESC | LIMIT 20"
+    },
+    {
+      "name": "Semantic Search for Similar Network Failure Patterns",
+      "pain_point": "Difficulty identifying root causes of recurring network issues across different failure scenarios",
+      "esql_features": [
+        "SEMANTIC",
+        "LOOKUP JOIN",
+        "STATS",
+        "KEEP"
+      ],
+      "required_datasets": [
+        "mme_signaling_failures",
+        "cell_tower_reference"
+      ],
+      "required_fields": {
+        "mme_signaling_failures": [
+          "@timestamp",
+          "failure_reason",
+          "current_cell_id",
+          "error_code",
+          "imsi"
+        ],
+        "cell_tower_reference": [
+          "cell_id",
+          "cell_name",
+          "tower_description",
+          "equipment_type",
+          "region"
+        ]
+      },
+      "description": "Uses semantic search to find similar failure patterns based on natural language descriptions, helping identify recurring issues and root causes",
+      "complexity": "medium",
+      "esql_query": "FROM mme_signaling_failures | WHERE @timestamp >= NOW() - 24 hours AND SEMANTIC(failure_reason, \"memory exhaustion software bugs resource depletion capacity overload\") | LOOKUP JOIN cell_tower_reference ON current_cell_id=cell_id | STATS failure_count = COUNT(*), unique_subscribers = COUNT_DISTINCT(imsi), error_types = COUNT_DISTINCT(error_code) BY current_cell_id, cell_tower_reference.equipment_type, cell_tower_reference.region | WHERE failure_count > 100 | KEEP current_cell_id, cell_tower_reference.cell_name, cell_tower_reference.equipment_type, failure_count, unique_subscribers, cell_tower_reference.region, error_types | SORT failure_count DESC | LIMIT 25"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "mme_signaling_failures",
+      "to": "cell_tower_reference",
+      "type": "many-to-one",
+      "join_field": "current_cell_id=cell_id"
+    },
+    {
+      "from": "mme_signaling_failures",
+      "to": "mme_host_inventory",
+      "type": "many-to-one",
+      "join_field": "mme_host"
+    },
+    {
+      "from": "subscriber_authentication_events",
+      "to": "mme_host_inventory",
+      "type": "many-to-one",
+      "join_field": "mme_host"
+    },
+    {
+      "from": "subscriber_authentication_events",
+      "to": "cell_tower_reference",
+      "type": "many-to-one",
+      "join_field": "cell_id"
+    }
+  ],
+  "field_mappings": {
+    "mme_signaling_failures.current_cell_id": "cell_tower_reference.cell_id",
+    "mme_signaling_failures.mme_host": "mme_host_inventory.mme_host",
+    "subscriber_authentication_events.mme_host": "mme_host_inventory.mme_host",
+    "subscriber_authentication_events.cell_id": "cell_tower_reference.cell_id"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "scripted_query_1": {
+    "tool_id": "adobe_inc.brand_conc_noisy_neighbor_detection",
+    "description": "Identifies noisy neighbor tenants causing performance issues. Detects resource-hogging accounts affecting multi-tenant SLA compliance with revenue impact scoring for prioritization.",
+    "tags": [
+      "performance",
+      "multi-tenant",
+      "sla",
+      "monitoring",
+      "esql"
+    ],
+    "sample_question": "",
+    "query": "FROM api_requests\n| STATS p95_latency = PERCENTILE(response_time_ms, 95), request_volume = COUNT(*) BY tenant_id\n| LOOKUP JOIN tenants ON tenant_id\n| INLINESTATS avg_p95 = AVG(p95_latency), avg_volume = AVG(request_volume)\n| EVAL latency_vs_avg_pct = ((p95_latency - avg_p95) / avg_p95) * 100\n| EVAL volume_vs_avg_pct = ((request_volume - avg_volume) / avg_volume) * 100\n| EVAL noisy_neighbor_score = (latency_vs_avg_pct * 0.4) + (volume_vs_avg_pct * 0.6)\n| EVAL sla_breach = CASE(p95_latency > sla_target_p95_ms, true, false)\n| WHERE noisy_neighbor_score > 50 OR sla_breach == true\n| EVAL revenue_impact = contract_arr / 12 / 30\n| SORT noisy_neighbor_score DESC\n| KEEP tenant_id, tenant_name, account_tier, p95_latency, sla_target_p95_ms, noisy_neighbor_score, sla_breach, revenue_impact\n| LIMIT 20",
+    "query_type": "scripted",
+    "last_updated": "2025-11-12T08:24:18.528453",
+    "deployed": true,
+    "deployed_tool_id": "adobe_inc.brand_conc_noisy_neighbor_detection",
+    "deployed_at": "2025-11-12T08:24:38.632013"
+  },
+  "parameterized_query_1": {
+    "tool_id": "adobe_inc.brand_conc_ab_experiment_analysis",
+    "description": "Analyzes A/B experiment results with statistical significance testing. Calculates conversion uplift and provides go/no-go decisions within 7 days to accelerate product iteration.",
+    "tags": [
+      "ab-testing",
+      "experiments",
+      "conversion",
+      "analytics",
+      "esql"
+    ],
+    "sample_question": "",
+    "query": "FROM feature_usage_events\n| WHERE experiment_variant IS NOT NULL\n| WHERE feature_name == ?feature_name\n| STATS \n    conversion_rate = (SUM(CASE(conversion_event == true, 1, 0)) / COUNT(*)) * 100,\n    avg_interaction_ms = AVG(interaction_duration_ms),\n    unique_users = COUNT_DISTINCT(user_id),\n    total_interactions = COUNT(*)\n  BY experiment_variant\n| LOOKUP JOIN ab_experiments ON experiment_variant == experiment_id\n| EVAL uplift_pct = ((conversion_rate - control_baseline) / control_baseline) * 100\n| EVAL statistical_significance = CASE(\n    unique_users >= 1000 AND ABS(uplift_pct) >= 5, \"significant\",\n    unique_users >= 500 AND ABS(uplift_pct) >= 10, \"significant\",\n    unique_users >= 100, \"insufficient_sample\",\n    \"too_early\"\n  )\n| EVAL decision = CASE(\n    statistical_significance == \"significant\" AND uplift_pct > 5, \"ship_variant\",\n    statistical_significance == \"significant\" AND uplift_pct < -5, \"kill_variant\",\n    statistical_significance == \"insufficient_sample\", \"continue_test\",\n    \"wait_for_data\"\n  )\n| EVAL engagement_improvement_pct = ((avg_interaction_ms - 5000) / 5000) * 100\n| SORT uplift_pct DESC\n| KEEP experiment_variant, experiment_name, variant_name, conversion_rate, control_baseline, uplift_pct, unique_users, statistical_significance, decision, engagement_improvement_pct\n| LIMIT 20",
+    "query_type": "parameterized",
+    "parameters": [
+      {
+        "name": "feature_name",
+        "type": "string",
+        "description": "Feature name to analyze (e.g., 'Smart Tagging', 'Bulk Upload', 'Collections')",
+        "required": true
+      }
+    ],
+    "last_updated": "2025-11-12T08:24:29.172812",
+    "deployed": true,
+    "deployed_tool_id": "adobe_inc.brand_conc_ab_experiment_analysis",
+    "deployed_at": "2025-11-12T08:24:53.669412"
+  }
+}
