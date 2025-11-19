@@ -12,6 +12,13 @@ from threading import Lock
 
 logger = logging.getLogger(__name__)
 
+# Dataset size ranges by preference (per-dataset limits)
+SIZE_RANGES = {
+    'small': {'timeseries': '1000-3000', 'reference': '50-200'},
+    'medium': {'timeseries': '5000-10000', 'reference': '200-1000'},
+    'large': {'timeseries': '20000-50000', 'reference': '1000-5000'}
+}
+
 
 @dataclass
 class QueryOutline:
@@ -50,6 +57,10 @@ class TwoPhaseQueryStrategyGenerator:
         """
         logger.info(f"Starting two-phase strategy generation for {context.get('company_name')}")
 
+        # Extract dataset size preference (default to 'medium' if not specified)
+        size_preference = context.get('dataset_size_preference', 'medium')
+        logger.info(f"Using dataset size preference: {size_preference}")
+
         # Phase 1: Generate lightweight query outlines
         query_outlines = self._phase1_generate_outlines(context)
         logger.info(f"Phase 1 complete: {len(query_outlines)} query outlines generated")
@@ -59,7 +70,7 @@ class TwoPhaseQueryStrategyGenerator:
         logger.info(f"Phase 2 complete: {len(enriched_queries)} queries enriched")
 
         # Phase 3: Generate dataset requirements from enriched queries
-        datasets = self._generate_dataset_requirements(enriched_queries)
+        datasets = self._generate_dataset_requirements(enriched_queries, size_preference)
 
         # Phase 4: Generate relationships and field mappings
         relationships, field_mappings = self._generate_relationships(datasets, enriched_queries)
@@ -244,9 +255,22 @@ Generate ONLY the JSON for this single query:"""
         result = self._extract_json(response.content[0].text)
         return result
 
-    def _generate_dataset_requirements(self, queries: List[Dict]) -> List[Dict]:
-        """Generate dataset requirements from enriched queries"""
+    def _generate_dataset_requirements(self, queries: List[Dict], size_preference: str = 'medium') -> List[Dict]:
+        """Generate dataset requirements from enriched queries
+
+        Args:
+            queries: List of enriched query dicts
+            size_preference: Dataset size preference - 'small', 'medium', or 'large' (default 'medium')
+
+        Returns:
+            List of dataset requirement dicts
+        """
         datasets = {}
+
+        # Get size ranges for the preference
+        size_ranges = SIZE_RANGES.get(size_preference, SIZE_RANGES['medium'])
+        reference_range = size_ranges['reference']
+        timeseries_range = size_ranges['timeseries']
 
         for query in queries:
             for dataset_name in query.get('required_datasets', []):
@@ -261,7 +285,7 @@ Generate ONLY the JSON for this single query:"""
                         "name": dataset_name,
                         "type": "reference" if uses_lookup else "timeseries",
                         "index_mode": "lookup" if uses_lookup else "data_stream",
-                        "row_count": "10000+" if uses_lookup else "100000+",
+                        "row_count": reference_range if uses_lookup else timeseries_range,
                         "required_fields": {},
                         "relationships": [],
                         "semantic_fields": []

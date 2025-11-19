@@ -10,6 +10,13 @@ from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
 
+# Dataset size ranges by preference (per-dataset limits)
+SIZE_RANGES = {
+    'small': {'timeseries': '1000-3000', 'reference': '50-200'},
+    'medium': {'timeseries': '5000-10000', 'reference': '200-1000'},
+    'large': {'timeseries': '20000-50000', 'reference': '1000-5000'}
+}
+
 
 @dataclass
 class DatasetRequirement:
@@ -60,6 +67,10 @@ class QueryStrategyGenerator:
         # Read ES|QL skill for reference
         esql_skill = self._read_esql_skill()
 
+        # Extract dataset size preference (default to 'medium' if not specified)
+        size_preference = context.get('dataset_size_preference', 'medium')
+        logger.info(f"Using dataset size preference: {size_preference}")
+
         # Start with requested number of queries
         num_queries = 5  # Reduced from 7 to avoid truncation
         max_retries = 4  # Increased to allow more aggressive reduction (5→3→2→1)
@@ -70,7 +81,7 @@ class QueryStrategyGenerator:
                 if attempt > 0:
                     logger.info(f"Retry {attempt}: Requesting {num_queries} queries to avoid truncation")
 
-                prompt = self._build_strategy_prompt(context, esql_skill, num_queries=num_queries)
+                prompt = self._build_strategy_prompt(context, esql_skill, num_queries, size_preference)
 
                 # Call LLM to generate strategy
                 response = self.llm_client.messages.create(
@@ -146,17 +157,22 @@ class QueryStrategyGenerator:
 
         return False
 
-    def _build_strategy_prompt(self, context: Dict, esql_skill: str, num_queries: int = 5) -> str:
+    def _build_strategy_prompt(self, context: Dict, esql_skill: str, num_queries: int = 5, size_preference: str = 'medium') -> str:
         """Build the LLM prompt for query strategy generation
 
         Args:
             context: Customer context
             esql_skill: ES|QL skill documentation
             num_queries: Number of queries to generate (default 5)
+            size_preference: Dataset size preference - 'small', 'medium', or 'large' (default 'medium')
 
         Returns:
             Prompt string
         """
+        # Get size ranges for the preference
+        size_ranges = SIZE_RANGES.get(size_preference, SIZE_RANGES['medium'])
+        timeseries_range = size_ranges['timeseries']
+        reference_range = size_ranges['reference']
 
         # Check if we have rich technical context for high-fidelity generation
         full_context = context.get('full_technical_context')
@@ -420,7 +436,7 @@ Each dimension in GROUP BY reduces density by its cardinality:
       "name": "sales_transactions",
       "type": "timeseries",
       "index_mode": "data_stream",
-      "row_count": "100000+",
+      "row_count": "{timeseries_range}",
       "required_fields": {{
         "transaction_id": "keyword",
         "@timestamp": "date",
@@ -437,7 +453,7 @@ Each dimension in GROUP BY reduces density by its cardinality:
       "name": "products",
       "type": "reference",
       "index_mode": "lookup",
-      "row_count": "10000+",
+      "row_count": "{reference_range}",
       "required_fields": {{
         "product_id": "keyword",
         "product_name": "text",

@@ -13,6 +13,14 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# Dataset size ranges by preference (per-dataset limits)
+# For search/RAG demos, we use 'documents' for main content and 'reference' for lookup tables
+SIZE_RANGES = {
+    'small': {'documents': '1000-3000', 'reference': '50-200'},
+    'medium': {'documents': '5000-10000', 'reference': '200-1000'},
+    'large': {'documents': '20000-50000', 'reference': '1000-5000'}
+}
+
 
 @dataclass
 class SearchDatasetRequirement:
@@ -59,10 +67,14 @@ class SearchQueryStrategyGenerator:
         """
         logger.info(f"Generating SEARCH strategy for {context.get('company_name')}")
 
+        # Extract dataset size preference (default to 'medium' if not specified)
+        size_preference = context.get('dataset_size_preference', 'medium')
+        logger.info(f"Using dataset size preference: {size_preference}")
+
         # Read ES|QL search skill for reference
         esql_skill = self._read_search_skill()
 
-        prompt = self._build_strategy_prompt(context, esql_skill)
+        prompt = self._build_strategy_prompt(context, esql_skill, size_preference)
 
         # Call LLM to generate strategy
         try:
@@ -95,8 +107,21 @@ class SearchQueryStrategyGenerator:
             logger.error(f"Raw response preview: {strategy_text[:1000] if 'strategy_text' in locals() else 'N/A'}")
             raise
 
-    def _build_strategy_prompt(self, context: Dict, esql_skill: str) -> str:
-        """Build the LLM prompt for search strategy generation"""
+    def _build_strategy_prompt(self, context: Dict, esql_skill: str, size_preference: str = 'medium') -> str:
+        """Build the LLM prompt for search strategy generation
+
+        Args:
+            context: Customer context
+            esql_skill: ES|QL skill documentation
+            size_preference: Dataset size preference - 'small', 'medium', or 'large' (default 'medium')
+
+        Returns:
+            Prompt string
+        """
+        # Get size ranges for the preference
+        size_ranges = SIZE_RANGES.get(size_preference, SIZE_RANGES['medium'])
+        documents_range = size_ranges['documents']
+        reference_range = size_ranges['reference']
 
         # Check if we have rich technical context for high-fidelity generation
         full_context = context.get('full_technical_context')
@@ -262,7 +287,7 @@ FROM documents
       "name": "knowledge_base_articles",
       "type": "documents",
       "index_mode": "lookup",
-      "row_count": "5000+",
+      "row_count": "{documents_range}",
       "required_fields": {{
         "article_id": "keyword",
         "title": "text",
@@ -280,7 +305,7 @@ FROM documents
       "name": "authors",
       "type": "reference",
       "index_mode": "lookup",
-      "row_count": "100+",
+      "row_count": "{reference_range}",
       "required_fields": {{
         "author_id": "keyword",
         "author_name": "text",
