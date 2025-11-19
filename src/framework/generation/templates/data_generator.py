@@ -12,7 +12,11 @@ def get_analytics_data_generator_template(config: Dict[str, Any]) -> str:
     """Get the data generator template for analytics mode demos"""
 
     # Extract size preferences
+    company_name = config.get("company_name", "Company").replace(" ", "")
+    department = config.get("department", "Analytics")
     size_preference = config.get('size_preference', 'medium').lower()
+    scale = config.get("scale", "unknown")
+
     ranges = {
         'small': {'timeseries_typical': '100-500', 'timeseries_max': 1000,
                   'reference_typical': '10-50', 'reference_max': 100},
@@ -30,11 +34,11 @@ import random
 from datetime import datetime, timedelta
 from typing import Dict, List
 
-class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule):
-    """Data generator for {config["company_name"]} - {config["department"]}"""
+class {company_name}DataGenerator(DataGeneratorModule):
+    \"\"\"Data generator for {company_name} - {department}\"\"\"
 
     def generate_datasets(self) -> Dict[str, pd.DataFrame]:
-        """Generate datasets specific to {config["company_name"]}'s needs"""
+        \"\"\"Generate datasets specific to their needs\"\"\"
         datasets = {{}}
 
         # Generate main dataset with columns specific to their business
@@ -52,18 +56,18 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
         # IMPORTANT: Size preference is {size_preference.upper()}
         # - Primary datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
         # - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
-        # Scale mentioned: {config["scale"]} (for context only, don't generate that many rows!)
+        # Scale mentioned: {scale} (for context only, don't generate that many rows!)
 
         return datasets
 
     def get_relationships(self) -> List[tuple]:
-        """Define foreign key relationships"""
+        \"\"\"Define foreign key relationships\"\"\"
         return [
             # (source_table, foreign_key_column, target_table)
         ]
 
     def get_data_descriptions(self) -> Dict[str, str]:
-        """Describe each dataset"""
+        \"\"\"Describe each dataset\"\"\"
         return {{
             # 'dataset_name': 'Description of what this data represents'
         }}
@@ -72,6 +76,8 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
 
 def get_search_data_generator_template(config: Dict[str, Any]) -> str:
     """Get the data generator template for search/RAG mode demos"""
+
+    company_name = config.get("company_name", "Company").replace(" ", "")
 
     return f"""from src.framework.base import DataGeneratorModule, DemoConfig
 import pandas as pd
@@ -83,11 +89,11 @@ from faker import Faker
 
 fake = Faker()
 
-class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule):
-    """Data generator for {config["company_name"]} - Search/RAG mode"""
+class {company_name}DataGenerator(DataGeneratorModule):
+    \"\"\"Data generator for {company_name} - Search/RAG mode\"\"\"
 
     def generate_datasets(self) -> Dict[str, pd.DataFrame]:
-        """Generate document collections for search/RAG demos"""
+        \"\"\"Generate document collections for search/RAG demos\"\"\"
         datasets = {{}}
 
         # Generate knowledge base or document collection
@@ -96,11 +102,11 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
         return datasets
 
     def get_relationships(self) -> List[tuple]:
-        """Define foreign key relationships for LOOKUP JOINs"""
+        \"\"\"Define foreign key relationships for LOOKUP JOINs\"\"\"
         return []
 
     def get_data_descriptions(self) -> Dict[str, str]:
-        """Describe each dataset"""
+        \"\"\"Describe each dataset\"\"\"
         return {{}}
 """
 
@@ -117,7 +123,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 
 class {company}DataGenerator(DataGeneratorModule):
-    """Simple data generator"""
+    \"\"\"Simple data generator\"\"\"
 
     def generate_datasets(self) -> Dict[str, pd.DataFrame]:
         return {{

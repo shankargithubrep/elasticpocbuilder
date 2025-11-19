@@ -51,16 +51,17 @@ src/framework/generation/
 - Lines 798-852: Tool metadata instructions
 
 #### → generators/static_files.py
-- Lines 2228-2293: `_generate_static_files()`
+- Lines 3343-3428: `_generate_static_files()` ✅ EXTRACTED
+- Lines 3274-3296: `_remove_timestamp_parameters()` ✅ EXTRACTED
 - Related helper methods for JSON generation
 
 #### → generators/config_generator.py
-- Lines 2284-2293: `_generate_config_file()`
+- Lines 2337-2356: `_generate_config_file()` ✅ EXTRACTED
 
 #### → generators/code_extractor.py
-- Lines 253-295: `_extract_python_code()`
-- Lines 3216-3265: `_validate_python_syntax()`
-- Lines 3266-3295: `_validate_query_module_methods()`
+- Lines 3084-3088: `_call_llm()` code extraction logic ✅ EXTRACTED as `extract_python_code()`
+- Lines 3090-3106: `_validate_python_syntax()` ✅ EXTRACTED
+- Lines 3108-3146: `_validate_query_module_methods()` ✅ EXTRACTED
 
 #### → deprecated/legacy_generator.py
 - Lines 65-94: `generate_demo_module()` without query_plan (DEPRECATED)
@@ -120,18 +121,42 @@ The new slim `module_generator.py` will only contain:
 
 ## Progress Tracking
 
+### Phase 1: Extract Templates (In Progress)
 - [x] Directory structure created
 - [x] Template stubs created
-- [x] Generator utility stubs created
 - [x] Data generator templates extracted (partially)
 - [ ] Query generator templates extracted
 - [ ] Guide generator templates extracted
 - [ ] Agent metadata templates extracted
-- [ ] Utility methods moved
-- [ ] Slim orchestrator created
-- [ ] Deprecated code isolated
-- [ ] Testing complete
-- [ ] Documentation updated
+
+### Phase 2: Extract Utilities (COMPLETE)
+- [x] Code extraction utilities (CodeExtractor) ✅
+  - `extract_python_code()` ✅
+  - `validate_python_syntax()` ✅
+  - `validate_query_module_methods()` ✅
+- [x] Static file generation (StaticFileGenerator) ✅
+  - `generate_static_files()` ✅
+  - `generate_all_queries_file()` ✅
+  - `_remove_timestamp_parameters()` ✅
+- [x] Config generation (ConfigGenerator) ✅
+  - `generate_config_file()` ✅
+- [x] Comprehensive tests created (23 tests, 100% passing) ✅
+
+### Phase 3: Create Slim Orchestrator (Pending)
+- [ ] Create new module_generator.py importing from submodules
+- [ ] Keep only orchestration logic
+- [ ] Delegate all template/utility work to submodules
+
+### Phase 4: Move Deprecated Code (Pending)
+- [ ] Move old generation methods to deprecated/
+- [ ] Mark clearly as deprecated
+- [ ] Keep for reference but not in main flow
+
+### Phase 5: Testing & Validation (Pending)
+- [ ] Test that existing imports still work
+- [ ] Generate a test demo
+- [ ] Verify all functionality preserved
+- [ ] Clean up and optimize
 
 ## Notes
 

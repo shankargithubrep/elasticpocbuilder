@@ -13,6 +13,9 @@ def get_agent_instructions_prompt(config: Dict[str, Any],
                                  datasets_info: List[str]) -> str:
     """Generate prompt for creating agent instructions
 
+    Creates professional agent instructions that define the agent's role,
+    expertise, and capabilities based on the customer context.
+
     Args:
         config: Demo configuration with company context
         query_descriptions: List of query descriptions to inform capabilities
@@ -21,13 +24,151 @@ def get_agent_instructions_prompt(config: Dict[str, Any],
     Returns:
         Prompt for LLM to generate comprehensive agent instructions
     """
+    query_context = "\n".join([f"- {desc}" for desc in query_descriptions[:10]]) if query_descriptions else "No queries available yet"
+    dataset_context = ", ".join(datasets_info) if datasets_info else "No datasets available yet"
 
-    company = config.get('company_name', 'Unknown Company')
-    department = config.get('department', 'Analytics')
-    industry = config.get('industry', 'general')
-    pain_points = config.get('pain_points', [])
-    use_cases = config.get('use_cases', [])
+    return f"""Generate professional agent instructions for an Elastic Agent Builder agent.
 
-    # Build the prompt for generating agent instructions
-    # This will be extracted from the _generate_agent_instructions method
-    return f"""# TODO: Extract agent instructions prompt generation"""
+**Company Context:**
+- Company: {config['company_name']}
+- Department: {config.get('department', 'General')}
+- Industry: {config.get('industry', 'General')}
+- Pain Points: {', '.join(config.get('pain_points', []))}
+- Use Cases: {', '.join(config.get('use_cases', []))}
+
+**Available Capabilities:**
+Query Capabilities:
+{query_context}
+
+Available Datasets:
+{dataset_context}
+
+**Task:** Generate clear, professional instructions that:
+1. Define the agent's role and expertise
+2. Explain what types of questions it can answer
+3. Reference the specific pain points and use cases
+4. Set appropriate tone and communication style
+5. Include any industry-specific considerations
+
+The instructions should be 150-250 words, professional but approachable, and specific to this customer's context.
+
+Generate ONLY the instructions text, no additional formatting or explanation."""
+
+
+def get_agent_metadata_template(config: Dict[str, Any],
+                               agent_id: str,
+                               avatar_symbol: str,
+                               avatar_color: str,
+                               instructions: str) -> Dict[str, Any]:
+    """Generate complete agent metadata structure for Elastic Agent Builder
+
+    Creates the JSON structure required for deploying an agent to the
+    Elastic Agent Builder platform.
+
+    Args:
+        config: Demo configuration with company context
+        agent_id: Unique identifier for the agent
+        avatar_symbol: 2-character symbol for agent avatar
+        avatar_color: Hex color code for avatar (#3B82F6 for analytics, #10B981 for search)
+        instructions: Professional instructions for agent behavior
+
+    Returns:
+        Dictionary with complete agent metadata structure ready for JSON serialization
+    """
+    company_slug = config['company_name'].lower().replace(' ', '_')[:20]
+    dept_slug = config.get('department', 'general').lower().replace(' ', '_')[:15]
+    demo_type = config.get('demo_type', 'analytics')
+
+    return {
+        "id": agent_id,
+        "name": f"{config['company_name']} {config.get('department', 'Analytics')} Assistant",
+        "description": f"AI assistant specialized in {config.get('department', 'data analysis')} for {config['company_name']}. I can help analyze your data, answer questions, and provide insights based on your specific use cases.",
+        "labels": [
+            company_slug,
+            dept_slug,
+            demo_type,
+            "demo-builder",
+            config.get('industry', 'general').lower()
+        ],
+        "avatar_color": avatar_color,
+        "avatar_symbol": avatar_symbol,
+        "configuration": {
+            "instructions": instructions,
+            "tools": []  # Initially empty, tools will be added separately
+        }
+    }
+
+
+def get_fallback_agent_instructions(config: Dict[str, Any]) -> str:
+    """Generate fallback agent instructions when LLM is unavailable
+
+    Provides a reasonable default set of instructions based on customer context.
+
+    Args:
+        config: Demo configuration with company context
+
+    Returns:
+        Fallback agent instructions text
+    """
+    pain_points = config.get('pain_points', ['Data analysis', 'Reporting', 'Insights'])[:3]
+    use_cases = config.get('use_cases', ['Analyzing trends', 'Finding patterns', 'Generating reports'])[:3]
+    pain_points_list = "\n".join([f"- {pp}" for pp in pain_points])
+    use_cases_list = "\n".join([f"- {uc}" for uc in use_cases])
+
+    return f"""You are an AI assistant specialized in {config.get('department', 'data analysis')} for {config['company_name']}.
+
+I help analyze data and provide insights specific to your {config.get('industry', 'business')} operations.
+
+Key areas of focus:
+{pain_points_list}
+
+I can assist with:
+{use_cases_list}
+
+Feel free to ask questions about your data, request specific analyses, or explore insights that can help optimize your operations."""
+
+
+def get_agent_avatar_color_by_type(demo_type: str) -> str:
+    """Get the appropriate avatar color based on demo type
+
+    Args:
+        demo_type: Type of demo ('analytics' or 'search')
+
+    Returns:
+        Hex color code (#3B82F6 for analytics, #10B981 for search)
+    """
+    if demo_type == 'search':
+        return "#10B981"  # Green
+    else:
+        return "#3B82F6"  # Blue (default for analytics)
+
+
+def generate_agent_id(company_name: str, department: str) -> str:
+    """Generate a unique agent ID from company and department
+
+    Args:
+        company_name: Name of the company
+        department: Department name
+
+    Returns:
+        Formatted agent ID (lowercase, underscores, max 50 chars)
+    """
+    company_slug = company_name.lower().replace(' ', '_')[:20]
+    dept_slug = department.lower().replace(' ', '_')[:15]
+    return f"{company_slug}_{dept_slug}_agent"
+
+
+def generate_avatar_symbol(company_name: str) -> str:
+    """Generate avatar symbol from company name initials
+
+    Args:
+        company_name: Name of the company
+
+    Returns:
+        2-character symbol representing the company
+    """
+    company_words = company_name.split()
+    if len(company_words) >= 2:
+        return (company_words[0][0] + company_words[1][0]).upper()[:2]
+    else:
+        return company_name[:2].upper()
