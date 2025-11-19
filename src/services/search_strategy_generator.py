@@ -279,6 +279,36 @@ FROM documents
 - ⚠️ Don't add @timestamp filters to every query - data is static, so time-based filters become stale
 - ✅ Other date fields (e.g., `created_at`, `published_date`, `effective_date`) → Can parameterize based on query purpose
 
+**🎯 CRITICAL: Dataset Size Requirements ({size_preference.upper()} preference)**
+
+You MUST use these EXACT row_count ranges in your output:
+- Document collections (e.g., policies, articles, FAQs, knowledge base): "{documents_range}"
+- Reference datasets (e.g., categories, users, metadata): "{reference_range}"
+
+**IMPORTANT:**
+- The customer's scale ("{context.get('scale', 'N/A')}") is for REALISM only (distribution, cardinality)
+- DO NOT calculate row counts based on scale (e.g., "10k documents × 5 categories")
+- ALWAYS use the template ranges above for row_count fields
+- Use cardinality_notes to explain data distribution, NOT to justify larger row counts
+
+**Example (CORRECT):**
+```json
+{{
+  "name": "policy_documents",
+  "row_count": "{documents_range}",  // ✅ Use this exact template value
+  "cardinality_notes": "Distributed across 50 categories and 10 regions for dense search results"
+}}
+```
+
+**Example (WRONG):**
+```json
+{{
+  "name": "policy_documents",
+  "row_count": "25000",  // ❌ DO NOT calculate your own row count
+  "cardinality_notes": "5k documents × 5 categories = 25k total documents"
+}}
+```
+
 **Output Format (MUST be valid JSON):**
 ```json
 {{

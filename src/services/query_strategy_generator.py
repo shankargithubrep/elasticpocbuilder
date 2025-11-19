@@ -428,6 +428,36 @@ Each dimension in GROUP BY reduces density by its cardinality:
 
 **NEVER VIOLATE THESE RULES OR QUERIES WILL RETURN 0 RESULTS!**
 
+**🎯 CRITICAL: Dataset Size Requirements ({size_preference.upper()} preference)**
+
+You MUST use these EXACT row_count ranges in your output:
+- Timeseries datasets (e.g., transactions, events, logs): "{timeseries_range}"
+- Reference datasets (e.g., products, customers, stores): "{reference_range}"
+
+**IMPORTANT:**
+- The customer's scale ("{context.get('scale', 'N/A')}") is for REALISM only (distribution, cardinality)
+- DO NOT calculate row counts based on scale (e.g., "15k/day × 90 days")
+- ALWAYS use the template ranges above for row_count fields
+- Use cardinality_notes to explain data distribution, NOT to justify larger row counts
+
+**Example (CORRECT):**
+```json
+{{
+  "name": "store_searches",
+  "row_count": "{timeseries_range}",  // ✅ Use this exact template value
+  "cardinality_notes": "Distributed across 100 stores and 50+ categories for dense aggregations"
+}}
+```
+
+**Example (WRONG):**
+```json
+{{
+  "name": "store_searches",
+  "row_count": "50000",  // ❌ DO NOT calculate your own row count
+  "cardinality_notes": "15k searches/day × 90 days = ~1.35M potential, sampled to 50k"
+}}
+```
+
 **Output Format (MUST be valid JSON):**
 ```json
 {{

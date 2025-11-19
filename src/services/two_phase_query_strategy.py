@@ -110,6 +110,10 @@ For each query, provide ONLY:
 - uses_lookup_join: true/false
 - pain_point_summary: ONE sentence describing the pain point it addresses
 
+**🎯 IMPORTANT: Do NOT specify row counts or dataset sizes in this phase.**
+
+This is just the outline phase. Row counts will be determined automatically in Phase 2 based on the {size_preference} preference. Focus only on query structure and pain points.
+
 **Output Format (JSON only):**
 ```json
 {{
