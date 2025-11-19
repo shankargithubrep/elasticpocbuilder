@@ -11,7 +11,7 @@ from .base import (
     DemoGuideModule
 )
 
-from .module_generator import ModuleGenerator
+from .generation.module_generator import ModuleGenerator
 from .module_loader import ModuleLoader, DemoModuleManager
 from .orchestrator import (
     ModularDemoOrchestrator,
