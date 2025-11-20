@@ -11,8 +11,8 @@ from .context_display import display_context_summary
 def render_sidebar():
     """Render the sidebar with mode toggle and context display"""
 
-    # Vulcan header
-    st.markdown("### Vulcan")
+    # Vulcan header with tooltip
+    st.markdown("### Vulcan", help="Vulcan helps create custom demo modules containing sample data, queries, and agentic tools.")
 
     # Prominent mode toggle buttons with custom styling
     col1, col2 = st.columns(2)

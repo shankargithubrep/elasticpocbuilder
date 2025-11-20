@@ -13,17 +13,15 @@ logger = logging.getLogger(__name__)
 
 def render_create_demo_view():
     """Render the demo creation interface"""
-    st.markdown("### Vulcan")
-    st.markdown("*Vulcan helps create custom demo modules containing sample data, queries, and agentic tools.*")
 
     # Display messages
     if not st.session_state.messages:
         st.markdown("""
         ### 👋 Get Started
 
-        **Quick Start:** Paste your customer description below and I'll extract context automatically.
+        Review the Demo Generation Options in the sidebar, then in the form below, provide a customer name & department/role, and provide key use cases, pain points, and key metrics. The more context you can provide in the prompt the better.
 
-        **Example:** *"Salesforce's Customer Success team wants to prevent churn in their 5,000+ enterprise accounts worth $10B in ARR..."*
+        **Note:** Since module generation is LLM-assisted, some variance is expected even with identical inputs. This is still an experimental utility, so if generation fails you may need to try again (and consider using a smarter model).
         """)
 
         # Expandable section for detailed prompt guidance
