@@ -118,8 +118,38 @@ pip install -r requirements.txt
 
 # Configure credentials
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys (see Configuration section below)
 ```
+
+### Configuration
+
+Vulcan requires LLM access for code generation. You can choose from three options:
+
+**Option 1: LLM Proxy (Recommended)**
+```bash
+LLM_PROXY_URL=https://your-proxy-url/v1
+LLM_PROXY_API_KEY=your-proxy-api-key
+```
+The proxy provides centralized model management and supports multiple providers (Anthropic, OpenAI, Google).
+
+**Option 2: Direct Anthropic API**
+```bash
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+**Option 3: Direct OpenAI API**
+```bash
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+**Configuration Precedence**:
+Vulcan checks for LLM credentials in the following order:
+1. **LLM Proxy** - If `LLM_PROXY_URL` and `LLM_PROXY_API_KEY` are set, the proxy is used
+2. **Anthropic** - If `ANTHROPIC_API_KEY` is set (and no proxy), Anthropic API is used directly
+3. **OpenAI** - If `OPENAI_API_KEY` is set (and no proxy/anthropic), OpenAI API is used directly
+4. **Mock Mode** - If no credentials are set, mock generation is used (testing only)
+
+When the LLM proxy is configured, direct API methods (Anthropic/OpenAI) are skipped entirely, allowing for centralized model management and cost control.
 
 ### Start Application
 
@@ -132,24 +162,52 @@ Access at `http://localhost:8501`
 
 ---
 
+## Using the Application
+
+### User Interface
+
+Vulcan provides a streamlined Streamlit interface with two main views:
+
+**Create Demo View**:
+- Submit customer context as a single comprehensive prompt
+- Sidebar tracks "Generation Options" in real-time:
+  - **LLM Model**: Choose complexity level (Fast, Balanced, Smart)
+  - **Demo Complexity**: Standard (direct processing) or Expanded (LLM enhances brief prompts)
+  - **Demo Type**: Auto-detect or manually select Search vs Analytics
+- Click "🌋 Generate Demo" to create module
+- Expandable "View Demo Complexity Expansion Prompt" shows LLM instructions for Expanded mode
+
+**Browse Demos View**:
+- Library of generated demo modules
+- View/edit queries, test against Elasticsearch
+- Deploy tools and agents to Agent Builder
+- Delete unwanted modules
+
+**Note**: Module generation is LLM-assisted, so some variance is expected even with identical inputs. This is an experimental utility; if generation fails, try again with a smarter model.
+
 ## Generation Process
 
 ### 1. Context Extraction
 
-Provide customer information in natural language:
+Provide comprehensive customer information in a single prompt:
 
 ```
 Bass Pro Shops needs to analyze fishing gear sales performance
 across regional stores. Product management team struggles with
-slow SQL reporting on 50K daily transactions.
+slow SQL reporting on 50K daily transactions. They need dashboards
+showing top products by region, seasonal trends, and inventory turnover.
+Key metrics: revenue per region, conversion rates, average order value.
 ```
 
-System extracts:
+The system extracts:
 - Company: Bass Pro Shops
 - Department: Product Management
-- Pain Points: Slow reporting
+- Pain Points: Slow reporting, need for real-time insights
+- Use Cases: Regional performance, seasonal trends, inventory analytics
 - Scale: 50K transactions/day
-- Industry: Retail
+- Metrics: Revenue, conversion rate, AOV
+- Industry: Retail (auto-detected)
+- Demo Type: Analytics (auto-detected from "analyze", "trends", "dashboards")
 
 ### 2. Query Strategy Planning
 
