@@ -1,6 +1,6 @@
-# Vulcan: LLM-Powered Demo Generation Platform
+# Vulcan: An AI-powered demo generation tool
 
-An AI-powered platform for Elastic Solutions Architects that generates custom Python code modules to create customer-specific demo assets. Each demo is built through a sophisticated planning process that aligns ES|QL queries with business intent, then designs data generation to support those queries.
+An AI-powered tool for generating sophisticated demo modules with a single user prompt. Each demo is built through a sophisticated planning process that aligns ES|QL queries with business intent, then designs data generation to support those queries. Supports both direct LLM-API and Elastic LLM Proxy connections. Module generation with experimental features enabled costs an average of $1 in API calls with Sonnet 4.5.
 
 ---
 
