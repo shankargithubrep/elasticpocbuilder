@@ -247,6 +247,11 @@ class ModuleGenerator:
         # NOW generate static files - all modules are complete (data, guide, AND queries)
         self._generate_static_files(module_path_obj)
 
+        # Generate agent metadata AFTER all static files (needs all_queries.json)
+        logger.info(">>> About to call _generate_agent_metadata() from generate_query_module_with_profile()")
+        self._generate_agent_metadata(config, module_path_obj)
+        logger.info(">>> Returned from _generate_agent_metadata()")
+
     def _generate_data_module(self, config: Dict[str, Any], module_path: Path):
         """Generate the data generation module"""
 
