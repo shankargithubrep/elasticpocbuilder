@@ -268,20 +268,17 @@ def render_tools_tab(loader):
                         tool_id = metadata.get('tool_id', f"{st.session_state.current_demo_module}_{query_id}")
                         tool_description = metadata.get('description', query.get('description', ''))
                         tool_tags = metadata.get('tags', [])
-                        sample_question = metadata.get('sample_question', '')
                     elif query.get('tool_metadata'):
                         # Use pre-generated tool metadata from query module
                         pre_gen = query['tool_metadata']
                         tool_id = pre_gen.get('tool_id', f"{st.session_state.current_demo_module}_{query_id}")
                         tool_description = pre_gen.get('description', query.get('description', ''))
                         tool_tags = pre_gen.get('tags', [])
-                        sample_question = pre_gen.get('sample_question', '')
                     else:
                         # Fallback defaults
                         tool_id = f"{st.session_state.current_demo_module}_{query_id}"
                         tool_description = query.get('description', '')
                         tool_tags = []
-                        sample_question = ''
 
                     # Input fields for tool metadata (removed name field)
                     new_tool_id = st.text_input(
@@ -308,14 +305,6 @@ def render_tools_tab(loader):
                     )
                     new_tool_tags = [t.strip() for t in tags_str.split(',') if t.strip()] if tags_str else []
 
-                    # Sample question input
-                    new_sample_question = st.text_input(
-                        "Sample Agent Question 💬",
-                        value=sample_question,
-                        key=f"sample_question_{query_id}",
-                        help="A realistic user question that would trigger an agent to call this tool",
-                        placeholder="e.g., 'Can you show me where we're spending the most on infrastructure?'"
-                    )
 
                     # Info message if using pre-generated metadata
                     if query.get('tool_metadata') and not metadata:
@@ -422,12 +411,11 @@ def render_tools_tab(loader):
 
                     with col_save:
                         if st.button("💾 Save Metadata", key=f"save_{query_id}", use_container_width=True):
-                            # Save the metadata (removed name field)
+                            # Save the metadata
                             new_metadata = {
                                 'tool_id': new_tool_id,
                                 'description': new_tool_description,
                                 'tags': new_tool_tags,
-                                'sample_question': new_sample_question,
                                 'query': display._get_query_text(query),
                                 'query_type': candidate['type']
                             }
@@ -492,7 +480,7 @@ def render_tools_tab(loader):
                                     except Exception as e:
                                         st.error(f"❌ Error during deployment: {e}")
                         else:
-                            st.warning("Please fill in all required fields before deploying")
+                            st.info("ℹ️ Ensure required fields are filled out, then save before deploying")
 
         # Show already deployed queries at the bottom
         if already_deployed:
