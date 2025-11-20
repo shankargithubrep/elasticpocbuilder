@@ -50,7 +50,7 @@
 
 ## Critical Anti-Patterns (MUST READ FIRST)
 
-These four anti-patterns are the **most common sources of errors** in LLM-generated ES|QL queries. Read this section FIRST before writing any queries.
+These six anti-patterns are the **most common sources of errors** in LLM-generated ES|QL queries. Read this section FIRST before writing any queries.
 
 ### 🚨 1. Integer Division (Silent Wrong Results)
 
@@ -165,6 +165,75 @@ selected = providers[:50]  # ❌ Only returns 3, not 50!
 providers = ["Dr. Smith", "Dr. Jones", "Dr. Brown"]
 selected = np.random.choice(providers, size=50, replace=True)  # ✅ With replacement
 ```
+
+---
+
+### 🚨 5. LOOKUP JOIN Incomplete ON Clause (Parsing Error)
+
+**Problem**: JOIN ON clause must have complete binary expressions (`field == field`). Partial conditions cause parsing errors.
+
+❌ **WRONG** (incomplete condition after AND):
+```esql
+| LOOKUP JOIN inventory_snapshots ON store_region == user_geo_region_name AND labels_product_category
+```
+**Error**: `parsing_exception: JOIN ON clause only supports fields or AND of Binary Expressions, found [labels_product_category]`
+
+**Why it fails**: The condition after `AND` is incomplete - it's just a field name without a comparison operator or value.
+
+✅ **CORRECT** (complete binary expressions):
+```esql
+| LOOKUP JOIN inventory_snapshots ON store_region == user_geo_region_name AND labels_product_category == product_category
+```
+
+**RULE**: Every condition in LOOKUP JOIN ON clause must be a complete binary expression:
+- ✅ `field1 == field2`
+- ✅ `field1 == field2 AND field3 == field4`
+- ❌ `field1 == field2 AND field3` (incomplete!)
+- ❌ `field1 AND field2 == field3` (field1 alone is incomplete!)
+
+**Common mistake**: Forgetting the right-hand side of the comparison after AND.
+
+---
+
+### 🚨 6. LOOKUP JOIN Ambiguous Fields (Verification Error)
+
+**Problem**: When the same field name exists in BOTH the main dataset and lookup table, you MUST qualify it in the ON clause to avoid ambiguity.
+
+❌ **WRONG** (ambiguous field reference):
+```esql
+FROM search_queries
+| LOOKUP JOIN inventory_snapshots ON labels_product_category == search_query_category AND store_region == client_geo_region_name
+```
+**Error**: `verification_exception: Found ambiguous reference to [labels_product_category]; matches any of [line 9:15 [labels_product_category], line 10:15 [labels_product_category]]`
+
+**Why it fails**: If `labels_product_category` exists in BOTH `search_queries` AND `inventory_snapshots`, ES|QL doesn't know which one you mean in the JOIN condition.
+
+✅ **CORRECT** - Option 1 (rename field in one dataset during data generation):
+```python
+# In data generator - ensure unique field names across datasets
+search_queries_df['query_category'] = ...  # Different name than lookup table
+inventory_df['product_category'] = ...     # Different name than main dataset
+```
+```esql
+FROM search_queries
+| LOOKUP JOIN inventory_snapshots ON query_category == product_category
+```
+
+✅ **CORRECT** - Option 2 (use different field entirely):
+```esql
+FROM search_queries
+| LOOKUP JOIN inventory_snapshots ON category_id == category_id  -- Use ID fields instead
+```
+
+**RULE**:
+- **Best practice**: Use UNIQUE field names between main dataset and lookup tables (e.g., `order_status` vs `status_name`)
+- **Avoid**: Fields with identical names in both tables unless they're the JOIN key
+- **JOIN keys**: Can have same name (e.g., `product_id` in both), but other fields should differ
+
+**Impact**:
+- Prevents ambiguous field errors
+- Makes queries more readable
+- Avoids needing field qualification (which doesn't work in LOOKUP JOIN)
 
 ---
 

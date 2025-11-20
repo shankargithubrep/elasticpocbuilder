@@ -61,6 +61,59 @@ FROM claims
 
 **Rule**: Reference ALL fields (from both source and joined datasets) without any table prefix after LOOKUP JOIN.
 
+**CRITICAL - Incomplete JOIN ON Clause (Parsing Error):**
+Every condition in a LOOKUP JOIN ON clause MUST be a complete binary expression (`field == field`).
+
+✅ CORRECT - Complete binary expressions:
+```esql
+FROM events
+| LOOKUP JOIN inventory ON store_region == user_geo_region AND product_id == product_id
+```
+
+❌ WRONG - Incomplete condition after AND:
+```esql
+FROM events
+| LOOKUP JOIN inventory ON store_region == user_geo_region AND labels_product_category
+```
+**Error**: `parsing_exception: JOIN ON clause only supports fields or AND of Binary Expressions, found [labels_product_category]`
+
+**Why this fails**: The condition after `AND` is incomplete - it's just a field name without a comparison operator or right-hand side.
+
+**Rule**:
+- ✅ `field1 == field2`
+- ✅ `field1 == field2 AND field3 == field4`
+- ❌ `field1 == field2 AND field3` (incomplete!)
+- ❌ `field1 AND field2 == field3` (field1 alone is incomplete!)
+
+**CRITICAL - Ambiguous Field References (Verification Error):**
+When the same field name exists in BOTH the main dataset and lookup table, you MUST use UNIQUE field names to avoid ambiguity.
+
+❌ WRONG - Ambiguous field reference:
+```esql
+FROM search_queries
+| LOOKUP JOIN inventory ON labels_product_category == search_query_category
+```
+**Error**: `verification_exception: Found ambiguous reference to [labels_product_category]; matches any of [line 9:15, line 10:15]`
+
+**Why this fails**: If `labels_product_category` exists in BOTH `search_queries` AND `inventory`, ES|QL cannot resolve which one you mean.
+
+✅ CORRECT - Use UNIQUE field names between datasets:
+```python
+# In data generator - ensure unique field names across datasets
+search_queries_df['query_category'] = ...   # Different from inventory field
+inventory_df['product_category'] = ...      # Different from search_queries field
+```
+```esql
+FROM search_queries
+| LOOKUP JOIN inventory ON query_category == product_category
+```
+
+**Rule for Data Generation**:
+- **Best practice**: Use UNIQUE field names between main dataset and lookup tables
+- **Example**: `order_status` in orders vs `status_name` in lookup table (not both `status`)
+- **JOIN keys**: Can have same name (e.g., `product_id` in both), but other fields should differ
+- **Avoid**: Fields with identical names in both tables unless they're the JOIN key
+
 **IMPORTANT**: Use LOOKUP JOIN for data enrichment, NOT ENRICH.
 LOOKUP JOIN is the modern, preferred approach that works with lookup mode indices.
 
@@ -607,6 +660,8 @@ COMMON_ERROR_FIXES = """
 | Error Pattern | Root Cause | Fix |
 |--------------|------------|-----|
 | "Unknown column [field] in right/left side of join" | Join key doesn't exist in both datasets | **CANNOT AUTO-FIX** - Verify schemas and use field that exists in BOTH |
+| "JOIN ON clause only supports fields or AND of Binary Expressions" | Incomplete JOIN condition (missing right-hand side) | Complete the binary expression: `ON field1 == field2 AND field3` → `ON field1 == field2 AND field3 == field4` |
+| "Found ambiguous reference to [field]" | Same field name in both datasets | **CANNOT AUTO-FIX** - Rename fields during data generation to be unique across datasets |
 | "[-] has arguments with incompatible types [datetime]" | Direct datetime subtraction | Wrap both sides in TO_LONG(): `(TO_LONG(NOW()) - TO_LONG(field))` |
 | "Unknown function [COUNT]" with DISTINCT | Using SQL `COUNT(DISTINCT field)` | Use `COUNT_DISTINCT(field)` instead |
 | INLINESTATS syntax error with multiple BY | Multiple BY clauses per aggregation | Use ONE BY clause: `INLINESTATS a = AVG(x), b = MAX(y) BY category` |

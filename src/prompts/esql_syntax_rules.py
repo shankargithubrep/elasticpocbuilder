@@ -30,8 +30,18 @@ ESQL_CRITICAL_RULES = """
 
 ### 4. LOOKUP JOIN Syntax
 ✅ CORRECT: `| LOOKUP JOIN table ON field`
+✅ CORRECT: `| LOOKUP JOIN table ON field1 == field2 AND field3 == field4` - Complete binary expressions
 ❌ WRONG: `| LOOKUP table ON field` - Missing JOIN keyword
 ❌ WRONG: `| LOOKUP JOIN table_lookup ON field` - No _lookup suffix needed
+❌ WRONG: `| LOOKUP JOIN table ON field1 == field2 AND field3` - Incomplete condition (missing right side)
+❌ WRONG: Using same field name in both datasets (causes ambiguous reference error)
+
+**CRITICAL - Complete Binary Expressions:**
+Every JOIN ON condition must be complete: `field == field`, not just `field`
+
+**CRITICAL - Unique Field Names:**
+Ensure field names are UNIQUE between main and lookup datasets to avoid ambiguous references.
+Use different names: `order_status` vs `status_name` (not both `status`)
 
 ### 5. Index Modes
 - **data_stream**: Regular timeseries data (default mode)
@@ -170,6 +180,8 @@ def get_common_error_fixes():
 |--------------|--------------|-----|
 | "Unknown column [agents_lookup]" | Using _lookup suffix | Remove _lookup suffix |
 | "line X:Y: mismatched input ',' expecting '('" | FORK with commas | Remove commas between branches |
+| "JOIN ON clause only supports fields or AND of Binary Expressions" | Incomplete JOIN condition | Complete binary expression: `field1 == field2 AND field3 == field4` |
+| "Found ambiguous reference to [field]" | Same field in both datasets | Rename fields during data generation to be unique |
 | "Unknown function [MATCH]" | MATCH outside WHERE | Move MATCH inside WHERE clause |
 | "mismatched input 'MATCH' expecting" | MATCH used as pipe command | Use WHERE MATCH(field, "query") |
 | "Lookup Join requires a single lookup mode index" | Target not in lookup mode | Ensure target index is lookup mode |
