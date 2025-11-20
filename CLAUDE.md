@@ -23,6 +23,50 @@ streamlit run app.py
 
 The app starts at `http://localhost:8501`
 
+### Environment Setup
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure credentials
+cp .env.example .env
+# Edit .env with your API keys (see LLM Configuration section below)
+```
+
+### LLM Configuration
+
+The system supports multiple LLM providers with automatic fallback. Configure at least one option:
+
+**Option 1: LLM Proxy (Recommended for Team Use)**
+```bash
+# .env
+LLM_PROXY_URL=https://your-llm-proxy.example.com
+LLM_PROXY_API_KEY=your_proxy_key
+```
+Benefits: Centralized billing, usage tracking, model routing
+
+**Option 2: Direct Anthropic API**
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-your_key_here
+```
+Best for: Individual use, testing, development
+
+**Option 3: OpenAI API (Fallback)**
+```bash
+# .env
+OPENAI_API_KEY=sk-your_key_here
+```
+Note: Limited ES|QL support compared to Anthropic models
+
+**Precedence Order**: LLM Proxy → Anthropic → OpenAI → Mock (tests only)
+
+The system automatically detects which credentials are available and uses the highest priority option.
+
 ### Testing Commands
 ```bash
 # Run all tests
@@ -176,27 +220,38 @@ ModularDemoOrchestrator
 ### Two Modes in One App
 
 **Create Demo Mode**:
-- Smart context extraction from natural language
-- Real-time sidebar showing extracted information
-- Progress indicator (needs 50%+ context to generate)
-- Test prompt button for quick testing
-- Conversation-based demo generation
+- Single comprehensive prompt submission (primary workflow)
+- Sidebar generation options:
+  - **LLM Model**: Select model (Fast/Balanced/Smart) - controls quality vs cost
+  - **Demo Complexity**:
+    - Standard: Direct processing of your prompt
+    - Expanded: LLM enhances brief prompts into detailed context
+  - **Demo Type**: Auto-detected (Search vs Analytics) or manually selected
+- Real-time generation progress tracking
+- Test prompt button for quick examples
 
 **Browse Demos Mode**:
-- List all generated demo modules
-- View details: Config, Data, Queries, Guide
-- Delete unwanted modules
-- Inspect generated Python code
+- List all generated demo modules with metadata cards
+- Detailed tabs for each module:
+  - **Config**: Customer context and settings
+  - **Data**: Generated datasets with statistics
+  - **Queries**: ES|QL queries with validation status
+  - **Guide**: Demo narrative and talk track
+  - **Tools**: Agent Builder tool definitions (if applicable)
+  - **Agents**: Agent metadata and capabilities (if applicable)
+- Module management (delete, inspect code)
+- Export capabilities
 
 ### Session State Structure
 ```python
 st.session_state = {
     "messages": [],              # Chat history
-    "demo_context": {...},       # Extracted context
-    "conversation_phase": str,   # "initial" | "gathering" | "ready_to_generate"
     "view_mode": str,           # "create" | "browse"
     "current_demo_module": str,  # Selected module name
-    "needs_processing": bool     # Flag for programmatic messages
+    "selected_model": str,       # LLM model selection
+    "demo_complexity": str,      # "standard" | "expanded"
+    "demo_type": str,           # "auto" | "search" | "analytics"
+    "generation_in_progress": bool  # Flag for active generation
 }
 ```
 
@@ -272,16 +327,27 @@ guide = guide_gen.generate_guide()
 
 ### Creating a Demo
 1. Start app: `streamlit run app.py`
-2. Paste customer description or click "Use Test Prompt"
-3. Watch sidebar fill with extracted context
-4. Type "Generate demo" when ready (≥50% context)
-5. View results in chat or switch to Browse mode
+2. Configure generation options in sidebar:
+   - Select LLM Model (Fast/Balanced/Smart)
+   - Choose Demo Complexity (Standard/Expanded)
+   - Set Demo Type (Auto/Search/Analytics)
+3. Paste comprehensive customer description or click "Use Test Prompt"
+4. Click "Generate Demo" button
+5. Monitor real-time progress (data → queries → guide)
+6. View results or switch to Browse mode for detailed inspection
 
 ### Browsing Demos
 1. Switch to "Browse Demos" mode in sidebar
-2. Click on demo card to expand
-3. Click "View Details" to see Config, Data, Queries, Guide tabs
-4. Delete unwanted modules with "Delete" button
+2. Browse generated modules with metadata cards
+3. Click "View Details" to see:
+   - **Config**: Customer context and generation settings
+   - **Data**: Generated datasets with field counts and statistics
+   - **Queries**: ES|QL queries with validation status and results
+   - **Guide**: Demo narrative, talk track, and key insights
+   - **Tools**: Agent Builder tool definitions (JSON format)
+   - **Agents**: Agent metadata and capabilities
+4. Use "Delete" button to remove unwanted modules
+5. Review query validation results and errors
 
 ### Customizing a Module
 1. Navigate to `demos/module_name/`

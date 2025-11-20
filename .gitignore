@@ -71,6 +71,9 @@ completed-demos/
 # Example demos (local only)
 examples/
 
+# Refactoring archive (local only)
+refactoring_archive/
+
 # Test files and validation reports
 test_*.py
 validation_report_*.json
