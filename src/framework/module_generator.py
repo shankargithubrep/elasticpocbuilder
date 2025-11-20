@@ -1379,7 +1379,7 @@ class {company_class}QueryGenerator(QueryGeneratorModule):
 
         if hasattr(self.llm_client, 'messages'):  # Anthropic
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=max_tokens,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
@@ -2809,7 +2809,7 @@ Generate the complete guide now:"""
 
         try:
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=16000,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
@@ -3077,7 +3077,7 @@ FROM index METADATA _score
 
         if hasattr(self.llm_client, 'messages'):  # Anthropic
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=16000,  # Increased from 8000 to fit all 3 query methods
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]

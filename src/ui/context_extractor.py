@@ -58,7 +58,7 @@ Return ONLY a JSON object with these keys. If a field is not found, use null or 
 JSON:"""
 
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=1000,
                 temperature=0.3,
                 messages=[{"role": "user", "content": extraction_prompt}]

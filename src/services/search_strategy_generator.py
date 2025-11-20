@@ -79,7 +79,7 @@ class SearchQueryStrategyGenerator:
         # Call LLM to generate strategy
         try:
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=8000,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
