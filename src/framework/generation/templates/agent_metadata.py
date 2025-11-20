@@ -81,7 +81,7 @@ def get_agent_metadata_template(config: Dict[str, Any],
 
     return {
         "id": agent_id,
-        "name": f"{config['company_name']} {config.get('department', 'Analytics')} Assistant",
+        "name": f"{config['company_name']} {generate_concise_department_name(config.get('department', 'Analytics'))} Assistant",
         "description": f"AI assistant specialized in {config.get('department', 'data analysis')} for {config['company_name']}. I can help analyze your data, answer questions, and provide insights based on your specific use cases.",
         "labels": [
             company_slug,
@@ -172,3 +172,63 @@ def generate_avatar_symbol(company_name: str) -> str:
         return (company_words[0][0] + company_words[1][0]).upper()[:2]
     else:
         return company_name[:2].upper()
+
+
+def generate_concise_department_name(department: str) -> str:
+    """Generate a concise department name for agent display
+
+    Takes a potentially long department name and creates a shorter version
+    suitable for agent names.
+
+    Args:
+        department: Full department name
+
+    Returns:
+        Concise department name (max ~30 chars)
+
+    Examples:
+        "Data team with product marketing and product management" → "Product Data & Marketing"
+        "Network Operations Center (NOC) / Radio Access Network Engineering" → "Network Operations"
+        "Platform Infrastructure & Engineering" → "Platform Infrastructure"
+    """
+    # Remove common noise words and parentheticals
+    dept = department.lower()
+
+    # Remove parentheticals
+    import re
+    dept = re.sub(r'\([^)]*\)', '', dept).strip()
+
+    # Common words to remove (articles, conjunctions, etc.)
+    noise_words = {'the', 'a', 'an', 'and', 'or', 'of', 'with', 'for', 'in', 'on', 'at', 'to', 'from'}
+
+    # Split on common delimiters
+    parts = re.split(r'[/,;]', dept)
+
+    # Take the first meaningful part if multiple parts exist
+    if len(parts) > 1:
+        dept = parts[0].strip()
+
+    # Extract key words (non-noise words)
+    words = dept.split()
+    key_words = []
+
+    for word in words:
+        if word not in noise_words or len(key_words) == 0:  # Keep at least one word
+            # Capitalize first letter
+            key_words.append(word.capitalize())
+
+        # Stop if we have a good concise name
+        if len(' '.join(key_words)) >= 20:
+            break
+
+    # If still too long, take first 3-4 key words
+    if len(' '.join(key_words)) > 35:
+        key_words = key_words[:3]
+
+    result = ' '.join(key_words)
+
+    # Fallback if result is empty
+    if not result:
+        result = department[:30]
+
+    return result
