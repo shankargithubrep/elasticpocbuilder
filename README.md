@@ -166,24 +166,47 @@ Access at `http://localhost:8501`
 
 ### User Interface
 
-Vulcan provides a streamlined Streamlit interface with two main views:
+Vulcan provides a streamlined Streamlit interface with two main modes accessible via the sidebar:
 
-**Create Demo View**:
-- Submit customer context as a single comprehensive prompt
-- Sidebar tracks "Generation Options" in real-time:
-  - **LLM Model**: Choose complexity level (Fast, Balanced, Smart)
-  - **Demo Complexity**: Standard (direct processing) or Expanded (LLM enhances brief prompts)
-  - **Demo Type**: Auto-detect or manually select Search vs Analytics
-- Click "🌋 Generate Demo" to create module
-- Expandable "View Demo Complexity Expansion Prompt" shows LLM instructions for Expanded mode
+#### Create Demo Mode
+The primary interface for generating new demo modules using a single comprehensive prompt:
 
-**Browse Demos View**:
-- Library of generated demo modules
-- View/edit queries, test against Elasticsearch
-- Deploy tools and agents to Agent Builder
-- Delete unwanted modules
+**Workflow**:
+1. **Configure Generation Options** (sidebar):
+   - **LLM Model**: Select complexity level (Fast, Balanced, Smart) to balance cost vs quality
+   - **Demo Complexity**:
+     - **Standard**: Direct processing of your prompt
+     - **Expanded**: LLM enhances brief prompts into detailed customer contexts (view expansion instructions via expandable section)
+   - **Demo Type**: Auto-detect based on keywords, or manually select Search vs Analytics
 
-**Note**: Module generation is LLM-assisted, so some variance is expected even with identical inputs. This is an experimental utility; if generation fails, try again with a smarter model.
+2. **Submit Customer Context**: Provide a single comprehensive prompt describing:
+   - Company name and department/role
+   - Key pain points and business challenges
+   - Use cases and desired analytics
+   - Important metrics and KPIs
+   - Data scale (optional)
+
+3. **Generate**: Click "🌋 Generate Demo" to create a complete module with data generators, queries, and demo guides
+
+**Note**: Module generation is LLM-assisted, so some variance is expected even with identical inputs. This is an experimental utility; if generation fails, try again with a smarter model or adjust complexity settings.
+
+#### Browse Demos Mode
+Interactive library for managing generated demo modules:
+
+**Features**:
+- **Config Tab**: View customer context and generation metadata
+- **Data Tab**: Inspect generated datasets and statistics
+- **Queries Tab**: Edit, test, and validate ES|QL queries against indexed data
+- **Guide Tab**: View demo narrative and talk track
+- **Tools Tab**: Deploy validated queries as Agent Builder tools
+- **Agents Tab**: Create and configure AI agents with access to your tools
+
+**Capabilities**:
+- Real-time query editing and testing
+- Parameter value testing with data profile samples
+- LLM-powered constraint optimization for zero-result queries
+- Agent Builder integration for production deployment
+- Module deletion and cleanup
 
 ## Generation Process
 
@@ -598,26 +621,60 @@ vulcan/
 ├── src/
 │   ├── framework/                  # Core generation framework
 │   │   ├── base.py                 # Abstract base classes
-│   │   ├── module_generator.py     # LLM code generation
+│   │   ├── module_generator.py     # Legacy module generator (deprecated)
 │   │   ├── module_loader.py        # Dynamic module loading
-│   │   └── orchestrator.py         # Generation orchestration
+│   │   ├── orchestrator.py         # Generation orchestration
+│   │   └── generation/             # Modular generation system
+│   │       ├── module_generator.py # LLM-powered code generation
+│   │       ├── templates/          # Code generation templates
+│   │       │   ├── data_generator.py
+│   │       │   ├── query_generator.py
+│   │       │   ├── guide_generator.py
+│   │       │   └── agent_metadata.py
+│   │       └── generators/         # Static file generators
+│   │           ├── config_generator.py
+│   │           ├── static_files.py
+│   │           └── code_extractor.py
 │   ├── services/                   # Supporting services
-│   │   ├── llm_service.py          # LLM integration
-│   │   ├── elasticsearch_indexer.py # ES operations
-│   │   ├── query_optimizer.py      # Query refinement
-│   │   └── esql_generator.py       # Query utilities
-│   └── ui/                         # Streamlit components
-│       ├── views/
-│       │   ├── create_demo.py      # Demo creation interface
-│       │   └── browse_demos.py     # Demo library + testing
-│       ├── context_extractor.py    # NL → structured data
-│       └── query_results_display.py # Query execution UI
+│   │   ├── llm_service.py          # Base LLM integration
+│   │   ├── llm_proxy_service.py    # LLM proxy client
+│   │   ├── elasticsearch_indexer.py # ES data operations
+│   │   ├── query_optimizer.py      # Constraint relaxation
+│   │   ├── query_test_runner.py    # Query validation
+│   │   ├── query_strategy_generator.py  # Analytics query planning
+│   │   ├── search_strategy_generator.py # Search/RAG query planning
+│   │   ├── agent_builder_service.py     # Agent Builder API
+│   │   ├── data_profiler.py        # Dataset statistics
+│   │   └── context_tracker.py      # Session context management
+│   ├── ui/                         # Streamlit UI components
+│   │   ├── views/
+│   │   │   ├── create_demo.py      # Single-prompt demo creation
+│   │   │   ├── browse_demos.py     # Module library & testing
+│   │   │   ├── under_the_hood.py   # Debug view
+│   │   │   └── tabs/               # Browse view tabs
+│   │   │       ├── config_tab.py
+│   │   │       ├── data_tab.py
+│   │   │       ├── queries_tab.py
+│   │   │       ├── guide_tab.py
+│   │   │       ├── tools_tab.py
+│   │   │       └── agents_tab.py
+│   │   ├── sidebar.py              # Generation options UI
+│   │   ├── context_extractor.py    # NL → structured context
+│   │   └── query_results_display.py # Query execution UI
+│   ├── prompts/                    # LLM prompt templates
+│   │   ├── conversation_prompts.py
+│   │   ├── esql_syntax_rules.py
+│   │   └── esql_strict_rules.py
+│   └── ui_helpers.py               # UI utility functions
 ├── demos/                          # Generated demo modules
 ├── tests/                          # Test suites
 ├── docs/                           # Documentation
+│   ├── RAG_SEARCH_ARCHITECTURE.md  # Search vs analytics architecture
+│   ├── ESQL_COMPLETE_REFERENCE.md  # ES|QL query guide
+│   └── ...
 └── .claude/                        # Claude Code integration
-    ├── skills/                     # ES|QL expertise
-    └── agents/                     # Specialized agents
+    ├── skills/                     # ES|QL expertise modules
+    └── agents/                     # Specialized development agents
 ```
 
 ---
