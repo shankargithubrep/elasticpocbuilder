@@ -1,6 +1,6 @@
 # ES|QL Complete Reference for LLM Query Generation
 
-**Version**: 2025-01-14
+**Version**: 2025-11-20
 **Purpose**: Comprehensive ES|QL guidance for LLM-based query generation
 **Audience**: General-purpose LLMs tasked with crafting ES|QL queries
 **Usage**: Stuff this entire document into your context window for production-quality ES|QL query generation
