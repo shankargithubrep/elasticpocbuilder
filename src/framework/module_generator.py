@@ -327,6 +327,15 @@ ALWAYS provide a fallback when filtering lists:
 - BETTER: choice(systems)  ← Avoid complex filtering when simple random choice works
 When you MUST filter, check the result before passing to safe_choice() or np.random.choice()
 
+CRITICAL - F-STRING ESCAPE RESTRICTIONS:
+Python f-strings CANNOT contain backslash escapes inside the expression parts (the {{}} braces).
+This will cause a SyntaxError: "f-string expression part cannot include a backslash"
+- WRONG: f'{{random.choice(["item\'s", "another"])}}' ← Backslash escape inside {{}}!
+- CORRECT: f'{{random.choice(["item" + chr(39) + "s", "another"])}}' ← Use chr(39) for apostrophe
+- BETTER: f'{{random.choice(["items", "another"])}}' ← Avoid apostrophes in lists
+- ALSO GOOD: random.choice(["item's", "another"]) ← No f-string at all
+When building strings with apostrophes/quotes, use concatenation, chr(), or avoid f-strings entirely.
+
 Template:
 ```python
 from src.framework.base import DataGeneratorModule, DemoConfig
@@ -1554,6 +1563,15 @@ ALWAYS provide a fallback when filtering lists:
 - CORRECT: filtered = [s for s in systems if condition]; choice(filtered if filtered else systems)
 - BETTER: choice(systems)  ← Avoid complex filtering when simple random choice works
 When you MUST filter, check the result before passing to safe_choice() or np.random.choice()
+
+CRITICAL - F-STRING ESCAPE RESTRICTIONS:
+Python f-strings CANNOT contain backslash escapes inside the expression parts (the {{}} braces).
+This will cause a SyntaxError: "f-string expression part cannot include a backslash"
+- WRONG: f'{{random.choice(["item\'s", "another"])}}' ← Backslash escape inside {{}}!
+- CORRECT: f'{{random.choice(["item" + chr(39) + "s", "another"])}}' ← Use chr(39) for apostrophe
+- BETTER: f'{{random.choice(["items", "another"])}}' ← Avoid apostrophes in lists
+- ALSO GOOD: random.choice(["item's", "another"]) ← No f-string at all
+When building strings with apostrophes/quotes, use concatenation, chr(), or avoid f-strings entirely.
 
 Template:
 ```python
