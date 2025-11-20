@@ -69,15 +69,15 @@ Only include fields that are actually missing. Be specific and relevant to their
 JSON:"""
 
     try:
-        # Get API key
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            return "❌ Cannot generate suggestions: ANTHROPIC_API_KEY not set. Please provide the missing information manually."
-
-        client = anthropic.Anthropic(api_key=api_key)
+        from src.services.llm_proxy_service import UnifiedLLMClient
+        
+        # Use unified client
+        client = UnifiedLLMClient()
+        if not client._proxy_client.is_available():
+            return "❌ Cannot generate suggestions: No LLM configured. Please provide the missing information manually."
 
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4",
             max_tokens=1000,
             temperature=0.7,  # Higher temperature for creative suggestions
             messages=[{"role": "user", "content": suggestion_prompt}]
@@ -305,16 +305,19 @@ You MUST return valid JSON in this EXACT format. No other text before or after t
 RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
 
     try:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            # Fallback to basic extraction if no API key
-            st.warning("⚠️ API key not found, using basic extraction")
+        from src.services.llm_proxy_service import UnifiedLLMClient
+        from src.exceptions import VulcanException
+        from src.ui.error_display import display_error
+        
+        # Use unified client
+        client = UnifiedLLMClient()
+        if not client._proxy_client.is_available():
+            # Fallback to basic extraction if no LLM
+            st.warning("⚠️ No LLM configured, using basic extraction")
             return _fallback_processing(message)
 
-        client = anthropic.Anthropic(api_key=api_key)
-
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4",
             max_tokens=16000,  # Increased for compound requests - need room for two full high-fidelity prompts
             temperature=0.3,
             messages=[{"role": "user", "content": prompt}]
@@ -322,15 +325,9 @@ RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
 
         content = response.content[0].text.strip()
 
-        # Debug logging
-        logger.info(f"LLM raw response length: {len(content)}")
+        # Debug logging (only to logger, not console)
+        logger.debug(f"LLM raw response length: {len(content)}")
         logger.debug(f"LLM response preview: {content[:500]}")
-        print(f"\n{'='*70}")
-        print(f"LLM RESPONSE DEBUG")
-        print(f"{'='*70}")
-        print(f"Length: {len(content)}")
-        print(f"First 500 chars:\n{content[:500]}")
-        print(f"{'='*70}\n")
 
         # Extract JSON from response
         if "```json" in content:
@@ -379,9 +376,18 @@ RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
         # Return the user-facing response from LLM
         return result.get('user_response', 'Processing your request...')
 
+    except VulcanException as e:
+        # For custom exceptions, show user-friendly error and fall back
+        logger.error(f"LLM processing failed: {e.user_message}", exc_info=True)
+        display_error(e, title="Message Processing Issue", show_technical_details=False)
+        st.info("💡 Falling back to basic text extraction...")
+        return _fallback_processing(message)
     except Exception as e:
-        logger.error(f"LLM processing failed: {e}", exc_info=True)
-        st.warning(f"⚠️ Using fallback processing due to error: {e}")
+        # For unexpected errors, log and fall back
+        logger.error(f"Unexpected error in message processing: {e}", exc_info=True)
+        st.warning(f"⚠️ Using fallback processing due to error. Check technical details below if the issue persists.")
+        with st.expander("Technical Details"):
+            st.code(str(e))
         return _fallback_processing(message)
 
 

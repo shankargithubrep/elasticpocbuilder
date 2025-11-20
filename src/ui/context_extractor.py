@@ -17,19 +17,14 @@ class SmartContextExtractor:
     def __init__(self):
         self.llm_client = None
         try:
-            import anthropic
-            import os
-
-            # Try to get API key from environment or Streamlit secrets
-            api_key = os.getenv("ANTHROPIC_API_KEY")
-            if not api_key and hasattr(st, 'secrets') and 'ANTHROPIC_API_KEY' in st.secrets:
-                api_key = st.secrets["ANTHROPIC_API_KEY"]
-
-            if api_key:
-                self.llm_client = anthropic.Anthropic(api_key=api_key)
-            else:
-                # Don't show warning in __init__, will show if extraction fails
-                pass
+            from src.services.llm_proxy_service import UnifiedLLMClient
+            
+            # Use unified client that auto-detects proxy/anthropic/openai
+            self.llm_client = UnifiedLLMClient()
+            
+            # Check if LLM is actually available (not mock mode)
+            if not self.llm_client._proxy_client.is_available():
+                self.llm_client = None
         except Exception as e:
             # Silently fail, will fallback to basic extraction
             pass
@@ -63,7 +58,7 @@ Return ONLY a JSON object with these keys. If a field is not found, use null or 
 JSON:"""
 
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4",
                 max_tokens=1000,
                 temperature=0.3,
                 messages=[{"role": "user", "content": extraction_prompt}]

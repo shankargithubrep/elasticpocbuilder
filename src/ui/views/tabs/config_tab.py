@@ -28,10 +28,11 @@ def render_config_tab(loader, assets_key: str):
         from src.ui.module_visualizer import ModuleVisualizer
 
         # Get LLM client if available
-        llm_client = None
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if api_key:
-            llm_client = anthropic.Anthropic(api_key=api_key)
+        from src.services.llm_proxy_service import UnifiedLLMClient
+        
+        llm_client = UnifiedLLMClient()
+        if not llm_client._proxy_client.is_available():
+            llm_client = None
 
         # Create and render visualizer
         visualizer = ModuleVisualizer(loader.module_path, llm_client)

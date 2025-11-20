@@ -38,16 +38,15 @@ class LLMDrivenOrchestrator:
 
     def _create_default_client(self):
         """Create default LLM client based on available API keys"""
-        import os
-
-        if os.getenv("ANTHROPIC_API_KEY"):
-            from anthropic import Anthropic
-            return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        elif os.getenv("OPENAI_API_KEY"):
-            from openai import OpenAI
-            return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        else:
+        from src.services.llm_proxy_service import UnifiedLLMClient
+        
+        # Use unified client that auto-detects proxy/anthropic/openai
+        client = UnifiedLLMClient()
+        
+        if not client._proxy_client.is_available():
             return None  # Mock mode
+        
+        return client
 
     def generate_demo(
         self,
@@ -148,7 +147,7 @@ Generate code that creates datasets specifically for {context.get('company_name'
             # Real LLM call
             if hasattr(self.llm_client, 'messages'):  # Anthropic
                 response = self.llm_client.messages.create(
-                    model="claude-sonnet-4-5-20250929",
+                    model="claude-sonnet-4",
                     max_tokens=2000,
                     temperature=0.7,
                     messages=[{"role": "user", "content": prompt}]
@@ -285,7 +284,7 @@ Generate queries that will make {context.get('company_name')} say "This solves o
             # Real LLM call
             if hasattr(self.llm_client, 'messages'):  # Anthropic
                 response = self.llm_client.messages.create(
-                    model="claude-sonnet-4-5-20250929",
+                    model="claude-sonnet-4",
                     max_tokens=2000,
                     temperature=0.7,
                     messages=[{"role": "user", "content": prompt}]

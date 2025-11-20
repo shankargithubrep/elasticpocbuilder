@@ -12,6 +12,9 @@ from datetime import datetime
 from .module_generator import ModuleGenerator
 from .module_loader import ModuleLoader, DemoModuleManager
 from .base import DemoConfig
+from src.exceptions import (
+    QueryGenerationError, DataGenerationError, IndexingError, VulcanException
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +39,16 @@ class ModularDemoOrchestrator:
 
     def _create_default_client(self):
         """Create default LLM client"""
-        import os
-        from anthropic import Anthropic
-
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if api_key:
-            return Anthropic(api_key=api_key)
-        else:
-            logger.warning("No ANTHROPIC_API_KEY found, using None")
+        from src.services.llm_proxy_service import UnifiedLLMClient
+        
+        # Use unified client that auto-detects proxy/anthropic/openai
+        client = UnifiedLLMClient()
+        
+        if not client._proxy_client.is_available():
+            logger.warning("No LLM configured, some features may not work")
             return None
+        
+        return client
 
     def generate_new_demo(
         self,
@@ -450,14 +454,13 @@ class ModularDemoOrchestrator:
                        f"{len(parameterized_queries)} parameterized, "
                        f"{len(rag_queries)} RAG")
 
+        except VulcanException:
+            # Re-raise our custom exceptions as-is
+            raise
         except Exception as e:
             logger.error(f"Query module generation failed: {e}", exc_info=True)
-            results['phases']['query_generation'] = {'status': 'failed', 'error': str(e)}
-            # Don't fail the entire generation if query generation fails
-            all_queries = []
-            scripted_queries = []
-            parameterized_queries = []
-            rag_queries = []
+            # Wrap in custom exception for better UI display
+            raise QueryGenerationError(error_message=str(e), phase="query_generation") from e
             # Initialize results keys even when query generation fails
             results['queries'] = []
             results['scripted_queries'] = []

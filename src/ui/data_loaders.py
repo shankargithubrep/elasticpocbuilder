@@ -181,11 +181,11 @@ def generate_sample_question(query: Dict, param: Dict, data_profile: dict) -> st
     Returns:
         str: Generated sample question
     """
-    import anthropic
+    from src.services.llm_proxy_service import UnifiedLLMClient
     import os
 
     try:
-        llm_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        llm_client = UnifiedLLMClient()
 
         # Build context about available data
         data_context = ""
