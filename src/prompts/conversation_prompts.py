@@ -105,7 +105,7 @@ Phase: {conversation_phase}
 - Be conversational and friendly
 - Use bullet points for clarity
 - Bold important terms or concepts
-- Include emojis sparingly for friendliness (🚀 for excitement, ✅ for confirmation, 💡 for ideas)
+- Include emojis sparingly for friendliness (🌋 for excitement, ✅ for confirmation, 💡 for ideas)
 - Keep responses concise but thorough
 - Always end with a clear question or next step
 

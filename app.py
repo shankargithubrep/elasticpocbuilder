@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # Page configuration
 st.set_page_config(
     page_title="Vulcan",
-    page_icon="🚀",
+    page_icon="🌋",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={

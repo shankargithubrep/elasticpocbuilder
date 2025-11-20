@@ -284,7 +284,7 @@ def render_create_demo_view():
         # Check if this is a generate command
         if prompt.lower().strip() == "generate" and st.session_state.conversation_phase == "ready_to_generate":
             with st.chat_message("assistant"):
-                with st.spinner("🚀 Generating custom demo module..."):
+                with st.spinner("🌋 Generating custom demo module..."):
                     try:
                         # Create config from context
                         context = st.session_state.demo_context

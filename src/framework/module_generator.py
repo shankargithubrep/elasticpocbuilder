@@ -2581,7 +2581,7 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
 
 ---
 
-## **🚀 Demo Setup Instructions**
+## **🌋 Demo Setup Instructions**
 
 ### **Step 1: Upload Sample Datasets in Kibana**
 
@@ -2821,7 +2821,7 @@ Using the template structure provided below, generate a COMPLETE, DETAILED demo 
 **CRITICAL FORMATTING RULES:**
 - Output ONLY the markdown content (no code fences around the entire guide)
 - Use proper markdown syntax
-- Keep the emoji section headers (📋, 🗂️, 🚀, 🎯, etc.)
+- Keep the emoji section headers (📋, 🗂️, 🌋, 🎯, etc.)
 - Queries should be in ```esql``` code blocks
 - Make it feel like a real internal demo script with specific, actionable content
 
@@ -2890,7 +2890,7 @@ Generate the complete guide now:"""
 
 ---
 
-## 🚀 Key Queries
+## 🌋 Key Queries
 
 {query_list}
 

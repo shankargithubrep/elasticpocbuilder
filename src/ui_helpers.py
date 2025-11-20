@@ -69,7 +69,7 @@ def display_context_summary(demo_context: Optional[Dict] = None):
     if progress >= 0.8:
         st.success("✅ **Ready to generate!**")
         # Add prominent Generate Demo button
-        if st.button("🚀 Generate Demo", type="primary", use_container_width=True):
+        if st.button("🌋 Generate Demo", type="primary", use_container_width=True):
             st.session_state.trigger_demo_generation = True
             st.rerun()
     elif progress >= 0.66:
