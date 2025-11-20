@@ -1,6 +1,0 @@
-mme_host,datacenter,software_version,hardware_model,memory_gb,cpu_cores,max_capacity,deployment_date,host_description
-MME-01,DC-CENTRAL,v5.2.1,Nokia FlexiNG,1024,128,50000,2021-12-29 16:47:55.588975,Primary MME handling downtown metropolitan area with high subscriber density
-MME-02,DC-EAST,v5.2.3,Ericsson SGSN-MME,512,96,50000,2021-11-10 16:47:55.589007,Primary MME handling downtown metropolitan area with high subscriber density
-MME-03,DC-EAST,v5.2.3,Nokia FlexiNG,1024,96,50000,2024-08-14 16:47:55.589013,Regional MME serving rural areas with extended coverage zones
-MME-04,DC-WEST,v5.3.1,Ericsson SGSN-MME,256,96,150000,2023-11-27 16:47:55.589018,Secondary MME for suburban coverage with load balancing capabilities
-MME-05,DC-WEST,v5.3.0,Nokia FlexiNG,1024,96,150000,2024-09-22 16:47:55.589023,Backup MME for disaster recovery and peak traffic overflow
