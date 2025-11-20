@@ -25,7 +25,8 @@ def render_create_demo_view():
         """)
 
         # Expandable section for detailed prompt guidance
-        with st.expander("💡 Need help creating detailed customer context? Click here for a guided approach"):
+        with st.expander("🔍 View Demo Complexity Expansion Prompt"):
+            st.info("ℹ️ This shows the LLM instructions used when the **Expanded** option is selected for Demo Complexity in the sidebar. The LLM uses this template to transform brief prompts into detailed customer contexts.")
             st.markdown("""
             ### Step 1: Create a Customer Context JSON
 
