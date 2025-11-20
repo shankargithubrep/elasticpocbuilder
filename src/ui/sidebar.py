@@ -40,10 +40,9 @@ def render_sidebar():
             st.rerun()
 
     if st.session_state.view_mode == "create":
-        display_context_summary()
+        st.markdown("---")
 
         # Dataset size preference (only in create mode)
-        st.markdown("---")
         st.markdown("#### Dataset Size")
 
         # Initialize dataset_size_preference if not exists
@@ -76,35 +75,43 @@ def render_sidebar():
 
         st.markdown("---")
 
-        # Enhanced Data Generation toggle (beta feature)
-        st.markdown("#### Advanced Options")
+        # Data Generation Mode
+        st.markdown("#### Data Generation Mode")
 
         # Initialize use_enhanced_generation if not exists
         if "use_enhanced_generation" not in st.session_state:
             st.session_state.use_enhanced_generation = False
 
-        use_enhanced = st.checkbox(
-            "Enhanced Data Generation (Beta)",
-            value=st.session_state.use_enhanced_generation,
-            key="enhanced_generation_checkbox",
-            help="Enable advanced data generation with realistic clustering and percentile-based query thresholds. Best for analytics demos with aggregations."
+        # Radio toggle for Standard vs Advanced
+        generation_mode = st.radio(
+            "Select data generation mode",
+            options=["Standard", "Advanced"],
+            index=1 if st.session_state.use_enhanced_generation else 0,
+            key="generation_mode_radio",
+            label_visibility="collapsed",
+            help="Advanced mode uses realistic clustering and percentile-based query thresholds. Experimental feature - best for analytics demos with aggregations."
         )
 
-        st.session_state.use_enhanced_generation = use_enhanced
+        st.session_state.use_enhanced_generation = (generation_mode == "Advanced")
 
-        if use_enhanced:
-            st.caption("⚡ **Enhanced mode:** Data will cluster realistically, queries will use percentile-based thresholds")
+        if generation_mode == "Advanced":
+            st.caption("⚡ **Advanced mode:** Data will cluster realistically, queries will use percentile-based thresholds")
 
             # Show helpful guidance based on dataset size
             current_size = st.session_state.dataset_size_preference
             if current_size == "small":
-                st.info("💡 **Tip:** Enhanced mode works best with **Medium** or **Large** dataset sizes for more stable percentile calculations.", icon="ℹ️")
+                st.info("💡 **Tip:** Advanced mode works best with **Medium** or **Large** dataset sizes for more stable percentile calculations.", icon="ℹ️")
             elif current_size == "medium":
-                st.success("✅ **Optimal:** Medium size is perfect for enhanced mode!", icon="✅")
+                st.success("✅ **Optimal:** Medium size is perfect for advanced mode!", icon="✅")
             else:  # large
                 st.success("✅ **Excellent:** Large datasets provide the most stable percentile-based queries!", icon="✅")
         else:
             st.caption("📊 **Standard mode:** Traditional random data generation")
+
+        st.markdown("---")
+
+        # Demo Context Section
+        display_context_summary()
 
         st.markdown("---")
 
