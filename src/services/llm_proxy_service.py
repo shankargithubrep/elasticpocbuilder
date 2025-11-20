@@ -162,10 +162,10 @@ class LLMProxyClient:
         
         elif self.provider == "anthropic":
             model_map = {
-                "code_generation": "claude-sonnet-4",
-                "conversation": "claude-sonnet-4",
+                "code_generation": "claude-sonnet-4-5-20250929",
+                "conversation": "claude-sonnet-4-5-20250929",
                 "fast": "claude-3-5-haiku-20241022",
-                "default": "claude-sonnet-4"
+                "default": "claude-sonnet-4-5-20250929"
             }
             return model_map.get(task, model_map["default"])
         
