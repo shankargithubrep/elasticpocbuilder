@@ -41,25 +41,22 @@ def render_sidebar():
 
     if st.session_state.view_mode == "create":
         st.markdown("---")
-
-        # Dataset size preference (only in create mode)
-        st.markdown("#### Dataset Size")
+        st.markdown("#### Generation Options")
 
         # Initialize dataset_size_preference if not exists
         if "dataset_size_preference" not in st.session_state:
             st.session_state.dataset_size_preference = "medium"  # Default to medium (best for enhanced mode)
 
-        # Slider with options
+        # Dataset Size Slider
         size_options = ["small", "medium", "large"]
         size_index = size_options.index(st.session_state.dataset_size_preference)
 
         selected_index = st.select_slider(
-            "Size",
+            "Dataset Size",
             options=range(len(size_options)),
             value=size_index,
             format_func=lambda x: size_options[x].capitalize(),
-            key="dataset_size_slider",
-            label_visibility="collapsed"
+            key="dataset_size_slider"
         )
 
         st.session_state.dataset_size_preference = size_options[selected_index]
@@ -73,30 +70,22 @@ def render_sidebar():
 
         st.caption(size_legends[st.session_state.dataset_size_preference])
 
-        st.markdown("---")
-
-        # Data Generation Mode
-        st.markdown("#### Data Generation Mode")
-
         # Initialize use_enhanced_generation if not exists
         if "use_enhanced_generation" not in st.session_state:
             st.session_state.use_enhanced_generation = False
 
-        # Radio toggle for Standard vs Advanced
+        # Data Generation Mode Radio
         generation_mode = st.radio(
-            "Select data generation mode",
+            "Data Generation Mode",
             options=["Standard", "Advanced"],
             index=1 if st.session_state.use_enhanced_generation else 0,
             key="generation_mode_radio",
-            label_visibility="collapsed",
             help="Advanced mode uses realistic clustering and percentile-based query thresholds. Experimental feature - best for analytics demos with aggregations."
         )
 
         st.session_state.use_enhanced_generation = (generation_mode == "Advanced")
 
         if generation_mode == "Advanced":
-            st.caption("⚡ **Advanced mode:** Data will cluster realistically, queries will use percentile-based thresholds")
-
             # Show helpful guidance based on dataset size
             current_size = st.session_state.dataset_size_preference
             if current_size == "small":
@@ -105,8 +94,24 @@ def render_sidebar():
                 st.success("✅ **Optimal:** Medium size is perfect for advanced mode!", icon="✅")
             else:  # large
                 st.success("✅ **Excellent:** Large datasets provide the most stable percentile-based queries!", icon="✅")
-        else:
-            st.caption("📊 **Standard mode:** Traditional random data generation")
+
+        # Initialize ai_expansion_enabled if not exists
+        if "ai_expansion_enabled" not in st.session_state:
+            st.session_state.ai_expansion_enabled = False
+        if "ai_expansion_used" not in st.session_state:
+            st.session_state.ai_expansion_used = False
+
+        # Demo Complexity Radio (only show if conversation hasn't started yet)
+        if not st.session_state.messages:
+            demo_complexity = st.radio(
+                "Demo Complexity",
+                options=["Simple", "Expanded"],
+                index=1 if st.session_state.ai_expansion_enabled else 0,
+                disabled=st.session_state.ai_expansion_used,
+                key="demo_complexity_radio",
+                help="Expanded mode automatically enhances brief prompts into detailed customer contexts using AI. Works on first message only."
+            )
+            st.session_state.ai_expansion_enabled = (demo_complexity == "Expanded")
 
         st.markdown("---")
 

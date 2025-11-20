@@ -244,15 +244,6 @@ def render_create_demo_view():
                     st.session_state.messages.append({"role": "assistant", "content": response})
                     st.rerun()
 
-    # AI expansion checkbox (only show if conversation hasn't started yet)
-    if not st.session_state.messages:
-        st.session_state.ai_expansion_enabled = st.checkbox(
-            "🤖 Generate detailed context with AI",
-            value=st.session_state.ai_expansion_enabled,
-            disabled=st.session_state.ai_expansion_used,
-            help="Automatically expand your brief prompt into a detailed customer context using the guided template. This feature works on your first message only."
-        )
-
     # Chat input
     if prompt := st.chat_input("Paste your customer description or type your response..."):
         # Add user message

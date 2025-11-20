@@ -53,9 +53,3 @@ def display_context_summary():
     else:
         missing_count = len(missing)
         st.warning(f"⚠️ Need more info ({missing_count} fields)")
-
-        # Show what's missing
-        prompt = tracker.generate_prompt_for_missing(missing)
-        if prompt:
-            with st.expander("What's missing?"):
-                st.info(prompt)
