@@ -17,6 +17,9 @@ Thumbs.db
 # Claude settings (local configuration)
 .claude/
 
+# MCP configuration (local only)
+.mcp.json
+
 # Logs
 logs
 *.log
