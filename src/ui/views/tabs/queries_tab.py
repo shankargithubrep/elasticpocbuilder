@@ -38,7 +38,11 @@ def render_queries_tab(loader):
             # Initialize QueryResultsDisplay for clean rendering
             display = QueryResultsDisplay()
 
-            # Initialize edit mode state
+            # Initialize persistent edit mode state dictionary
+            if "query_editor_states" not in st.session_state:
+                st.session_state.query_editor_states = {}
+
+            # Initialize temporary editor content dictionary
             if "query_edit_mode" not in st.session_state:
                 st.session_state.query_edit_mode = {}
 
@@ -78,20 +82,23 @@ def render_queries_tab(loader):
                         temp_editor_key = f"temp_editor_{query_key}"
                         current_query = st.session_state.get(temp_editor_key, original_query)
 
-                        # Check edit mode state - read from widget key in session_state
+                        # Render the checkbox FIRST so its state is available
                         edit_toggle_key = f"edit_toggle_{query_key}"
 
-                        # CRITICAL: Check if we just tested this query - preserve edit mode
-                        just_tested_key = f"{query_key}_just_tested"
-                        if just_tested_key in st.session_state:
-                            # We just executed a test, ensure checkbox stays checked
-                            st.session_state[edit_toggle_key] = True
-                            del st.session_state[just_tested_key]
+                        # Create columns for the checkbox
+                        checkbox_col1, checkbox_col2 = st.columns([5, 1])
+                        with checkbox_col2:
+                            # Render checkbox and capture its state
+                            edit_checked = st.checkbox(
+                                "✏️ Edit",
+                                key=edit_toggle_key,
+                                value=st.session_state.query_editor_states.get(query_key, False)
+                            )
+                            # Update persistent state
+                            st.session_state.query_editor_states[query_key] = edit_checked
 
-                        is_editing = st.session_state.get(edit_toggle_key, False)
-
-                        # Debug: show edit state
-                        st.caption(f"🔍 DEBUG: is_editing={is_editing}, toggle_key={edit_toggle_key}")
+                        # Now check if we're in edit mode
+                        is_editing = edit_checked
 
                         if is_editing:
                             # Show editor mode with text_area
@@ -141,36 +148,94 @@ def render_queries_tab(loader):
                                 st.session_state[temp_editor_key] = edited_query
 
                             # Button for edit mode
-                            if st.button("▶️ Test This Query", key=f"test_edit_{query_key}", use_container_width=True):
-                                # Use the edited_query directly from text_area
-                                if edited_query and edited_query.strip():
-                                    from src.services.elasticsearch_indexer import ElasticsearchIndexer
-                                    try:
-                                        # Store the query being tested
-                                        st.session_state[temp_editor_key] = edited_query
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                if st.button("▶️ Test This Query", key=f"test_edit_{query_key}", use_container_width=True):
+                                    # Use the edited_query directly from text_area
+                                    if edited_query and edited_query.strip():
+                                        from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                                        try:
+                                            # Store the query being tested
+                                            st.session_state[temp_editor_key] = edited_query
 
-                                        # CRITICAL: Set flag to preserve edit mode on next render
-                                        st.session_state[just_tested_key] = True
+                                            # Keep edit mode active in persistent state
+                                            st.session_state.query_editor_states[query_key] = True
 
-                                        indexer = ElasticsearchIndexer()
-                                        success, result, error = indexer.execute_esql(edited_query)
+                                            indexer = ElasticsearchIndexer()
+                                            success, result, error = indexer.execute_esql(edited_query)
 
-                                        if success:
-                                            st.session_state[f"{query_key}_results"] = result
-                                            st.session_state[f"{query_key}_test_success"] = True
-                                            # Don't call st.rerun() to avoid checkbox reset
-                                        else:
-                                            st.session_state[f"{query_key}_test_error"] = error
-                                    except Exception as e:
-                                        st.session_state[f"{query_key}_test_error"] = str(e)
-                                else:
-                                    st.session_state[f"{query_key}_test_error"] = "No query content in editor"
+                                            if success:
+                                                st.session_state[f"{query_key}_results"] = result
+                                                st.session_state[f"{query_key}_test_success"] = True
+                                                # Don't call st.rerun() to avoid checkbox reset
+                                            else:
+                                                st.session_state[f"{query_key}_test_error"] = error
+                                        except Exception as e:
+                                            st.session_state[f"{query_key}_test_error"] = str(e)
+                                    else:
+                                        st.session_state[f"{query_key}_test_error"] = "No query content in editor"
+                            with col2:
+                                if st.button("✖️ Cancel Edit", key=f"cancel_edit_{query_key}", use_container_width=True):
+                                    # Clear edit mode
+                                    st.session_state.query_editor_states[query_key] = False
+                                    # Clear temporary editor content
+                                    if temp_editor_key in st.session_state:
+                                        del st.session_state[temp_editor_key]
+                                    # Clear any test results/errors
+                                    keys_to_clear = [f"{query_key}_test_success", f"{query_key}_test_error", f"{query_key}_results"]
+                                    for key in keys_to_clear:
+                                        if key in st.session_state:
+                                            del st.session_state[key]
+                                    st.rerun()
 
                             # Display success/error messages (keep them in session state)
                             if f"{query_key}_test_success" in st.session_state:
                                 results = st.session_state.get(f"{query_key}_results", {})
                                 st.success(f"✅ Query executed! {len(results.get('values', []))} rows returned")
-                                # Don't delete - let it persist
+
+                                # Show save button after successful test
+                                col_save1, col_save2 = st.columns([1, 3])
+                                with col_save1:
+                                    if st.button("💾 Save Query", key=f"save_{query_key}", use_container_width=True, type="primary"):
+                                        # Import persistence service
+                                        from src.services.query_persistence_service import QueryPersistenceService
+                                        persistence = QueryPersistenceService(loader.module_path)
+
+                                        # Get the current edited query
+                                        current_query_text = st.session_state.get(temp_editor_key, original_query)
+
+                                        # Pass the query as-is - persistence service will handle finding the correct field
+                                        # The persistence service now looks for esql, esql_query, or query fields
+                                        # Save the query
+                                        success, message = persistence.save_edited_query(
+                                            query_id=query_key,
+                                            query_type=query_type,
+                                            edited_esql=current_query_text,
+                                            original_query=query  # Pass the original query dict as-is
+                                        )
+
+                                        if success:
+                                            st.session_state[f"{query_key}_save_success"] = message
+                                            # Clear edit mode after successful save
+                                            st.session_state.query_editor_states[query_key] = False
+                                            # Clear temp editor content
+                                            if temp_editor_key in st.session_state:
+                                                del st.session_state[temp_editor_key]
+
+                                            # Clear the demo-specific assets loaded flag to force reload
+                                            assets_key = f"assets_loaded_{st.session_state.current_demo_module}"
+                                            if assets_key in st.session_state:
+                                                del st.session_state[assets_key]
+
+                                            st.rerun()
+                                        else:
+                                            st.session_state[f"{query_key}_save_error"] = message
+
+                                # Display save status
+                                if f"{query_key}_save_success" in st.session_state:
+                                    st.success(f"✅ {st.session_state[f'{query_key}_save_success']}")
+                                if f"{query_key}_save_error" in st.session_state:
+                                    st.error(f"❌ {st.session_state[f'{query_key}_save_error']}")
 
                             if f"{query_key}_test_error" in st.session_state:
                                 st.error(f"❌ {st.session_state[f'{query_key}_test_error']}")
@@ -280,59 +345,46 @@ def render_queries_tab(loader):
                                                 except Exception as e:
                                                     st.error(f"❌ Error: {e}")
 
-                                    with col2:
-                                        # Edit mode checkbox - let Streamlit manage state via key
-                                        st.checkbox(
-                                            "✏️ Edit Query",
-                                            key=f"edit_toggle_{query_key}"
-                                        )
+                                    # Checkbox is now rendered at the top, so no need here
 
                             # For scripted queries, simple test button
                             elif query_type == 'scripted':
-                                col1, col2, col3 = st.columns([1, 1, 2])
-                                with col1:
-                                    if st.button("▶️ Test Query", key=f"test_{query_key}", use_container_width=True):
-                                        from src.services.elasticsearch_indexer import ElasticsearchIndexer
-                                        query_name = query.get('name', f'Query {i}')
+                                # Just create a button, no need for columns since checkbox is at top
+                                if st.button("▶️ Test Query", key=f"test_{query_key}", use_container_width=True):
+                                    from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                                    query_name = query.get('name', f'Query {i}')
 
-                                        with st.spinner(f"Executing {query_name}..."):
-                                            try:
-                                                indexer = ElasticsearchIndexer()
+                                    with st.spinner(f"Executing {query_name}..."):
+                                        try:
+                                            indexer = ElasticsearchIndexer()
 
-                                                # Check if we're in edit mode and have temp editor content
-                                                temp_editor_key = f"temp_editor_{query_key}"
-                                                if temp_editor_key in st.session_state and st.session_state[temp_editor_key]:
-                                                    # Use current editor content
-                                                    query_text = st.session_state[temp_editor_key]
-                                                    st.info(f"Using edited query ({len(query_text)} chars)")
-                                                else:
-                                                    # Use original query
-                                                    query_text = display._get_query_text(query)
-                                                    st.info(f"Using original query ({len(query_text)} chars)")
+                                            # Check if we're in edit mode and have temp editor content
+                                            temp_editor_key = f"temp_editor_{query_key}"
+                                            if temp_editor_key in st.session_state and st.session_state[temp_editor_key]:
+                                                # Use current editor content
+                                                query_text = st.session_state[temp_editor_key]
+                                                st.info(f"Using edited query ({len(query_text)} chars)")
+                                            else:
+                                                # Use original query
+                                                query_text = display._get_query_text(query)
+                                                st.info(f"Using original query ({len(query_text)} chars)")
 
-                                                if not query_text or not query_text.strip():
-                                                    st.error("❌ Query is empty!")
-                                                    st.stop()
+                                            if not query_text or not query_text.strip():
+                                                st.error("❌ Query is empty!")
+                                                st.stop()
 
-                                                success, result, error = indexer.execute_esql(query_text)
+                                            success, result, error = indexer.execute_esql(query_text)
 
-                                                if success:
-                                                    st.success("✅ Query executed successfully!")
-                                                    # Store results in session state for display
-                                                    st.session_state[f"{query_key}_results"] = result
-                                                    # Note: Not calling st.rerun() to avoid tab reset
-                                                    # Results will display below automatically
-                                                else:
-                                                    st.error(f"❌ Query failed: {error}")
-                                            except Exception as e:
-                                                st.error(f"❌ Error: {e}")
-
-                                with col2:
-                                    # Edit mode checkbox - let Streamlit manage state via key
-                                    st.checkbox(
-                                        "✏️ Edit Query",
-                                        key=f"edit_toggle_{query_key}"
-                                    )
+                                            if success:
+                                                st.success("✅ Query executed successfully!")
+                                                # Store results in session state for display
+                                                st.session_state[f"{query_key}_results"] = result
+                                                # Note: Not calling st.rerun() to avoid tab reset
+                                                # Results will display below automatically
+                                            else:
+                                                st.error(f"❌ Query failed: {error}")
+                                        except Exception as e:
+                                            st.error(f"❌ Error: {e}")
 
                             # Display substituted query if available (for parameterized)
                             if f"{query_key}_substituted" in st.session_state:
