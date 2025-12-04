@@ -63,6 +63,10 @@ def render_queries_tab(loader):
                         # Check if query is validated
                         is_validated = validation_service.is_query_validated(query_key)
 
+                        # Check if query has changed since validation (needs hash)
+                        sync_status = validation_service.get_query_sync_status(query_key, original_query)
+                        needs_revalidation = sync_status.get('needs_revalidation', False)
+
                         # Show validation status in header
                         col_header, col_status = st.columns([10, 1])
                         with col_header:
@@ -75,8 +79,10 @@ def render_queries_tab(loader):
                                 allow_editing=False
                             )
                         with col_status:
-                            if is_validated:
-                                st.success("✅")
+                            if needs_revalidation:
+                                st.warning("🔄", help="Query modified since last validation - needs revalidation")
+                            elif is_validated:
+                                st.success("✅", help="Query is validated")
 
                         # Check if query has temp edits
                         temp_editor_key = f"temp_editor_{query_key}"
@@ -399,16 +405,30 @@ def render_queries_tab(loader):
                                     # Add validation button after successful test
                                     col_val1, col_val2, col_val3 = st.columns([2, 2, 6])
                                     with col_val1:
-                                        if is_validated:
+                                        # Check sync status for revalidation needs
+                                        current_query_text = display._get_query_text(query)
+                                        sync_status = validation_service.get_query_sync_status(query_key, current_query_text)
+                                        needs_revalidation = sync_status.get('needs_revalidation', False)
+
+                                        if needs_revalidation:
+                                            # Query has been modified since last validation
+                                            if st.button("🔄 Revalidate Query", key=f"revalidate_{query_key}", use_container_width=True, type="primary"):
+                                                # Use the method that stores hash
+                                                validation_service.mark_query_validated_with_hash(query_key, current_query_text)
+                                                st.rerun()
+                                        elif is_validated:
                                             if st.button("❌ Mark as Unvalidated", key=f"unvalidate_{query_key}", use_container_width=True):
                                                 validation_service.mark_query_unvalidated(query_key)
                                                 st.rerun()
                                         else:
                                             if st.button("✅ Mark as Validated", key=f"validate_{query_key}", use_container_width=True, type="primary"):
-                                                validation_service.mark_query_validated(query_key)
+                                                # Store hash when marking as validated
+                                                validation_service.mark_query_validated_with_hash(query_key, current_query_text)
                                                 st.rerun()
                                     with col_val2:
-                                        if is_validated:
+                                        if needs_revalidation:
+                                            st.warning("Query modified - needs revalidation 🔄")
+                                        elif is_validated:
                                             st.success("Query is validated ✅")
 
                                 # Check if query returned zero results - offer optimization

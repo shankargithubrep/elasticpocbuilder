@@ -9,8 +9,9 @@ This service handles:
 
 import json
 import os
+import hashlib
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any, Set, Tuple
 from datetime import datetime
 
 
@@ -257,3 +258,112 @@ class QueryValidationService:
                     'metadata': metadata
                 })
         return deployed
+
+    def compute_query_hash(self, query_text: str) -> str:
+        """
+        Compute SHA256 hash of a query text for change detection.
+
+        Args:
+            query_text: The ES|QL query text
+
+        Returns:
+            SHA256 hash of the query
+        """
+        return hashlib.sha256(query_text.encode('utf-8')).hexdigest()
+
+    def store_query_hash(self, query_id: str, query_text: str):
+        """
+        Store the hash of a validated query for future comparison.
+
+        Args:
+            query_id: The unique identifier for the query
+            query_text: The ES|QL query text
+        """
+        if query_id not in self.tool_metadata:
+            self.tool_metadata[query_id] = {}
+
+        query_hash = self.compute_query_hash(query_text)
+        self.tool_metadata[query_id]['query_hash'] = query_hash
+        self.tool_metadata[query_id]['hash_stored_at'] = datetime.now().isoformat()
+        self._save_tool_metadata()
+
+    def is_query_changed(self, query_id: str, current_query_text: str) -> bool:
+        """
+        Check if a query has changed since it was validated/deployed.
+
+        Args:
+            query_id: The unique identifier for the query
+            current_query_text: The current ES|QL query text
+
+        Returns:
+            True if the query has changed, False otherwise
+        """
+        metadata = self.tool_metadata.get(query_id, {})
+        stored_hash = metadata.get('query_hash')
+
+        if not stored_hash:
+            # No hash stored, consider it changed (needs initial validation)
+            return True
+
+        current_hash = self.compute_query_hash(current_query_text)
+        return current_hash != stored_hash
+
+    def get_query_sync_status(self, query_id: str, current_query_text: str) -> Dict[str, Any]:
+        """
+        Get detailed synchronization status for a query.
+
+        Args:
+            query_id: The unique identifier for the query
+            current_query_text: The current ES|QL query text
+
+        Returns:
+            Dictionary with sync status information
+        """
+        metadata = self.tool_metadata.get(query_id, {})
+        is_changed = self.is_query_changed(query_id, current_query_text)
+        is_deployed = self.is_tool_deployed(query_id)
+
+        return {
+            'query_id': query_id,
+            'is_validated': query_id in self.validated_queries,
+            'is_deployed': is_deployed,
+            'is_changed': is_changed,
+            'needs_revalidation': is_changed and query_id in self.validated_queries,
+            'needs_redeployment': is_changed and is_deployed,
+            'deployed_tool_id': metadata.get('deployed_tool_id'),
+            'last_hash_update': metadata.get('hash_stored_at'),
+            'deployed_at': metadata.get('deployed_at')
+        }
+
+    def mark_query_validated_with_hash(self, query_id: str, query_text: str):
+        """
+        Mark a query as validated and store its hash.
+
+        Args:
+            query_id: The unique identifier for the query
+            query_text: The ES|QL query text that was validated
+        """
+        self.mark_query_validated(query_id)
+        self.store_query_hash(query_id, query_text)
+
+    def get_query_versions(self, query_id: str) -> Dict[str, Any]:
+        """
+        Get information about deployed vs current versions of a query.
+
+        Args:
+            query_id: The unique identifier for the query
+
+        Returns:
+            Dictionary with version information
+        """
+        metadata = self.tool_metadata.get(query_id, {})
+        return {
+            'query_id': query_id,
+            'has_deployed_version': self.is_tool_deployed(query_id),
+            'deployed_query': metadata.get('deployed_query_text'),
+            'deployed_hash': metadata.get('query_hash'),
+            'deployed_at': metadata.get('deployed_at'),
+            'current_query': metadata.get('current_query'),
+            'query_modified': metadata.get('query_modified', False),
+            'modified_at': metadata.get('modified_at')
+        }

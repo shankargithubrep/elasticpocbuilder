@@ -95,6 +95,12 @@ class QueryPersistenceService:
             if not success:
                 logger.warning(f"Could not update query_testing_results.json: {message}")
 
+            # NEW: Update tool metadata if it exists
+            self._update_tool_metadata_query(query_id, edited_esql)
+
+            # NEW: Invalidate validation status
+            self._invalidate_validation(query_id)
+
             return True, f"Query saved successfully. Backup created at: {backup_path.name}"
 
         except Exception as e:
@@ -358,3 +364,64 @@ class QueryPersistenceService:
 
         except Exception as e:
             logger.warning(f"Could not regenerate JSON from Python: {e}")
+
+    def _update_tool_metadata_query(self, query_id: str, edited_esql: str):
+        """Update the tool metadata if this query has a deployed tool.
+
+        This stores the current query text with the tool metadata so we can
+        detect when the query has been modified after tool deployment.
+        """
+        try:
+            tool_metadata_path = self.module_path / "tool_metadata.json"
+            if not tool_metadata_path.exists():
+                return
+
+            with open(tool_metadata_path, 'r') as f:
+                metadata = json.load(f)
+
+            # Check if this query has a deployed tool
+            for tool in metadata.get('tools', []):
+                if tool.get('query_id') == query_id:
+                    # Store the current query text for comparison
+                    tool['current_query'] = edited_esql
+                    tool['query_modified'] = True
+                    tool['modified_at'] = datetime.now().isoformat()
+
+                    with open(tool_metadata_path, 'w') as f:
+                        json.dump(metadata, f, indent=2)
+
+                    logger.info(f"Updated tool metadata for query {query_id}")
+                    break
+
+        except Exception as e:
+            logger.warning(f"Could not update tool metadata: {e}")
+
+    def _invalidate_validation(self, query_id: str):
+        """Mark the query validation as invalid after editing.
+
+        This ensures that the query will need to be revalidated before
+        any tools based on it can be deployed or updated.
+        """
+        try:
+            validation_path = self.module_path / "query_validation_results.json"
+            if not validation_path.exists():
+                return
+
+            with open(validation_path, 'r') as f:
+                validation_data = json.load(f)
+
+            # Find and invalidate the query
+            for query in validation_data.get('queries', []):
+                if query.get('id') == query_id:
+                    query['validation_status'] = 'needs_revalidation'
+                    query['invalidated_at'] = datetime.now().isoformat()
+                    query['invalidation_reason'] = 'query_edited'
+
+                    with open(validation_path, 'w') as f:
+                        json.dump(validation_data, f, indent=2)
+
+                    logger.info(f"Invalidated validation for query {query_id}")
+                    break
+
+        except Exception as e:
+            logger.warning(f"Could not invalidate validation: {e}")

@@ -259,6 +259,30 @@ def render_tools_tab(loader):
                         if query.get('description'):
                             st.markdown(f"**Description:** {query['description']}")
 
+                    # Check if query has changed since validation
+                    query_text = display.extract_query_text(query)
+                    sync_status = validation_service.get_query_sync_status(query_id, query_text)
+
+                    if sync_status.get('needs_revalidation'):
+                        st.warning("⚠️ **Query Modified**: This query has been edited since it was last validated. Revalidation required before deployment.")
+
+                        # Show both versions if we have version info
+                        version_info = validation_service.get_query_versions(query_id)
+                        if version_info.get('deployed_query'):
+                            st.markdown("##### Query Versions")
+
+                            col_deployed, col_current = st.columns(2)
+
+                            with col_deployed:
+                                st.markdown("**📤 Deployed Version:**")
+                                st.code(version_info['deployed_query'], language='sql')
+
+                            with col_current:
+                                st.markdown("**✏️ Current Version:**")
+                                st.code(query_text, language='sql')
+
+                            st.info("ℹ️ To use the current version, validate the query in the Queries tab first.")
+
                     # Tool metadata form
                     st.markdown("##### Tool Configuration")
 
@@ -429,10 +453,14 @@ def render_tools_tab(loader):
                             st.rerun()
 
                     with col_deploy:
-                        # Check if ready for deployment
+                        # Check if ready for deployment and query hasn't changed
                         is_ready = validation_service.is_tool_ready_for_deployment(query_id)
 
-                        if is_ready:
+                        # Also check if query has been modified
+                        query_text_for_deploy = display.extract_query_text(query)
+                        is_changed = validation_service.is_query_changed(query_id, query_text_for_deploy)
+
+                        if is_ready and not is_changed:
                             if st.button("🚀 Deploy Tool", key=f"deploy_{query_id}",
                                 use_container_width=True, type="primary"):
                                 with st.spinner("Deploying tool to Agent Builder..."):
@@ -479,6 +507,8 @@ def render_tools_tab(loader):
 
                                     except Exception as e:
                                         st.error(f"❌ Error during deployment: {e}")
+                        elif is_changed:
+                            st.warning("⚠️ **Cannot Deploy**: Query has been modified since validation. Please revalidate in the Queries tab first.")
                         else:
                             st.info("ℹ️ Ensure required fields are filled out, then save before deploying")
 
