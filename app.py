@@ -34,6 +34,7 @@ from src.ui import (
     render_create_demo_view,
     render_browse_demos_view
 )
+# Help chat is now part of sidebar modes
 
 # Configure logging
 logging.basicConfig(
@@ -134,7 +135,7 @@ def main():
 
         render_under_the_hood()
     else:
-        # Render main content based on mode
+        # Render main content based on mode (Create or Browse only)
         if st.session_state.view_mode == "create":
             render_create_demo_view()
         else:

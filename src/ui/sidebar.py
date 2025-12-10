@@ -6,6 +6,7 @@ import streamlit as st
 
 from src.framework import DemoModuleManager
 from .context_display import display_context_summary
+from .components.help_chat import render_chat_sidebar
 
 
 def render_sidebar():
@@ -14,8 +15,12 @@ def render_sidebar():
     # Vulcan header with tooltip
     st.markdown("### Vulcan", help="Vulcan helps create custom demo modules containing sample data, queries, and agentic tools.")
 
-    # Prominent mode toggle buttons with custom styling
-    col1, col2 = st.columns(2)
+    # Initialize help toggle state
+    if "help_chat_visible" not in st.session_state:
+        st.session_state.help_chat_visible = False
+
+    # Mode toggle buttons + Help toggle
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         create_selected = st.session_state.view_mode == "create"
@@ -39,6 +44,25 @@ def render_sidebar():
             st.session_state.view_mode = "browse"
             st.rerun()
 
+    with col3:
+        # Help toggle button
+        help_label = "Help ✓" if st.session_state.help_chat_visible else "Help"
+        if st.button(
+            help_label,
+            use_container_width=True,
+            type="primary" if st.session_state.help_chat_visible else "secondary",
+            key="help_toggle_btn"
+        ):
+            st.session_state.help_chat_visible = not st.session_state.help_chat_visible
+            st.rerun()
+
+    # If help is visible, show chat at top of sidebar
+    if st.session_state.help_chat_visible:
+        st.markdown("---")
+        render_chat_sidebar()
+        st.markdown("---")
+
+    # Always render mode-specific content below
     if st.session_state.view_mode == "create":
         st.markdown("---")
         st.markdown("#### Generation Options")

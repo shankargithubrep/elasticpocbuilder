@@ -19,6 +19,7 @@ from .tabs import (
     render_tools_tab,
     render_agents_tab
 )
+from ..components.progress_tracker import render_progress_header
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,9 @@ def render_browse_demos_view():
     # Show details if a module is selected
     if st.session_state.current_demo_module:
         st.markdown(f"#### 📊 {st.session_state.current_demo_module}")
+
+        # Progress tracking header
+        render_progress_header(st.session_state.current_demo_module)
 
         manager = DemoModuleManager()
         loader = manager.get_module(st.session_state.current_demo_module)

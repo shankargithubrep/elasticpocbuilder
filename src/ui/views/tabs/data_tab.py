@@ -12,12 +12,16 @@ from src.ui.data_loaders import (
     load_demo_datasets,
     load_demo_data_profile
 )
+from src.ui.components.progress_tracker import get_progress_service
 
 logger = logging.getLogger(__name__)
 
 
 def render_data_tab():
     """Render the Data tab content."""
+    # Section guidance
+    st.info("📊 **Index your datasets** to Elasticsearch so queries can run against real data. Click 'Index All Datasets' to complete this step. *Need help? Use the Help feature in the sidebar.*")
+
     # Only load if assets have been generated
     if st.session_state.get("assets_generated", False):
         try:
@@ -102,6 +106,13 @@ def render_data_tab():
                             st.error(f"❌ {name}: {str(e)}")
 
                     st.success("🎉 Batch indexing complete!")
+
+                    # Update progress tracking
+                    try:
+                        progress_service = get_progress_service(st.session_state.current_demo_module)
+                        progress_service.mark_data_indexed()
+                    except Exception as e:
+                        logger.warning(f"Could not update progress tracking: {e}")
 
                 st.divider()
 

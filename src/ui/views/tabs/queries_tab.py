@@ -23,6 +23,9 @@ def render_queries_tab(loader):
     Args:
         loader: The demo module loader instance
     """
+    # Section guidance
+    st.info("📝 **Test and validate queries** by running them against your indexed data. Only validated queries become tool candidates for Agent Builder. Not all generated queries are guaranteed to return results—use the edit checkbox below each query to fix issues. You don't need to validate all queries. *Need help? Use the Help feature in the sidebar.*")
+
     # Only load if assets have been generated
     if st.session_state.get("assets_generated", False):
         try:
@@ -80,9 +83,9 @@ def render_queries_tab(loader):
                             )
                         with col_status:
                             if needs_revalidation:
-                                st.warning("🔄", help="Query modified since last validation - needs revalidation")
+                                st.markdown("🔄", help="Query modified since last validation - needs revalidation")
                             elif is_validated:
-                                st.success("✅", help="Query is validated")
+                                st.markdown("✅", help="Query is validated")
 
                         # Check if query has temp edits
                         temp_editor_key = f"temp_editor_{query_key}"

@@ -20,6 +20,9 @@ def render_tools_tab(loader):
     Args:
         loader: The demo module loader instance
     """
+    # Section guidance
+    st.info("🔧 **Deploy validated queries as tools** to Agent Builder. Only validated queries can become tools. Deploy the tools you want your agent to use. *Need help? Use the Help feature in the sidebar.*")
+
     # Import necessary services
     from src.services.agent_builder_service import AgentBuilderService
     from src.services.query_validation_service import QueryValidationService

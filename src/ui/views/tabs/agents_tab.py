@@ -8,6 +8,7 @@ import os
 import json
 
 from .utils import get_module_prefix, matches_module_prefix
+from src.ui.components.progress_tracker import get_progress_service
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,9 @@ def render_agents_tab(agent_builder):
     Args:
         agent_builder: The AgentBuilderService instance
     """
+    # Section guidance
+    st.info("🤖 **Deploy your agent** to Agent Builder with the tools you've deployed. Once deployed, you can test your agent in the Agent Builder interface. *Need help? Use the Help feature in the sidebar.*")
+
     st.markdown("### Agent Management")
 
     # Load agent metadata from module if it exists
@@ -312,6 +316,13 @@ def render_agents_tab(agent_builder):
                                 if result.get('success'):
                                     st.success(f"✅ Agent deployed successfully: {agent_id}")
                                     st.balloons()
+
+                                    # Update progress tracking
+                                    try:
+                                        progress_service = get_progress_service(st.session_state.current_demo_module)
+                                        progress_service.mark_agent_deployed()
+                                    except Exception as e:
+                                        logger.warning(f"Could not update progress tracking: {e}")
                                 else:
                                     st.error(f"❌ Deployment failed: {result.get('error')}")
 
