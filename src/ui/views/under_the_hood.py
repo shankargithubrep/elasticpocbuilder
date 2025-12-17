@@ -141,10 +141,10 @@ context = {
         - **Strategy Routing**: Different code generation strategies per type
         """)
         st.code("""
-# Analytics keywords: analyze, trend, metric, aggregate, dashboard
+# Observability keywords: analyze, trend, metric, aggregate, dashboard, monitor, APM
 # Search keywords: find, retrieve, lookup, documents, semantic search
 
-if demo_type == "analytics":
+if demo_type == "observability":
     strategy_generator = QueryStrategyGenerator()  # STATS, INLINESTATS, LOOKUP JOIN
 elif demo_type == "search":
     strategy_generator = SearchQueryStrategyGenerator()  # MATCH, RERANK, COMPLETION
@@ -565,7 +565,7 @@ Focus on these ES|QL capabilities:
 
 Output JSON with:
 {{
-  "demo_type": "analytics" | "search",
+  "demo_type": "observability" | "search",
   "queries": [
     {{
       "name": "...",

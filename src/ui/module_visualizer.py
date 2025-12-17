@@ -160,7 +160,7 @@ class ModuleVisualizer:
 Company: {context.get('company_name', 'Unknown')}
 Industry: {context.get('industry', 'Unknown')}
 Department: {context.get('department', 'Unknown')}
-Demo Type: {self.config.get('demo_type', 'analytics')}
+Demo Type: {self.config.get('demo_type', 'observability')}
 
 Datasets: {len(self.datasets)} datasets with {self.total_records:,}+ records
 - Types: {', '.join(set(d.get('type', 'unknown') for d in self.datasets))}
@@ -189,7 +189,7 @@ Write a business-focused summary highlighting the demo's purpose and value. Focu
 
         # Fallback template-based summary
         context = self.config.get('customer_context', {})
-        demo_type = "search and retrieval" if self.config.get('demo_type') == 'search' else "analytics"
+        demo_type = "search and retrieval" if self.config.get('demo_type') == 'search' else "observability"
 
         return f"""This {demo_type} demo for {context.get('company_name', 'the organization')} addresses {len(context.get('pain_points', []))} critical pain points across {context.get('department', 'the department')}.
         It analyzes {len(self.datasets)} interconnected datasets containing {self.total_records:,}+ records with {len(self.queries)} queries covering key business scenarios."""
@@ -320,7 +320,9 @@ Fields: {len(dataset.get('required_fields', {}))}"""
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            demo_type = self.config.get('demo_type', 'analytics')
+            demo_type = self.config.get('demo_type', 'observability')
+            if demo_type == 'analytics':
+                demo_type = 'observability'  # Backward compatibility
             type_emoji = "🔍" if demo_type == "search" else "📊"
             st.metric("Demo Type", f"{type_emoji} {demo_type.title()}")
 

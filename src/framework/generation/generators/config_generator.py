@@ -34,7 +34,7 @@ class ConfigGenerator:
                 - use_cases: List of use cases
                 - scale: Scale/size preference
                 - metrics: List of metrics
-                - demo_type: 'search' or 'analytics' (optional, defaults to 'analytics')
+                - demo_type: 'search' or 'observability' (optional, defaults to 'observability')
             module_path: Path to the demo module directory
 
         Returns:
@@ -50,7 +50,7 @@ class ConfigGenerator:
             ...     'use_cases': ['reporting'],
             ...     'scale': '10000',
             ...     'metrics': ['revenue'],
-            ...     'demo_type': 'analytics'
+            ...     'demo_type': 'observability'
             ... }
             >>> module_path = Path('demos/test_module')
             >>> module_path.mkdir(exist_ok=True)
@@ -59,11 +59,13 @@ class ConfigGenerator:
             >>> config_file.exists()
             True
         """
-        # Extract demo_type to top level for visibility
-        demo_type = config.get('demo_type', 'analytics')
+        # Extract demo_type to top level for visibility (support old 'analytics' name)
+        demo_type = config.get('demo_type', 'observability')
+        if demo_type == 'analytics':
+            demo_type = 'observability'  # Backward compatibility
 
         config_data = {
-            "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+            "_comment": "demo_type: 'search' (document retrieval/RAG) or 'observability' (metrics/trends)",
             "demo_type": demo_type,
             "module_version": "1.0.0",
             "generated_at": datetime.now().isoformat(),

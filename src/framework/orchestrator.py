@@ -230,7 +230,10 @@ class ModularDemoOrchestrator:
         if progress_callback:
             progress_callback(0.05, "🎯 Planning query strategy...")
 
-        demo_type = config.get('demo_type', 'analytics')  # Default to analytics
+        # Support both old 'analytics' and new 'observability' naming
+        demo_type = config.get('demo_type', 'observability')
+        if demo_type == 'analytics':
+            demo_type = 'observability'  # Backward compatibility
         logger.info(f"Generating demo with type: {demo_type}")
 
         # Determine whether to use two-phase strategy based on complexity
@@ -245,7 +248,7 @@ class ModularDemoOrchestrator:
         elif demo_type == 'search':
             from src.services.search_strategy_generator import SearchQueryStrategyGenerator
             strategy_generator = SearchQueryStrategyGenerator(self.llm_client)
-        else:  # analytics
+        else:  # observability (default)
             from src.services.query_strategy_generator import QueryStrategyGenerator
             strategy_generator = QueryStrategyGenerator(self.llm_client)
 

@@ -1,8 +1,56 @@
 """
 Prompt templates for AI expansion and context generation
+
+Two templates exist for different demo types:
+- OBSERVABILITY_EXPANSION_TEMPLATE: For APM, logs, metrics, infrastructure monitoring demos
+- SEARCH_EXPANSION_TEMPLATE: For search relevancy, RAG, document retrieval demos
 """
 
-GUIDED_HELP_TEMPLATE = """You are an Elastic Solutions Architect creating a detailed technical use case document. You will receive sparse customer context including company name, department, pain points, and basic use cases. Your task is to transform this into a comprehensive, realistic document that aligns with actual enterprise data sources and Elastic Observability capabilities.
+import re
+from typing import Literal
+
+# Keywords for early demo type detection
+SEARCH_KEYWORDS = [
+    'search', 'find', 'retrieve', 'lookup', 'look up', 'discovery', 'discover',
+    'knowledge base', 'documents', 'document', 'rag', 'retrieval', 'semantic',
+    'provider directory', 'policy search', 'content', 'catalog', 'inventory lookup',
+    'fuzzy', 'matching', 'relevance', 'relevancy', 'ranking', 'recommendations',
+    'question answering', 'qa', 'chatbot', 'assistant', 'help desk', 'support search',
+    'product search', 'site search', 'ecommerce search', 'e-commerce'
+]
+
+OBSERVABILITY_KEYWORDS = [
+    'monitor', 'monitoring', 'apm', 'traces', 'tracing', 'logs', 'logging',
+    'metrics', 'infrastructure', 'performance', 'latency', 'throughput',
+    'cpu', 'memory', 'disk', 'network', 'kubernetes', 'k8s', 'containers',
+    'observability', 'sre', 'devops', 'incident', 'alert', 'dashboard',
+    'trend', 'analytics', 'aggregate', 'statistics', 'time-series', 'timeseries',
+    'metricbeat', 'filebeat', 'heartbeat', 'opentelemetry', 'otel'
+]
+
+
+def detect_demo_type(text: str) -> Literal['search', 'observability']:
+    """
+    Detect demo type from user input BEFORE expansion.
+    Returns 'search' or 'observability' based on keyword analysis.
+    """
+    text_lower = text.lower()
+
+    search_score = sum(1 for kw in SEARCH_KEYWORDS if kw in text_lower)
+    observability_score = sum(1 for kw in OBSERVABILITY_KEYWORDS if kw in text_lower)
+
+    # Default to observability if no clear signal (maintains backward compatibility)
+    if search_score > observability_score:
+        return 'search'
+    return 'observability'
+
+
+# =============================================================================
+# OBSERVABILITY EXPANSION TEMPLATE
+# For: APM, logs, metrics, infrastructure monitoring, time-series analytics
+# =============================================================================
+
+OBSERVABILITY_EXPANSION_TEMPLATE = """You are an Elastic Solutions Architect creating a detailed technical use case document. You will receive sparse customer context including company name, department, pain points, and basic use cases. Your task is to transform this into a comprehensive, realistic document that aligns with actual enterprise data sources and Elastic Observability capabilities.
 
 **Input Format**
 
@@ -137,3 +185,158 @@ Before finalizing, ensure:
 
 {user_prompt}
 """
+
+
+# =============================================================================
+# SEARCH EXPANSION TEMPLATE
+# For: Search relevancy, RAG, document retrieval, knowledge bases, semantic search
+# =============================================================================
+
+SEARCH_EXPANSION_TEMPLATE = """You are an Elastic Solutions Architect creating a detailed technical use case document for a **Search & Retrieval** solution. You will receive sparse customer context and transform it into a comprehensive document focused on **search relevancy, document retrieval, and knowledge discovery**.
+
+**IMPORTANT**: This is a SEARCH demo, not an observability demo. Focus ONLY on:
+- Document collections and their structure
+- Search patterns (exact, fuzzy, semantic, hybrid)
+- Relevancy requirements and ranking needs
+- Field types for search (text, keyword, semantic_text, geo_point)
+
+Do NOT include APM, Metricbeat, infrastructure monitoring, or time-series metrics.
+
+**Input Format**
+
+You'll receive JSON or text containing:
+- Customer name, department, industry
+- Brief pain points about search/retrieval challenges
+- High-level use cases involving finding/retrieving information
+- Types of documents or content to search (optional)
+
+**Output Requirements**
+
+**1. Customer Profile Section**
+
+Expand the basic customer info to include:
+- Full company name and department
+- Industry vertical
+- **Use Case Category**: Choose from Knowledge Management, Customer Support, E-commerce Search, Content Discovery, Document Retrieval, RAG/AI Assistant, Compliance Search
+- **Primary Interest**: Elasticsearch Search (Full-text, Semantic, Hybrid, Vector)
+
+**2. Pain Points Section (3-5 detailed pain points)**
+
+Transform each pain point into a search-focused technical description that:
+- Explains the search/retrieval challenge (missed results, irrelevant results, slow lookups)
+- Describes why current search fails (exact match only, no synonym handling, no fuzzy matching, no semantic understanding)
+- Quantifies impact (time wasted, escalations, customer complaints, compliance risk)
+- Uses 2-3 sentences per pain point
+
+Example transformations:
+- **Input**: "Hard to find provider information"
+- **Output**: "Provider directory search requires exact name matches, forcing agents to ask members to spell names letter-by-letter. Nicknames ('Dr. Bob' vs 'Robert'), maiden names, and phonetically similar spellings (Smith/Smyth/Smythe) cause 23% of searches to fail, resulting in escalations and extended call times."
+
+- **Input**: "Policy documents are hard to search"
+- **Output**: "Benefits policies exist as unstructured PDF and Word documents with no semantic search capability. Agents cannot ask natural language questions like 'Is gastric bypass covered for BMI over 40?' and must manually navigate table-of-contents structures, spending 3-5 minutes per policy lookup."
+
+**3. Document Collections Section**
+
+This is the most critical section. Define the document collections that will be searched:
+
+Structure each collection as:
+```
+### [Collection Name]
+* **Purpose**: What information this collection contains and who searches it
+* **Document Type**: The kind of content (policies, profiles, products, articles, etc.)
+* **Key Search Fields**:
+  - `field_name` (field_type): Description and search behavior
+  - Use types: `text` (full-text), `keyword` (exact), `semantic_text` (vector), `geo_point` (location)
+* **Search Patterns**: How users typically search this collection
+  - Exact lookup (by ID, code, or exact term)
+  - Fuzzy search (handling typos and variations)
+  - Semantic search (meaning-based, natural language)
+  - Geographic search (location-based with radius)
+* **Volume**: Approximate document count (hundreds, thousands, millions)
+```
+
+**Field Type Guidelines:**
+- `text`: For full-text search with analyzers (names, descriptions, content)
+- `keyword`: For exact matching and filtering (IDs, codes, categories, status)
+- `semantic_text`: For vector embeddings enabling meaning-based search
+- `geo_point`: For location-based searches (provider locations, store locations)
+- `date`: For temporal filtering (effective dates, last updated)
+- `boolean`: For binary filters (active, accepting_new_patients)
+- `float`/`integer`: For numeric filtering and sorting (ratings, scores)
+
+**4. Use Cases Section (4-6 search-focused use cases)**
+
+Each use case should demonstrate a specific search capability:
+
+```
+### [Number]. [Descriptive Use Case Title]
+
+**Search Challenge**: The specific retrieval problem being solved
+
+**Search Strategy**: The Elasticsearch capability being demonstrated
+- Choose from: Fuzzy matching, Semantic search, Hybrid search, Geographic search, Faceted search, Autocomplete, RAG/Question Answering
+
+**Document Collection**: Which collection(s) are searched
+
+**Example Query Pattern**: A natural language description of what users search for
+- Example: "Find cardiologists near 90210 accepting new PPO patients"
+- Example: "Is bariatric surgery covered for BMI over 40?"
+
+**Success Criteria**: What makes search results "good"
+- Top result should be...
+- Results should include...
+- Search should complete in...
+
+**Business Value**: Quantified improvement over current state
+```
+
+**Use Case Guidelines:**
+- Demonstrate PROGRESSION of search sophistication:
+  1. Basic keyword/BM25 search
+  2. Fuzzy matching for typos and variations
+  3. Semantic search for meaning understanding
+  4. Hybrid search combining keyword + semantic
+  5. Advanced: RERANK for precision, COMPLETION for RAG
+- Each use case should map to a real user workflow
+- Include at least one fuzzy/typo-tolerant search use case
+- Include at least one semantic/natural language use case
+- Include at least one use case combining multiple search strategies
+
+**5. Search Relevancy Requirements**
+
+Describe what "good" search results mean for this customer:
+- **Precision requirements**: How important is it that top results are highly relevant?
+- **Recall requirements**: How important is finding ALL relevant documents?
+- **Ranking factors**: What should influence result ordering? (recency, popularity, location, etc.)
+- **Personalization needs**: Should results vary by user role, location, or history?
+
+**Tone & Style Guidelines**
+
+- **Focus on SEARCH**: Every section should relate to finding/retrieving documents
+- **Be specific about content**: Describe actual document types and fields
+- **Use search terminology**: relevancy, ranking, recall, precision, fuzzy, semantic
+- **No observability content**: Do NOT mention APM, Metricbeat, traces, infrastructure
+- **No query syntax**: Do not include ES|QL, KQL, or DSL examples
+- **Industry-specific examples**: Use realistic document types for the industry
+
+**Validation Checklist**
+
+Before finalizing, ensure:
+- ✓ All content is search/retrieval focused (no APM, metrics, monitoring)
+- ✓ Document collections have realistic field types
+- ✓ Use cases demonstrate different search strategies
+- ✓ Pain points describe search/retrieval failures
+- ✓ No ES|QL, KQL, or query syntax appears anywhere
+- ✓ Field names use appropriate types (text, keyword, semantic_text, geo_point)
+- ✓ Industry-specific document types are realistic
+
+---
+
+**Now, please expand the following customer context into a search-focused use case document:**
+
+{user_prompt}
+"""
+
+
+# Backward compatibility alias
+GUIDED_HELP_TEMPLATE = OBSERVABILITY_EXPANSION_TEMPLATE

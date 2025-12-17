@@ -12,7 +12,11 @@ import os
 from typing import Dict
 
 from .context_extractor import SmartContextExtractor
-from .prompt_templates import GUIDED_HELP_TEMPLATE
+from .prompt_templates import (
+    detect_demo_type,
+    OBSERVABILITY_EXPANSION_TEMPLATE,
+    SEARCH_EXPANSION_TEMPLATE
+)
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +124,21 @@ JSON:"""
         return f"❌ Error generating suggestions: {e}\n\nPlease provide the missing information manually."
 
 
-def expand_brief_prompt(brief_prompt: str) -> str:
-    """Expand a brief user prompt into detailed customer context using the guided help template"""
+def expand_brief_prompt(brief_prompt: str, force_demo_type: str = None) -> str:
+    """
+    Expand a brief user prompt into detailed customer context using the appropriate template.
+
+    Uses early demo type detection to select the right expansion template:
+    - Search demos get SEARCH_EXPANSION_TEMPLATE (focused on relevancy, no APM/metrics)
+    - Observability demos get OBSERVABILITY_EXPANSION_TEMPLATE (focused on APM/metrics)
+
+    Args:
+        brief_prompt: The user's brief input to expand
+        force_demo_type: Optional override for demo type ('search' or 'observability')
+
+    Returns:
+        Expanded detailed context document
+    """
     import anthropic
 
     try:
@@ -151,8 +168,24 @@ The system will extract context from your detailed document without expansion.""
 
         client = anthropic.Anthropic(api_key=api_key)
 
-        # Combine user prompt with guided template
-        full_prompt = GUIDED_HELP_TEMPLATE.format(user_prompt=brief_prompt)
+        # EARLY DEMO TYPE DETECTION - Select appropriate template BEFORE expansion
+        if force_demo_type:
+            detected_type = force_demo_type
+            logger.info(f"Using forced demo type: {detected_type}")
+        else:
+            detected_type = detect_demo_type(brief_prompt)
+            logger.info(f"Early detection determined demo type: {detected_type}")
+
+        # Select the appropriate expansion template
+        if detected_type == 'search':
+            expansion_template = SEARCH_EXPANSION_TEMPLATE
+            logger.info("Using SEARCH_EXPANSION_TEMPLATE (relevancy-focused, no APM/metrics)")
+        else:
+            expansion_template = OBSERVABILITY_EXPANSION_TEMPLATE
+            logger.info("Using OBSERVABILITY_EXPANSION_TEMPLATE (APM/metrics-focused)")
+
+        # Combine user prompt with selected template
+        full_prompt = expansion_template.format(user_prompt=brief_prompt)
 
         logger.info(f"Expanding brief prompt: {brief_prompt[:100]}...")
 
@@ -166,6 +199,11 @@ The system will extract context from your detailed document without expansion.""
         expanded_content = response.content[0].text.strip()
 
         logger.info(f"Expansion complete. Length: {len(expanded_content)} characters")
+
+        # Store detected type in session state for later use
+        if 'demo_context' in st.session_state:
+            st.session_state.demo_context['demo_type'] = detected_type
+            logger.info(f"Stored demo_type '{detected_type}' in session state")
 
         return expanded_content
 
@@ -254,33 +292,33 @@ You MUST return valid JSON in this EXACT format. No other text before or after t
       - Words: search, find, retrieve, lookup, knowledge base, documents, RAG, semantic search, discovery, locate
       - Examples: "find provider info", "lookup policies", "search knowledge base", "retrieve patient records"
 
-   B) AND the message also contains use cases matching "analytics" keywords:
-      - Words: analyze, trend, pattern, metric, aggregate, dashboard, report, insight, forecast, statistics
-      - Examples: "analyze denial trends", "track metrics", "identify patterns", "forecast demand"
+   B) AND the message also contains use cases matching "observability" keywords:
+      - Words: analyze, trend, pattern, metric, aggregate, dashboard, report, insight, forecast, statistics, monitor, APM, logs
+      - Examples: "analyze denial trends", "track metrics", "identify patterns", "monitor performance"
 
    **Explicit Examples:**
-   - ✅ COMPOUND: "Provider lookup (search) + denial trend analysis (analytics)"
-   - ✅ COMPOUND: "Knowledge base search (search) + call volume metrics (analytics)"
-   - ✅ COMPOUND: "Document retrieval (search) + performance dashboards (analytics)"
+   - ✅ COMPOUND: "Provider lookup (search) + denial trend analysis (observability)"
+   - ✅ COMPOUND: "Knowledge base search (search) + call volume metrics (observability)"
+   - ✅ COMPOUND: "Document retrieval (search) + performance dashboards (observability)"
    - ❌ NOT compound: "Provider lookup + policy search" (both search)
-   - ❌ NOT compound: "Trend analysis + metric tracking" (both analytics)
+   - ❌ NOT compound: "Trend analysis + metric tracking" (both observability)
 
    **If compound detected**:
    - Set compound_request_detected to true
-   - Set suggested_analytics_prompt to a SHORT summary (1-2 sentences) of analytics use cases only
+   - Set suggested_analytics_prompt to a SHORT summary (1-2 sentences) of observability use cases only
    - Set suggested_search_prompt to a SHORT summary (1-2 sentences) of search use cases only
    - Keep these summaries BRIEF - just enough to show the split, NOT full prompts
 
 5. **Classify demo_type** (CRITICAL):
    - Set to "search" if use case involves: finding/retrieving documents, RAG, knowledge bases, patient records, policy lookup, semantic search, relevance
-   - Set to "analytics" if use case involves: analyzing trends, metrics, aggregations, dashboards, BI, time-series, forecasting
+   - Set to "observability" if use case involves: analyzing trends, metrics, aggregations, dashboards, BI, time-series, monitoring, APM, logs
    - If compound_request_detected is true, pick the type that appears FIRST or most prominently in the user's message
 6. For user_response:
    - **SPECIAL CASE - Compound Request:** If compound_request_detected is true, INSTEAD of normal response:
-      - Explain that you detected BOTH search and analytics use cases
-      - Briefly mention the analytics use cases
+      - Explain that you detected BOTH search and observability use cases
+      - Briefly mention the observability use cases
       - Briefly mention the search use cases
-      - Ask which type of demo they want to build (analytics or search)
+      - Ask which type of demo they want to build (observability or search)
       - Remind them they can build the other type in a second run
       - Keep this response concise (2-3 sentences max)
    - **NORMAL CASE - Single Demo Type:**

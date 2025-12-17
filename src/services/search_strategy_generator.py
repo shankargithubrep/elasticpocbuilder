@@ -367,16 +367,56 @@ You MUST use these EXACT row_count ranges in your output:
   ],
   "queries": [
     {{
-      "name": "Basic Semantic Search",
+      "name": "article_search_bm25",
+      "pain_point": "Agents can't quickly find answers to customer questions",
+      "search_type": "keyword",
+      "required_datasets": ["knowledge_base_articles"],
+      "required_fields": {{
+        "knowledge_base_articles": ["article_id", "title", "content", "category"]
+      }},
+      "description": "BM25 keyword search - fast but requires exact term matches",
+      "complexity": "simple",
+      "variant_group": "article_search",
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE title:\"password reset\" | KEEP article_id, _score, title, content, category | SORT _score DESC | LIMIT 10"
+    }},
+    {{
+      "name": "article_search_semantic",
       "pain_point": "Agents can't quickly find answers to customer questions",
       "search_type": "semantic",
       "required_datasets": ["knowledge_base_articles"],
       "required_fields": {{
-        "knowledge_base_articles": ["title", "content", "category", "created_date"]
+        "knowledge_base_articles": ["article_id", "title", "content", "category"]
       }},
-      "description": "Use semantic search to find most relevant articles for a customer inquiry",
-      "complexity": "simple",
-      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'password reset procedure') | KEEP article_id, _score, title, content, category | SORT _score DESC | LIMIT 10"
+      "description": "Semantic search - understands meaning, handles synonyms and related concepts",
+      "complexity": "medium",
+      "variant_group": "article_search",
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'how to reset my password forgot login') | KEEP article_id, _score, title, content, category | SORT _score DESC | LIMIT 10"
+    }},
+    {{
+      "name": "article_search_hybrid",
+      "pain_point": "Agents can't quickly find answers to customer questions",
+      "search_type": "hybrid",
+      "required_datasets": ["knowledge_base_articles"],
+      "required_fields": {{
+        "knowledge_base_articles": ["article_id", "title", "content", "category"]
+      }},
+      "description": "Hybrid search - combines keyword precision with semantic understanding",
+      "complexity": "advanced",
+      "variant_group": "article_search",
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(title, 'password reset', {{'boost': 0.4}}) OR MATCH(content, 'password reset procedure', {{'boost': 0.6}}) | KEEP article_id, _score, title, content, category | SORT _score DESC | LIMIT 10"
+    }},
+    {{
+      "name": "article_search_sophisticated",
+      "pain_point": "Agents can't quickly find answers to customer questions",
+      "search_type": "hybrid_pipeline",
+      "required_datasets": ["knowledge_base_articles"],
+      "required_fields": {{
+        "knowledge_base_articles": ["article_id", "title", "content", "category"]
+      }},
+      "description": "Full pipeline - FORK/FUSE parallel search with ML reranking for maximum relevancy",
+      "complexity": "expert",
+      "variant_group": "article_search",
+      "example_esql": "FROM knowledge_base_articles METADATA _id, _index, _score | FORK (WHERE title:\\\"password reset\\\" | SORT _score DESC | LIMIT 50) (WHERE MATCH(content, 'password reset forgot login', {{'fuzziness': 'AUTO'}}) | SORT _score DESC | LIMIT 50) | FUSE LINEAR WITH {{ \\\"weights\\\": {{ \\\"fork1\\\": 0.3, \\\"fork2\\\": 0.7 }}, \\\"normalizer\\\": \\\"minmax\\\" }} | LIMIT 15 | RERANK \\\"how to reset password\\\" ON content, title WITH {{ \\\"inference_id\\\": \\\".rerank-v1-elasticsearch\\\" }} | LIMIT 10 | KEEP article_id, _score, title, content, category"
     }},
     {{
       "name": "Multi-Strategy Hybrid Search with FORK + FUSE",
@@ -447,6 +487,44 @@ You MUST use these EXACT row_count ranges in your output:
 - Always include LIMIT (5-50 for search results)
 - Include _score for relevance ranking
 - Focus on "finding the right document" not "counting documents"
+
+**🎯 CRITICAL: Multi-Strategy Query Variants (Required for 2-3 key queries)**
+
+For 2-3 of your most important queries, generate FOUR variants demonstrating the progression of search sophistication.
+This showcases Elastic's relevancy capabilities and helps SAs demonstrate "here's basic search vs sophisticated search."
+
+**Variant Naming Convention:**
+Use a suffix to indicate the strategy type:
+- `{query_name}_bm25` - Simple keyword/BM25 search (baseline)
+- `{query_name}_semantic` - Semantic/vector search
+- `{query_name}_hybrid` - Keyword + semantic combined
+- `{query_name}_sophisticated` - Full pipeline (FORK/FUSE + RERANK or COMPLETION)
+
+**Example Variant Set:**
+For a "Provider Search" query, generate all four:
+
+1. **provider_search_bm25** (complexity: "simple")
+   - Uses exact keyword matching: `WHERE provider_name:"Dr Smith"`
+   - Shows baseline - fast but literal, misses variations
+
+2. **provider_search_semantic** (complexity: "medium")
+   - Uses semantic matching: `WHERE MATCH(provider_name, "heart doctor cardiologist")`
+   - Shows meaning understanding, synonym handling
+
+3. **provider_search_hybrid** (complexity: "advanced")
+   - Combines both: `WHERE MATCH(provider_name, "Smith", {{"boost": 0.5}}) OR provider_name:"Smith"`
+   - Shows best-of-both-worlds approach
+
+4. **provider_search_sophisticated** (complexity: "expert")
+   - Full pipeline with FORK/FUSE: `FORK (...) (...) | FUSE LINEAR ... | RERANK ...`
+   - Shows enterprise-grade relevancy
+
+**Guidelines for Variant Selection:**
+- Choose 2-3 queries that best represent the customer's core search needs
+- Make the progression meaningful (each step adds value)
+- Keep the base query name consistent, only change the suffix
+- All variants should address the SAME pain point
+- Add `"variant_group": "base_query_name"` to link variants together
 
 **Example Search Queries (NOT analytics):**
 ✅ GOOD: "Find all policies related to parental leave"
@@ -731,6 +809,10 @@ ES|QL Search Commands:
             for key in required_query_keys:
                 if key not in query:
                     raise ValueError(f"Query missing required key: {key}")
+
+            # variant_group is optional but should be a string if present
+            if 'variant_group' in query and not isinstance(query['variant_group'], str):
+                raise ValueError(f"Query variant_group must be a string")
 
         logger.info("Search strategy validation passed")
         return True
