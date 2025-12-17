@@ -109,7 +109,11 @@ class LLMProxyClient:
             if not api_key:
                 raise ValueError("ANTHROPIC_API_KEY must be set")
             
-            client = Anthropic(api_key=api_key)
+            client = Anthropic(
+                api_key=api_key,
+                timeout=600.0,  # 10 minutes for large code generation prompts
+                max_retries=2
+            )
             logger.info("Initialized Anthropic client")
             return client
             

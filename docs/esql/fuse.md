@@ -5,7 +5,6 @@ url: https://www.elastic.co/docs/reference/query-languages/esql/commands/fuse
 ---
 
 # ES|QL FUSE command
-
 ```yaml
 serverless: preview
 stack: preview 9.2.0
@@ -51,7 +50,6 @@ FUSE <fuse_method> SCORE BY <score_column> GROUP BY <group_column> KEY BY <key_c
 </definitions>
 
 <tab-set>
-
   <tab-item title="RRF">
     When `fuse_method` is `RRF`, `options` supports the following parameters:
     <definitions>
@@ -145,7 +143,7 @@ FROM books METADATA _id, _index, _score
 
 These limitations can be present either when:
 - `FUSE` is not combined with [`FORK`](https://www.elastic.co/docs/reference/query-languages/esql/commands/fork)
-- `FUSE` doesn't use the default  [metadata](https://www.elastic.co/docs/reference/query-languages/esql/esql-metadata-fields) columns `_id`, `_index`, `_score` and `_fork`  
+- `FUSE` doesn't use the default  [metadata](https://www.elastic.co/docs/reference/query-languages/esql/esql-metadata-fields) columns `_id`, `_index`, `_score` and `_fork`
   1. `FUSE` assumes that `key_columns` are single valued. When `key_columns` are multivalued, `FUSE` can produce unreliable relevance scores.
-  2. `FUSE` automatically assigns a score value of `NULL` if the `<score_column>` or `<group_column>` are multivalued.
-  3. `FUSE` assumes that the combination of `key_columns` and `group_column` is unique. If not, `FUSE` can produce unreliable relevance scores.
+2. `FUSE` automatically assigns a score value of `NULL` if the `<score_column>` or `<group_column>` are multivalued.
+3. `FUSE` assumes that the combination of `key_columns` and `group_column` is unique. If not, `FUSE` can produce unreliable relevance scores.

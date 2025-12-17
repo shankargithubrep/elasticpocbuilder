@@ -2,10 +2,17 @@
 Context Provider for Help Chat widget.
 
 Gathers current UI state to provide contextual assistance.
+
+Enhanced context includes:
+- New user detection
+- Create mode conversation preview
+- Browse mode data profiles and query status
+- Sample errors from query testing
 """
 
 import streamlit as st
 import logging
+import json
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
@@ -30,12 +37,15 @@ class HelpChatContextProvider:
         Returns:
             Dictionary with context information including:
             - mode: Current view mode ("create" | "browse")
+            - is_new_user: Whether user has no demos yet
             - tab: Current tab name (if browse mode)
             - module_name: Selected module (if browse mode)
             - module_summary: Brief description of module contents
             - datasets: List of dataset summaries
             - query_count: Number of queries
+            - query_errors: Sample errors from query testing
             - conversation_phase: Current conversation phase (if create mode)
+            - conversation_preview: Preview of conversation (if create mode)
             - demo_context: Extracted demo context (if create mode)
         """
         context = {}
@@ -44,12 +54,32 @@ class HelpChatContextProvider:
         mode = st.session_state.get("view_mode", "create")
         context["mode"] = mode
 
+        # Check if new user (no demos created yet)
+        context["is_new_user"] = self._is_new_user()
+
         if mode == "create":
             context.update(self._get_create_context())
         elif mode == "browse":
             context.update(self._get_browse_context())
 
         return context
+
+    def _is_new_user(self) -> bool:
+        """Check if user is new (no demos created yet)."""
+        try:
+            demos_path = Path("demos")
+            if not demos_path.exists():
+                return True
+
+            # Check for any module directories (exclude __pycache__)
+            modules = [
+                d for d in demos_path.iterdir()
+                if d.is_dir() and not d.name.startswith("_")
+            ]
+            return len(modules) == 0
+
+        except Exception:
+            return True
 
     def _get_create_context(self) -> Dict[str, Any]:
         """Get context specific to Create mode."""
@@ -59,6 +89,11 @@ class HelpChatContextProvider:
         context["conversation_phase"] = st.session_state.get(
             "conversation_phase", "initial"
         )
+
+        # Get conversation preview (summaries of recent messages)
+        conversation_preview = self._get_conversation_preview()
+        if conversation_preview:
+            context["conversation_preview"] = conversation_preview
 
         # Extracted demo context
         demo_context = st.session_state.get("demo_context", {})
@@ -78,6 +113,36 @@ class HelpChatContextProvider:
         )
 
         return context
+
+    def _get_conversation_preview(self, char_limit: int = 1000) -> Optional[str]:
+        """
+        Get a preview of the current conversation in Create mode.
+
+        Includes summaries of user and AI messages to provide context
+        about what demo is being created.
+
+        Args:
+            char_limit: Max characters per message preview
+
+        Returns:
+            Formatted conversation preview string or None
+        """
+        messages = st.session_state.get("messages", [])
+        if not messages:
+            return None
+
+        previews = []
+        for msg in messages[-6:]:  # Last 6 messages max
+            role = msg.get("role", "user").title()
+            content = msg.get("content", "")
+
+            # Truncate long messages
+            if len(content) > char_limit:
+                content = content[:char_limit] + "..."
+
+            previews.append(f"[{role}]: {content}")
+
+        return "\n".join(previews) if previews else None
 
     def _get_browse_context(self) -> Dict[str, Any]:
         """Get context specific to Browse mode."""
@@ -105,7 +170,6 @@ class HelpChatContextProvider:
             # Load config if available
             config_path = module_path / "config.json"
             if config_path.exists():
-                import json
                 with open(config_path) as f:
                     config = json.load(f)
 
@@ -118,15 +182,102 @@ class HelpChatContextProvider:
                 context["datasets"] = datasets
                 context["dataset_count"] = len(datasets)
 
+            # Load data profile for richer context
+            data_profile = self._load_data_profile(module_name)
+            if data_profile:
+                context["data_profile_summary"] = data_profile
+
             # Get query count from session state
             query_count = self._get_query_count_from_session(module_name)
             if query_count:
                 context["query_count"] = query_count
 
+            # Get query status with sample errors
+            query_status = self._get_query_status(module_name)
+            if query_status:
+                context["query_status"] = query_status
+
         except Exception as e:
             logger.warning(f"Error getting module context: {e}")
 
         return context
+
+    def _load_data_profile(self, module_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Load data profile summary for the module.
+
+        Returns a condensed version with record counts and field counts.
+        """
+        try:
+            profile_path = Path("demos") / module_name / "data_profile.json"
+            if not profile_path.exists():
+                return None
+
+            with open(profile_path) as f:
+                profile = json.load(f)
+
+            # Create condensed summary
+            summary = {}
+            datasets = profile.get("datasets", {})
+
+            for name, info in datasets.items():
+                summary[name] = {
+                    "records": info.get("total_records", "?"),
+                    "fields": len(info.get("fields", {}))
+                }
+
+            return summary
+
+        except Exception as e:
+            logger.warning(f"Error loading data profile: {e}")
+            return None
+
+    def _get_query_status(self, module_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get query validation status including sample errors.
+
+        Returns dict with validated count, failed count, and sample errors.
+        """
+        try:
+            # Check for query testing results
+            results_path = Path("demos") / module_name / "query_testing_results.json"
+            if not results_path.exists():
+                return None
+
+            with open(results_path) as f:
+                results = json.load(f)
+
+            # Count validated and failed
+            validated = 0
+            failed = 0
+            sample_errors = []
+
+            for query_id, result in results.items():
+                if result.get("success"):
+                    validated += 1
+                else:
+                    failed += 1
+                    # Capture sample errors (up to 3)
+                    if len(sample_errors) < 3:
+                        error_msg = result.get("error", "Unknown error")
+                        # Truncate long errors
+                        if len(error_msg) > 200:
+                            error_msg = error_msg[:200] + "..."
+                        sample_errors.append({
+                            "query_id": query_id,
+                            "error": error_msg
+                        })
+
+            return {
+                "validated": validated,
+                "failed": failed,
+                "total": validated + failed,
+                "sample_errors": sample_errors
+            }
+
+        except Exception as e:
+            logger.warning(f"Error getting query status: {e}")
+            return None
 
     def _summarize_config(self, config: Dict[str, Any]) -> str:
         """Create a brief summary of module config."""

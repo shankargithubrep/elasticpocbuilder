@@ -50,7 +50,6 @@ class ConversationHandler:
                     "industry": self.context.industry,
                     "pain_points": self.context.pain_points,
                     "use_cases": self.context.use_cases,
-                    "scale": self.context.scale,
                     "metrics": self.context.metrics
                 })
         except:
@@ -82,7 +81,6 @@ class ConversationHandler:
             "industry": self.context.industry,
             "pain_points": self.context.pain_points,
             "use_cases": self.context.use_cases,
-            "scale": self.context.scale,
             "phase": self.context.conversation_phase,
             "ready_to_generate": self.llm_service.is_ready_to_generate(self.context)
         }
@@ -99,7 +97,6 @@ class ConversationHandler:
             industry=saved_context.get("industry"),
             pain_points=saved_context.get("pain_points", []),
             use_cases=saved_context.get("use_cases", []),
-            scale=saved_context.get("scale"),
             urgency=saved_context.get("urgency"),
             audience=saved_context.get("audience"),
             metrics=saved_context.get("metrics", []),

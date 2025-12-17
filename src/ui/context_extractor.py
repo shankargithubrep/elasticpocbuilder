@@ -51,7 +51,6 @@ Extract:
 - pain_points: List of specific pain points or challenges (array of strings, extract as many as mentioned)
 - use_cases: List of use cases or goals (array of strings)
 - metrics: List of metrics they care about (array of strings)
-- scale: Data scale mentioned (string or null, e.g., "5000+ accounts", "millions of transactions")
 
 Return ONLY a JSON object with these keys. If a field is not found, use null or empty array.
 

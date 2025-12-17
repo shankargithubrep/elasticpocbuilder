@@ -5,7 +5,6 @@ url: https://www.elastic.co/docs/reference/query-languages/esql/commands/complet
 ---
 
 # ES|QL COMPLETION command
-
 ```yaml
 serverless: preview
 stack: preview 9.1.0
@@ -13,25 +12,48 @@ stack: preview 9.1.0
 
 The `COMPLETION` command allows you to send prompts and context to a Large Language Model (LLM) directly within your ESQL queries, to perform text generation tasks.
 <important>
-  **Every row processed by the COMPLETION command generates a separate API call to the LLM endpoint.**Be careful to test with small datasets first before running on production data or in automated workflows, to avoid unexpected costs.Best practices:
-  1. **Start with dry runs**: Validate your query logic and row counts by running without `COMPLETION` initially. Use `| STATS count = COUNT(*)` to check result size.
-  2. **Filter first**: Use `WHERE` clauses to limit rows before applying `COMPLETION`.
-  3. **Test with `LIMIT`**: Always start with a low [`LIMIT`](https://www.elastic.co/docs/reference/query-languages/esql/commands/limit) and gradually increase.
-  4. **Monitor usage**: Track your LLM API consumption and costs.
+  **Every row processed by the COMPLETION command generates a separate API call to the LLM endpoint.**
+  <tab-set>
+    <tab-item title="9.3.0+">
+      Starting in version 9.3.0, `COMPLETION` automatically limits processing to **100 rows by default** to prevent accidental high consumption and costs. This limit is applied before the `COMPLETION` command executes.If you need to process more rows, you can adjust the limit using the cluster setting:
+      ```
+      PUT _cluster/settings
+      {
+        "persistent": {
+          "esql.command.completion.limit": 500
+        }
+      }
+      ```
+      You can also disable the command entirely if needed:
+      ```
+      PUT _cluster/settings
+      {
+        "persistent": {
+          "esql.command.completion.enabled": false
+        }
+      }
+      ```
+    </tab-item>
+
+    <tab-item title="9.1.x - 9.2.x">
+      Be careful to test with small datasets first before running on production data or in automated workflows, to avoid unexpected costs.Best practices:
+      1. **Start with dry runs**: Validate your query logic and row counts by running without `COMPLETION` initially. Use `| STATS count = COUNT(*)` to check result size.
+      2. **Filter first**: Use `WHERE` clauses to limit rows before applying `COMPLETION`.
+      3. **Test with `LIMIT`**: Always start with a low [`LIMIT`](https://www.elastic.co/docs/reference/query-languages/esql/commands/limit) and gradually increase.
+      4. **Monitor usage**: Track your LLM API consumption and costs.
+    </tab-item>
+  </tab-set>
 </important>
 
 **Syntax**
 <tab-set>
-
   <tab-item title="9.2.0+">
-
     ```esql
     COMPLETION [column =] prompt WITH { "inference_id" : "my_inference_endpoint" }
     ```
   </tab-item>
 
   <tab-item title="9.1.x only">
-
     ```esql
     COMPLETION [column =] prompt WITH my_inference_endpoint
     ```
@@ -77,22 +99,18 @@ task type `completion`.
 `COMPLETION` commands may time out when processing large datasets or complex prompts. The default timeout is 10 minutes, but you can increase this limit if necessary.
 How you increase the timeout depends on your deployment type:
 <tab-set>
-
   <tab-item title="Elastic Cloud Hosted">
-
     - You can adjust Elasticsearch settings in the [Elastic Cloud Console](https://www.elastic.co/docs/deploy-manage/deploy/elastic-cloud/edit-stack-settings)
     - You can also adjust the `search.default_search_timeout` cluster setting using [Kibana's Advanced settings](https://www.elastic.co/docs/reference/kibana/advanced-settings#kibana-search-settings)
   </tab-item>
 
   <tab-item title="Self-managed">
-
     - You can configure at the cluster level by setting `search.default_search_timeout` in `elasticsearch.yml` or updating via [Cluster Settings API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-cluster-put-settings)
     - You can also adjust the `search:timeout` setting using [Kibana's Advanced settings](https://www.elastic.co/docs/reference/kibana/advanced-settings#kibana-search-settings)
     - Alternatively, you can add timeout parameters to individual queries
   </tab-item>
 
   <tab-item title="Elastic Cloud Serverless">
-
     - Requires a manual override from Elastic Support because you cannot modify timeout settings directly
   </tab-item>
 </tab-set>

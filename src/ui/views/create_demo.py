@@ -48,7 +48,6 @@ def render_create_demo_view():
                   "Demonstrate application performance migration from Intel to AMD hardware",
                   "Consolidate data from Kafka queues and Hive into unified observability platform"
                 ],
-                "scale": "100+ team members managing 1,000+ transactions daily",
                 "metrics": [
                   "user engagement",
                   "response time",
@@ -76,8 +75,7 @@ def render_create_demo_view():
             - Customer name, department, industry
             - Brief pain points (1-2 sentences each)
             - High-level use cases (simple descriptions)
-            - Basic metrics mentioned
-            - Scale indicators (optional)
+            - Basic metrics mentioned (optional)
 
             **Output Requirements**
 
@@ -294,11 +292,10 @@ def render_create_demo_view():
                             "industry": context.get("industry", "Enterprise"),
                             "pain_points": context.get("pain_points", []),
                             "use_cases": context.get("use_cases", []),
-                            "scale": context.get("scale", "10000 records"),
                             "metrics": context.get("metrics", []),
                             "demo_type": context.get("demo_type", "analytics"),
                             "dataset_size_preference": st.session_state.get("dataset_size_preference", "medium"),
-                            "use_enhanced_generation": st.session_state.get("use_enhanced_generation", False),
+                            "use_enhanced_generation": True,  # Always use enhanced generation
                             "full_technical_context": context.get("full_technical_context")  # Pass rich context for high-fidelity generation
                         }
 

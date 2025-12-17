@@ -9,11 +9,112 @@ from .context_display import display_context_summary
 from .components.help_chat import render_chat_sidebar
 
 
+def _render_status_section():
+    """Render the collapsible Status section at top of sidebar."""
+    from src.services.status_service import get_app_status
+
+    # Get status (cached for session to avoid repeated calls)
+    if "app_status" not in st.session_state:
+        st.session_state.app_status = get_app_status()
+
+    status = st.session_state.app_status
+
+    # Status header with overall indicator
+    status_emoji = "✅" if status.all_ok else "❌"
+    status_label = f"Status {status_emoji}"
+
+    with st.expander(status_label, expanded=False):
+        # LLM Config - compact single line
+        llm_emoji = "✅" if status.llm.is_ok else "❌"
+        st.markdown(f"{llm_emoji} **LLM:** {status.llm.detail}")
+
+        # Elasticsearch - compact single line
+        es_emoji = "✅" if status.elasticsearch.is_ok else "❌"
+        st.markdown(f"{es_emoji} **ES:** {status.elasticsearch.detail}")
+
+        # ES test buttons
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Test", key="test_es_btn", use_container_width=True):
+                from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                try:
+                    indexer = ElasticsearchIndexer()
+                    success, message = indexer.verify_connection()
+                    if success:
+                        st.success(f"✅ {message}")
+                        del st.session_state.app_status
+                    else:
+                        st.error(f"❌ {message}")
+                except Exception as e:
+                    st.error(f"❌ {e}")
+
+        with col2:
+            if st.button("ELSER", key="test_elser_btn", use_container_width=True):
+                from src.services.elasticsearch_indexer import ElasticsearchIndexer
+                try:
+                    indexer = ElasticsearchIndexer()
+                    is_ready, message = indexer.check_elser_deployment()
+                    if is_ready:
+                        st.success(f"✅ {message}")
+                    else:
+                        st.warning(f"⚠️ {message}")
+                except Exception as e:
+                    st.error(f"❌ {e}")
+
+        # AI Assistant - compact single line
+        ai_emoji = "✅" if status.ai_assistant.is_ok else "❌"
+        st.markdown(f"{ai_emoji} **AI:** {status.ai_assistant.detail}")
+        st.caption("Toggle in Help panel")
+
+        st.divider()
+
+        # Inference Endpoints - compact
+        st.markdown("**Inference Endpoints**")
+
+        # Initialize inference endpoints in session state if not exists
+        if "inference_endpoints" not in st.session_state:
+            st.session_state.inference_endpoints = {
+                "rerank": ".rerank-v1-elasticsearch",
+                "completion": "completion-vulcan"
+            }
+
+        # RERANK endpoint input
+        rerank_endpoint = st.text_input(
+            "RERANK",
+            value=st.session_state.inference_endpoints["rerank"],
+            help="Inference endpoint ID for RERANK command",
+            key="rerank_endpoint_input",
+            label_visibility="collapsed",
+            placeholder="RERANK endpoint"
+        )
+        st.session_state.inference_endpoints["rerank"] = rerank_endpoint
+
+        # COMPLETION endpoint input
+        completion_endpoint = st.text_input(
+            "COMPLETION",
+            value=st.session_state.inference_endpoints["completion"],
+            help="Inference endpoint ID for COMPLETION command",
+            key="completion_endpoint_input",
+            label_visibility="collapsed",
+            placeholder="COMPLETION endpoint"
+        )
+        st.session_state.inference_endpoints["completion"] = completion_endpoint
+
+        # Refresh status button
+        if st.button("🔄 Refresh", use_container_width=True, key="refresh_status_btn"):
+            if "app_status" in st.session_state:
+                del st.session_state.app_status
+            st.rerun()
+
+
 def render_sidebar():
     """Render the sidebar with mode toggle and context display"""
 
     # Vulcan header with tooltip
     st.markdown("### Vulcan", help="Vulcan helps create custom demo modules containing sample data, queries, and agentic tools.")
+
+    # Status section at top (collapsible)
+    _render_status_section()
 
     # Initialize help toggle state
     if "help_chat_visible" not in st.session_state:
@@ -65,77 +166,59 @@ def render_sidebar():
     # Always render mode-specific content below
     if st.session_state.view_mode == "create":
         st.markdown("---")
-        st.markdown("#### Generation Options")
 
-        # Initialize dataset_size_preference if not exists
-        if "dataset_size_preference" not in st.session_state:
-            st.session_state.dataset_size_preference = "medium"  # Default to medium (best for enhanced mode)
-
-        # Dataset Size Slider
-        size_options = ["small", "medium", "large"]
-        size_index = size_options.index(st.session_state.dataset_size_preference)
-
-        selected_index = st.select_slider(
-            "Dataset Size",
-            options=range(len(size_options)),
-            value=size_index,
-            format_func=lambda x: size_options[x].capitalize(),
-            key="dataset_size_slider"
-        )
-
-        st.session_state.dataset_size_preference = size_options[selected_index]
-
-        # Display legend based on selection
-        size_legends = {
-            "small": "**Small:** < 5,000 records per dataset",
-            "medium": "**Medium:** 5,000-15,000 records per dataset",
-            "large": "**Large:** 15,000-50,000 records per dataset"
-        }
-
-        st.caption(size_legends[st.session_state.dataset_size_preference])
-
-        # Initialize use_enhanced_generation if not exists
-        if "use_enhanced_generation" not in st.session_state:
-            st.session_state.use_enhanced_generation = False
-
-        # Data Generation Mode Radio
-        generation_mode = st.radio(
-            "Data Generation Mode",
-            options=["Standard", "Advanced"],
-            index=1 if st.session_state.use_enhanced_generation else 0,
-            key="generation_mode_radio",
-            help="Advanced mode uses realistic clustering and percentile-based query thresholds. Experimental feature - best for analytics demos with aggregations."
-        )
-
-        st.session_state.use_enhanced_generation = (generation_mode == "Advanced")
-
-        if generation_mode == "Advanced":
-            # Show helpful guidance based on dataset size
-            current_size = st.session_state.dataset_size_preference
-            if current_size == "small":
-                st.info("💡 **Tip:** Advanced mode works best with **Medium** or **Large** dataset sizes for more stable percentile calculations.", icon="ℹ️")
-            elif current_size == "medium":
-                st.success("✅ **Optimal:** Medium size is perfect for advanced mode!", icon="✅")
-            else:  # large
-                st.success("✅ **Excellent:** Large datasets provide the most stable percentile-based queries!", icon="✅")
-
-        # Initialize ai_expansion_enabled if not exists
+        # Initialize state
         if "ai_expansion_enabled" not in st.session_state:
-            st.session_state.ai_expansion_enabled = False
+            st.session_state.ai_expansion_enabled = True  # Default to Expanded
         if "ai_expansion_used" not in st.session_state:
             st.session_state.ai_expansion_used = False
+        if "dataset_size_preference" not in st.session_state:
+            st.session_state.dataset_size_preference = "medium"
+        # Always use enhanced generation (no toggle needed)
+        st.session_state.use_enhanced_generation = True
 
-        # Demo Complexity Radio (only show if conversation hasn't started yet)
-        if not st.session_state.messages:
-            demo_complexity = st.radio(
-                "Demo Complexity",
-                options=["Simple", "Expanded"],
-                index=1 if st.session_state.ai_expansion_enabled else 0,
+        # Data Generation section header
+        st.markdown("**Data Generation**")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            complexity_options = ["Simple", "Expanded"]
+            complexity_index = 1 if st.session_state.ai_expansion_enabled else 0
+            selected_complexity = st.selectbox(
+                "Complexity",
+                options=complexity_options,
+                index=complexity_index,
                 disabled=st.session_state.ai_expansion_used,
-                key="demo_complexity_radio",
-                help="Expanded mode automatically enhances brief prompts into detailed customer contexts using AI. Works on first message only."
+                key="complexity_select",
+                help="Expanded enhances brief prompts into detailed contexts"
             )
-            st.session_state.ai_expansion_enabled = (demo_complexity == "Expanded")
+            st.session_state.ai_expansion_enabled = (selected_complexity == "Expanded")
+
+        with col2:
+            size_options = ["Small", "Medium", "Large"]
+            size_map = {"Small": "small", "Medium": "medium", "Large": "large"}
+            reverse_map = {"small": "Small", "medium": "Medium", "large": "Large"}
+            current_display = reverse_map[st.session_state.dataset_size_preference]
+            size_index = size_options.index(current_display)
+
+            selected_size = st.selectbox(
+                "Size",
+                options=size_options,
+                index=size_index,
+                key="size_select",
+                help="Dataset record count"
+            )
+            st.session_state.dataset_size_preference = size_map[selected_size]
+
+        # Compact description
+        size_legends = {
+            "small": "< 5K records",
+            "medium": "5-15K records",
+            "large": "15-50K records"
+        }
+        expansion_note = "LLM expands prompt" if st.session_state.ai_expansion_enabled else "Direct processing"
+        st.caption(f"{expansion_note} · {size_legends[st.session_state.dataset_size_preference]}")
 
         st.markdown("---")
 
@@ -153,9 +236,9 @@ def render_sidebar():
                 "pain_points": [],
                 "use_cases": [],
                 "metrics": [],
-                "scale": None,
             }
             st.session_state.conversation_phase = "initial"
+            st.session_state.ai_expansion_used = False  # Re-enable complexity dropdown
             st.rerun()
 
         if st.button("📋 Use Test Prompt", use_container_width=True):
@@ -163,82 +246,6 @@ def render_sidebar():
             st.session_state.messages.append({"role": "user", "content": test_prompt})
             st.session_state.needs_processing = True
             st.rerun()
-
-        st.markdown("---")
-        st.markdown("### 🔗 Elasticsearch")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            if st.button("Test Connection", use_container_width=True):
-                from src.services.elasticsearch_indexer import ElasticsearchIndexer
-                try:
-                    indexer = ElasticsearchIndexer()
-                    success, message = indexer.verify_connection()
-
-                    if success:
-                        st.success(f"✅ {message}")
-                    else:
-                        st.error(f"❌ {message}")
-                except Exception as e:
-                    st.error(f"❌ Connection failed: {e}")
-
-        with col2:
-            if st.button("Check ELSER", use_container_width=True):
-                from src.services.elasticsearch_indexer import ElasticsearchIndexer
-                try:
-                    indexer = ElasticsearchIndexer()
-                    is_ready, message = indexer.check_elser_deployment()
-
-                    if is_ready:
-                        st.success(f"✅ {message}")
-                    else:
-                        st.warning(f"⚠️ {message}")
-
-                        # Offer to deploy
-                        if "not deployed" in message.lower():
-                            if st.button("Deploy ELSER", use_container_width=True):
-                                with st.spinner("Deploying ELSER..."):
-                                    deploy_success, deploy_msg = indexer.deploy_elser()
-                                    if deploy_success:
-                                        st.success(f"✅ {deploy_msg}")
-                                    else:
-                                        st.error(f"❌ {deploy_msg}")
-                except Exception as e:
-                    st.error(f"❌ Error: {e}")
-
-        # Inference Endpoints Configuration
-        st.markdown("---")
-        st.markdown("### ⚙️ Inference Endpoints")
-
-        # Initialize inference endpoints in session state if not exists
-        if "inference_endpoints" not in st.session_state:
-            st.session_state.inference_endpoints = {
-                "rerank": ".rerank-v1-elasticsearch",
-                "completion": "completion-vulcan"
-            }
-
-        # RERANK endpoint input
-        rerank_endpoint = st.text_input(
-            "RERANK Endpoint",
-            value=st.session_state.inference_endpoints["rerank"],
-            help="Inference endpoint ID for RERANK command (default: .rerank-v1-elasticsearch)",
-            key="rerank_endpoint_input"
-        )
-        st.session_state.inference_endpoints["rerank"] = rerank_endpoint
-
-        # COMPLETION endpoint input
-        completion_endpoint = st.text_input(
-            "COMPLETION Endpoint",
-            value=st.session_state.inference_endpoints["completion"],
-            help="Inference endpoint ID for COMPLETION command (default: completion-vulcan)",
-            key="completion_endpoint_input"
-        )
-        st.session_state.inference_endpoints["completion"] = completion_endpoint
-
-        # Show current values
-        st.caption(f"🔄 RERANK: `{st.session_state.inference_endpoints['rerank']}`")
-        st.caption(f"🤖 COMPLETION: `{st.session_state.inference_endpoints['completion']}`")
 
         # Under the Hood button
         st.markdown("---")

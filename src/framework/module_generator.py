@@ -287,7 +287,6 @@ Department: {config["department"]}
 Industry: {config["industry"]}
 Pain Points: {", ".join(config["pain_points"])}
 Use Cases: {", ".join(config["use_cases"])}
-Scale: {config["scale"]}
 Dataset Size Preference: {size_preference.upper()}
 
 The module should:
@@ -309,7 +308,7 @@ CRITICAL - TIMESTAMP REQUIREMENTS:
 CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
 - Primary timeseries datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
-- Scale mentioned ({config["scale"]}) is for REALISM only, don't generate that many!
+- Use realistic cardinality for the industry, but keep within size limits above
 
 CRITICAL - STRING TEMPLATE FORMATTING:
 When using string templates with .format(), ensure placeholder names EXACTLY match the keyword arguments:
@@ -367,7 +366,6 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
         # IMPORTANT: Size preference is {size_preference.upper()}
         # - Primary datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
         # - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
-        # Scale mentioned: {config["scale"]} (for context only, don't generate that many rows!)
 
         return datasets
 
@@ -1516,7 +1514,6 @@ Department: {config["department"]}
 Industry: {config["industry"]}
 Pain Points: {", ".join(config["pain_points"])}
 Use Cases: {", ".join(config["use_cases"])}
-Scale: {config["scale"]}
 Dataset Size Preference: {size_preference.upper()}
 
 {formatted_requirements}
@@ -1546,7 +1543,7 @@ CRITICAL - FIELD NAMING:
 CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
 - Primary timeseries datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
-- Scale mentioned ({config["scale"]}) is for REALISM only, don't generate that many!
+- Use realistic cardinality for the industry, but keep within size limits above
 
 CRITICAL - STRING TEMPLATE FORMATTING:
 When using string templates with .format(), ensure placeholder names EXACTLY match the keyword arguments:

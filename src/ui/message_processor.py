@@ -60,8 +60,7 @@ Format your response as JSON with this structure:
 {{
   "pain_points": ["suggestion 1", "suggestion 2", "suggestion 3"],
   "use_cases": ["suggestion 1", "suggestion 2"],
-  "metrics": ["suggestion 1", "suggestion 2"],
-  "scale": "suggested scale description"
+  "metrics": ["suggestion 1", "suggestion 2"]
 }}
 
 Only include fields that are actually missing. Be specific and relevant to their industry and department.
@@ -206,7 +205,6 @@ def process_smart_message(message: str) -> str:
 - Industry: {current_context.get('industry') or 'Not provided'}
 - Pain Points: {len(current_context.get('pain_points', []))} identified
 - Use Cases: {len(current_context.get('use_cases', []))} identified
-- Scale: {current_context.get('scale') or 'Not provided'}
 - Metrics: {len(current_context.get('metrics', []))} identified
 
 **Recent Conversation:**
@@ -225,7 +223,6 @@ You MUST return valid JSON in this EXACT format. No other text before or after t
     "industry": null,
     "pain_points": [],
     "use_cases": [],
-    "scale": null,
     "metrics": [],
     "demo_type": null
   }},
@@ -297,7 +294,6 @@ You MUST return valid JSON in this EXACT format. No other text before or after t
 **Example user_response format when info is missing:**
 "Great! I've captured [what you found]. To complete the demo, I need:
 
-• **Scale:** How many [relevant unit]? (e.g., agents, transactions, customers)
 • **Metrics:** What KPIs matter most? (e.g., response time, conversion rate)
 
 💡 Don't have all the details? Just type **'skip'** and I'll use reasonable defaults."
@@ -399,14 +395,6 @@ def _handle_skip_defaults() -> str:
     tracker = ContextTracker()
 
     # Fill in reasonable defaults for missing fields
-    if not context.get('scale'):
-        # Infer scale from company/department context
-        if 'enterprise' in str(context.get('company_name', '')).lower() or \
-           'call center' in str(context.get('department', '')).lower():
-            context['scale'] = "1000+ agents handling 10,000+ daily interactions"
-        else:
-            context['scale'] = "100+ team members managing 1,000+ transactions daily"
-
     if not context.get('metrics') or len(context.get('metrics', [])) == 0:
         # Infer metrics from department
         dept = str(context.get('department', '')).lower()
@@ -427,7 +415,6 @@ def _handle_skip_defaults() -> str:
         st.session_state.conversation_phase = "ready_to_generate"
         return f"""Perfect! I've filled in reasonable defaults:
 
-• **Scale:** {context.get('scale')}
 • **Metrics:** {', '.join(context.get('metrics', []))}
 
 You're all set! Type **'generate'** to create your custom demo module."""

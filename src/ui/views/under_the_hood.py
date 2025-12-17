@@ -129,7 +129,6 @@ context = {
     "industry": "Telecommunications",
     "pain_points": ["HSS database failures", "Signaling storms"],
     "use_cases": ["Proactive anomaly detection", "Cell tower analysis"],
-    "scale": "5000 events/minute",
     "metrics": ["IMSI spike detection", "Cell ID cardinality"]
 }
         """, language="python")
@@ -471,7 +470,7 @@ class DataGenerator:
     | Large (10K-100K) | 50,000-100,000 | Performance testing |
     | Enterprise (> 100K) | 500,000+ | Scale demonstrations |
 
-    The scale is automatically determined from context extraction or can be specified explicitly.
+    The scale is specified via the "Size" dropdown in the sidebar (Small/Medium/Large).
     """)
 
 

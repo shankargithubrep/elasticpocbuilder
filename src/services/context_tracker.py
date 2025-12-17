@@ -12,39 +12,45 @@ logger = logging.getLogger(__name__)
 class ContextTracker:
     """Tracks extraction progress and prompts for missing info"""
 
+    # Minimum requirements for generation:
+    # - Company Name (required)
+    # - Department (required)
+    # - Pain Points OR Use Cases (at least one)
+    # - Key Metrics (optional but recommended)
+
     REQUIRED_FIELDS = {
         'company_name': {
-            'weight': 20,
+            'weight': 30,
             'prompt': 'What company are you building this demo for?',
-            'display_name': 'Company Name'
+            'display_name': 'Company',
+            'required_for_generate': True
         },
         'department': {
-            'weight': 15,
+            'weight': 25,
             'prompt': 'Which department will use this?',
-            'display_name': 'Department'
+            'display_name': 'Department',
+            'required_for_generate': True
         },
         'pain_points': {
             'weight': 25,
             'prompt': 'What are the main pain points they face?',
-            'min_count': 2,
-            'display_name': 'Pain Points'
+            'min_count': 1,
+            'display_name': 'Pain Points',
+            'required_for_generate': 'pain_points_or_use_cases'
         },
         'use_cases': {
-            'weight': 20,
-            'prompt': 'What are the key use cases for this demo?',
-            'min_count': 2,
-            'display_name': 'Use Cases'
-        },
-        'scale': {
             'weight': 10,
-            'prompt': 'What scale of data are we dealing with?',
-            'display_name': 'Data Scale'
+            'prompt': 'What are the key use cases for this demo?',
+            'min_count': 1,
+            'display_name': 'Use Cases',
+            'required_for_generate': 'pain_points_or_use_cases'
         },
         'metrics': {
             'weight': 10,
             'prompt': 'What metrics matter most to them?',
-            'min_count': 2,
-            'display_name': 'Key Metrics'
+            'min_count': 1,
+            'display_name': 'Key Metrics',
+            'required_for_generate': False  # Optional but recommended
         }
     }
 
@@ -135,16 +141,33 @@ class ContextTracker:
 
     def is_ready_to_generate(self, context: Dict) -> bool:
         """
-        Check if context has enough information to generate demo
+        Check if context has enough information to generate demo.
+
+        Requirements:
+        - Company Name (required)
+        - Department (required)
+        - Pain Points OR Use Cases (at least one with at least 1 item)
 
         Args:
             context: Current demo context dictionary
 
         Returns:
-            True if >= 50% complete
+            True if minimum requirements are met
         """
-        progress, _ = self.calculate_progress(context)
-        return progress >= 0.5
+        # Check required fields
+        if not context.get('company_name'):
+            return False
+        if not context.get('department'):
+            return False
+
+        # Check pain_points OR use_cases (at least one must have items)
+        pain_points = context.get('pain_points', [])
+        use_cases = context.get('use_cases', [])
+
+        if not pain_points and not use_cases:
+            return False
+
+        return True
 
     def get_summary(self, context: Dict) -> str:
         """
@@ -171,10 +194,6 @@ class ContextTracker:
         # Industry
         if context.get('industry'):
             summary_parts.append(f"**Industry:** {context['industry']}")
-
-        # Scale
-        if context.get('scale'):
-            summary_parts.append(f"**Scale:** {context['scale']}")
 
         # Pain points
         if context.get('pain_points'):

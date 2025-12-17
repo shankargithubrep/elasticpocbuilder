@@ -5,6 +5,7 @@ Provides:
 - Contextual help responses based on current UI state
 - Pre-built FAQ responses for common questions
 - Integration with CLAUDE.md documentation
+- Semantic search over indexed documentation (when enabled)
 """
 
 import os
@@ -17,9 +18,52 @@ from src.services.llm_proxy_service import UnifiedLLMClient
 logger = logging.getLogger(__name__)
 
 
+# Try to import doc indexer (may not be available if ES not configured)
+try:
+    from src.services.doc_indexer_service import get_doc_indexer
+    DOC_INDEXER_AVAILABLE = True
+except ImportError:
+    DOC_INDEXER_AVAILABLE = False
+    logger.warning("Doc indexer service not available")
+
+
 # Pre-built FAQ responses for common chip questions
 # These avoid LLM calls for frequently asked questions
 FAQ_RESPONSES = {
+    # Universal FAQ - appears in all contexts
+    "How do I use this app?": """
+**Getting Started with Vulcan**
+
+**1. Check Your Setup** (expand Status in sidebar)
+- Verify LLM and Elasticsearch are connected
+- Both should show green checkmarks
+
+**2. Create a Demo**
+Write a customer description including:
+- **Company & Department** - Who you're demoing to
+- **Pain Points** - What problems they face
+- **Desired Outcomes** - What success looks like
+
+**Example prompt:**
+> "Acme Corp's Support team handles 10K tickets/month but lacks visibility into trends. They want to identify recurring issues and predict escalations."
+
+**3. Configure Generation Options** (sidebar)
+- **Demo Complexity**: Use "Expanded" for brief prompts (LLM enhances your description, generates 5-10 datasets)
+- **Dataset Size**: Medium is a good default
+- **Data Generation Mode**: Advanced for analytics demos with aggregations
+
+**4. Browse & Refine**
+After generation, switch to Browse mode to:
+- View generated datasets
+- Test and validate queries
+- Deploy tools to Agent Builder
+
+**Pro Tips:**
+- Be specific about metrics and KPIs
+- Click "Use Test Prompt" to see an example
+- Check the Status section if something isn't working
+""",
+
     # Create mode FAQs
     "How should I format my prompt?": """
 **Formatting Your Demo Prompt**
@@ -306,13 +350,17 @@ class HelpChatService:
 
     Provides intelligent responses about using the demo-builder,
     with awareness of current UI context (mode, tab, loaded module).
+
+    Enhanced with semantic search over indexed documentation when available.
     """
 
     def __init__(self):
         """Initialize the help chat service."""
         self.llm_client = None
+        self._doc_indexer = None
         self.system_prompt = self._build_system_prompt()
         self._initialize_llm()
+        self._initialize_doc_search()
 
     def _initialize_llm(self):
         """Initialize LLM client with error handling."""
@@ -324,6 +372,71 @@ class HelpChatService:
         except Exception as e:
             logger.error(f"Failed to initialize LLM for help chat: {e}")
             self.llm_client = None
+
+    def _initialize_doc_search(self):
+        """Initialize documentation search service if available."""
+        if not DOC_INDEXER_AVAILABLE:
+            logger.info("Doc indexer not available - semantic doc search disabled")
+            return
+
+        try:
+            self._doc_indexer = get_doc_indexer()
+            if self._doc_indexer.is_available() and self._doc_indexer.check_index_exists():
+                logger.info("Doc indexer connected - semantic doc search enabled")
+            else:
+                logger.info("Doc indexer available but index not created yet")
+        except Exception as e:
+            logger.warning(f"Could not initialize doc indexer: {e}")
+            self._doc_indexer = None
+
+    def is_doc_search_enabled(self) -> bool:
+        """Check if documentation search is available and enabled."""
+        if not self._doc_indexer:
+            return False
+        return self._doc_indexer.is_available() and self._doc_indexer.check_index_exists()
+
+    def _search_documentation(self, query: str, limit: int = 3) -> List[Dict[str, Any]]:
+        """
+        Search indexed documentation for relevant content.
+
+        Args:
+            query: User's question
+            limit: Max results to return
+
+        Returns:
+            List of relevant doc chunks with content previews
+        """
+        if not self.is_doc_search_enabled():
+            return []
+
+        try:
+            results = self._doc_indexer.search_docs(query, limit=limit)
+            return results
+        except Exception as e:
+            logger.warning(f"Doc search failed: {e}")
+            return []
+
+    def _format_doc_context(self, doc_results: List[Dict[str, Any]]) -> str:
+        """Format documentation search results for LLM context."""
+        if not doc_results:
+            return ""
+
+        parts = ["## Relevant Documentation\n"]
+
+        for i, doc in enumerate(doc_results, 1):
+            title = doc.get("doc_title", "Unknown")
+            section = doc.get("section_title", "")
+            preview = doc.get("content_preview", "")
+            category = doc.get("doc_category", "")
+
+            parts.append(f"### {i}. {title}")
+            if section:
+                parts.append(f"**Section:** {section}")
+            if category:
+                parts.append(f"**Category:** {category}")
+            parts.append(f"\n{preview}\n")
+
+        return "\n".join(parts)
 
     def _build_system_prompt(self) -> str:
         """Build system prompt with CLAUDE.md documentation."""
@@ -411,6 +524,8 @@ Use this documentation to provide accurate, detailed answers about the platform.
         """
         Generate a contextual help response.
 
+        Enhanced with semantic documentation search when available.
+
         Args:
             user_message: User's question or message
             context: Current UI context (mode, tab, module info, etc.)
@@ -428,13 +543,20 @@ Use this documentation to provide accurate, detailed answers about the platform.
         if not self.llm_client:
             return self._fallback_response(user_message, context)
 
+        # Search documentation for relevant context (if enabled)
+        doc_results = self._search_documentation(user_message)
+        doc_context = self._format_doc_context(doc_results)
+
+        # Build enhanced system prompt with doc context
+        enhanced_prompt = self._build_enhanced_prompt(context, doc_context)
+
         # Build messages for LLM
         messages = self._build_messages(user_message, context, chat_history)
 
         try:
             response = self.llm_client.create(
                 messages=messages,
-                system=self.system_prompt,
+                system=enhanced_prompt,
                 max_tokens=1000,
                 temperature=0.7
             )
@@ -443,6 +565,97 @@ Use this documentation to provide accurate, detailed answers about the platform.
         except Exception as e:
             logger.error(f"LLM request failed: {e}")
             return self._fallback_response(user_message, context)
+
+    def _build_enhanced_prompt(
+        self,
+        context: Dict[str, Any],
+        doc_context: str
+    ) -> str:
+        """
+        Build enhanced system prompt with context and doc search results.
+
+        Args:
+            context: Current UI context
+            doc_context: Formatted documentation search results
+
+        Returns:
+            Enhanced system prompt string
+        """
+        prompt_parts = [self.system_prompt]
+
+        # Add current context section
+        context_section = self._format_enhanced_context(context)
+        if context_section:
+            prompt_parts.append(f"\n## Current Context\n{context_section}")
+
+        # Add doc search results
+        if doc_context:
+            prompt_parts.append(f"\n{doc_context}")
+
+        return "\n".join(prompt_parts)
+
+    def _format_enhanced_context(self, context: Dict[str, Any]) -> str:
+        """Format enhanced context for system prompt."""
+        parts = []
+
+        # New user indicator
+        if context.get("is_new_user"):
+            parts.append("**User Status:** New user (no demos created yet)")
+
+        # Mode and location
+        mode = context.get("mode", "unknown")
+        parts.append(f"**Mode:** {mode.title()}")
+
+        if mode == "create":
+            # Create mode specific context
+            phase = context.get("conversation_phase", "initial")
+            parts.append(f"**Conversation Phase:** {phase}")
+
+            demo_ctx = context.get("demo_context", {})
+            if demo_ctx:
+                if demo_ctx.get("company"):
+                    parts.append(f"**Company:** {demo_ctx['company']}")
+                if demo_ctx.get("industry"):
+                    parts.append(f"**Industry:** {demo_ctx['industry']}")
+                if demo_ctx.get("demo_type"):
+                    parts.append(f"**Demo Type:** {demo_ctx['demo_type']}")
+
+        elif mode == "browse":
+            # Browse mode specific context
+            tab = context.get("tab", "config")
+            parts.append(f"**Current Tab:** {tab}")
+
+            if context.get("module_name"):
+                parts.append(f"**Module:** {context['module_name']}")
+
+            if context.get("module_summary"):
+                parts.append(f"**Module Details:** {context['module_summary']}")
+
+            # Data profile
+            data_profile = context.get("data_profile_summary", {})
+            if data_profile:
+                datasets_info = ", ".join(
+                    f"{name} ({info.get('records', '?')} records)"
+                    for name, info in data_profile.items()
+                )
+                parts.append(f"**Datasets:** {datasets_info}")
+
+            # Query status with errors
+            query_status = context.get("query_status", {})
+            if query_status:
+                validated = query_status.get("validated", 0)
+                failed = query_status.get("failed", 0)
+                total = query_status.get("total", 0)
+                parts.append(f"**Query Status:** {validated}/{total} validated, {failed} failed")
+
+                # Include sample errors if present
+                sample_errors = query_status.get("sample_errors", [])
+                if sample_errors:
+                    parts.append("**Recent Query Errors:**")
+                    for err in sample_errors[:2]:
+                        parts.append(f"  - {err.get('query_id', 'unknown')}: {err.get('error', 'Unknown error')[:100]}")
+
+        return "\n".join(parts) if parts else ""
 
     def _build_messages(
         self,

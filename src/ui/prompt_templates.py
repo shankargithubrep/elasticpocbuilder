@@ -10,8 +10,7 @@ You'll receive JSON or text containing:
 - Customer name, department, industry
 - Brief pain points (1-2 sentences each)
 - High-level use cases (simple descriptions)
-- Basic metrics mentioned
-- Scale indicators (optional)
+- Basic metrics mentioned (optional)
 
 **Output Requirements**
 

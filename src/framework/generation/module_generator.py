@@ -704,7 +704,6 @@ Department: {config["department"]}
 Industry: {config["industry"]}
 Pain Points: {", ".join(config["pain_points"])}
 Use Cases: {", ".join(config["use_cases"])}
-Scale: {config["scale"]}
 Dataset Size Preference: {size_preference.upper()}
 
 The module should:
@@ -717,7 +716,7 @@ The module should:
 CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
 - Primary timeseries datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
-- Scale mentioned ({config["scale"]}) is for REALISM only, don't generate that many!
+- Use realistic cardinality for the industry, but keep within size limits above
 
 CRITICAL - TIMESTAMP REQUIREMENTS:
 - All timestamp/datetime columns MUST use datetime.now() as the END date
@@ -766,7 +765,6 @@ Department: {config["department"]}
 Industry: {config["industry"]}
 Pain Points: {", ".join(config["pain_points"])}
 Use Cases: {", ".join(config["use_cases"])}
-Scale: {config["scale"]}
 Dataset Size Preference: {size_preference.upper()}
 
 {formatted_requirements}

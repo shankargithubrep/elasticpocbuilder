@@ -138,8 +138,7 @@ class SearchQueryStrategyGenerator:
 - Department: {context.get('department')}
 - Industry: {context.get('industry')}
 - Pain Points: {json.dumps(context.get('pain_points', []), indent=2)}
-- Use Cases: {json.dumps(context.get('use_cases', []), indent=2)}
-- Scale: {context.get('scale')}"""
+- Use Cases: {json.dumps(context.get('use_cases', []), indent=2)}"""
 
         prompt = f"""You are an ES|QL search expert designing a SEARCH/RAG demo for Elastic Agent Builder.
 
@@ -155,23 +154,49 @@ This is a SEARCH/RAG demo, NOT analytics. Focus on document retrieval, not aggre
 - Design document collections that match the described content types
 
 **CRITICAL - Always Demonstrate Advanced Capabilities:**
-While addressing the customer's pain points, ALWAYS include at least 2-3 sophisticated queries that showcase Elasticsearch's advanced search features:
+While addressing the customer's pain points, ALWAYS include sophisticated queries that showcase Elasticsearch's advanced search features.
 
-1. **Weighted Hybrid Search** - Use `MATCH` with `{{"boost": X}}` to balance semantic vs exact matching
+**MANDATORY: Include at least 1-2 queries using these ADVANCED HYBRID SEARCH commands:**
+
+1. **FORK + FUSE Pipeline** - Multi-branch parallel search with score fusion
+   ```esql
+   FROM index METADATA _id, _index, _score
+   | FORK (WHERE field:"exact term" | SORT _score DESC | LIMIT 50)
+          (WHERE MATCH(semantic_field, "natural language query") | SORT _score DESC | LIMIT 50)
+   | FUSE LINEAR WITH {{ "weights": {{ "fork1": 0.3, "fork2": 0.7 }}, "normalizer": "minmax" }}
+   | LIMIT 20
+   ```
+   Use FORK to run lexical + semantic searches in parallel, FUSE to combine with weighted scoring.
+
+2. **RERANK** - ML-based relevance reranking for precision
+   ```esql
+   | RERANK "query text" ON content_field WITH {{ "inference_id": ".rerank-v1-elasticsearch" }}
+   ```
+   Add RERANK after initial retrieval to improve result quality with ML models.
+
+3. **COMPLETION** - LLM text generation for RAG answers/summaries
+   ```esql
+   | EVAL prompt = CONCAT("Summarize: ", content)
+   | COMPLETION summary = prompt WITH {{ "inference_id": "completion-vulcan" }}
+   ```
+   Use after retrieval to generate answers, summaries, or insights.
+
+**Also include these standard advanced features:**
+
+4. **Weighted Hybrid Search** - Use `MATCH` with `{{"boost": X}}` to balance semantic vs exact matching
    Example: `MATCH(title_semantic, "term", {{"boost": 0.75}}) OR MATCH(title, "term", {{"boost": 0.25}})`
 
-2. **Fuzzy Search** - Use `{{"fuzziness": "AUTO"}}` to handle typos and misspellings
+5. **Fuzzy Search** - Use `{{"fuzziness": "AUTO"}}` to handle typos and misspellings
    Example: `MATCH(product_name, "wireles headfones", {{"fuzziness": "AUTO"}})`
 
-3. **Precision Control** - Use `{{"minimum_should_match": N}}` for multi-term queries
+6. **Precision Control** - Use `{{"minimum_should_match": N}}` for multi-term queries
    Example: `MATCH(content, "configure email notification settings", {{"operator": "OR", "minimum_should_match": 3}})`
 
-4. **Multi-field Search** - Search across multiple fields with different weights
-
-5. **Phrase Matching** - Use `MATCH_PHRASE` for exact phrase searches with optional `{{"slop": N}}`
-
-These advanced queries should feel natural to the use case, not forced. If customer pain points are basic,
-frame these as "best practice" or "advanced optimization" examples.
+**Query Complexity Targets (MANDATORY):**
+- At least 1-2 queries MUST use FORK + FUSE for hybrid search
+- At least 1 query SHOULD use RERANK for ML reranking
+- At least 1 query SHOULD use COMPLETION for RAG/summarization
+- All queries should feel natural to the use case, not forced
 
 **ES|QL Search Capabilities:**
 {esql_skill}
@@ -280,8 +305,8 @@ You MUST use these EXACT row_count ranges in your output:
 - Reference datasets (e.g., categories, users, metadata): "{reference_range}"
 
 **IMPORTANT:**
-- The customer's scale ("{context.get('scale', 'N/A')}") is for REALISM only (distribution, cardinality)
-- DO NOT calculate row counts based on scale (e.g., "10k documents × 5 categories")
+- Use cardinality appropriate for the industry (realistic distribution)
+- DO NOT calculate row counts based on business size (e.g., "10k documents × 5 categories")
 - ALWAYS use the template ranges above for row_count fields
 - Use cardinality_notes to explain data distribution, NOT to justify larger row counts
 
@@ -347,23 +372,47 @@ You MUST use these EXACT row_count ranges in your output:
       "search_type": "semantic",
       "required_datasets": ["knowledge_base_articles"],
       "required_fields": {{
-        "knowledge_base_articles": ["title", "content_semantic", "category", "created_date"]
+        "knowledge_base_articles": ["title", "content", "category", "created_date"]
       }},
       "description": "Use semantic search to find most relevant articles for a customer inquiry",
       "complexity": "simple",
-      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content_semantic, 'password reset procedure') | KEEP title, content, category, _score | SORT _score DESC | LIMIT 5"
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'password reset procedure') | KEEP article_id, _score, title, content, category | SORT _score DESC | LIMIT 10"
     }},
     {{
-      "name": "Weighted Hybrid Search - Best Practice",
-      "pain_point": "Demonstrate advanced relevance tuning",
-      "search_type": "hybrid",
+      "name": "Multi-Strategy Hybrid Search with FORK + FUSE",
+      "pain_point": "Need to combine exact matching with semantic understanding",
+      "search_type": "hybrid_pipeline",
       "required_datasets": ["knowledge_base_articles"],
       "required_fields": {{
-        "knowledge_base_articles": ["title", "title_semantic", "content", "_score"]
+        "knowledge_base_articles": ["article_id", "title", "content", "_score"]
       }},
-      "description": "Balance semantic understanding with exact keyword matching using boost weights",
-      "complexity": "advanced",
-      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(title_semantic, 'authentication error', {{'boost': 0.75}}) OR MATCH(title, 'authentication error', {{'boost': 0.25}}) | KEEP title, content, _score | SORT _score DESC | LIMIT 10"
+      "description": "Use FORK to run lexical and semantic searches in parallel, then FUSE to combine with weighted scoring",
+      "complexity": "expert",
+      "example_esql": "FROM knowledge_base_articles METADATA _id, _index, _score | FORK (WHERE title:\\"authentication\\" | SORT _score DESC | LIMIT 50) (WHERE MATCH(content, 'authentication login error', {{'fuzziness': 'AUTO'}}) | SORT _score DESC | LIMIT 50) | FUSE LINEAR WITH {{ \\"weights\\": {{ \\"fork1\\": 0.3, \\"fork2\\": 0.7 }}, \\"normalizer\\": \\"minmax\\" }} | LIMIT 15 | KEEP article_id, _score, title, content, category"
+    }},
+    {{
+      "name": "Precision Search with ML Reranking",
+      "pain_point": "Initial search results need better relevance ranking",
+      "search_type": "rerank",
+      "required_datasets": ["knowledge_base_articles"],
+      "required_fields": {{
+        "knowledge_base_articles": ["article_id", "title", "content", "_score"]
+      }},
+      "description": "Retrieve candidates with semantic search, then use ML reranking for precision",
+      "complexity": "expert",
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'configure SSO single sign-on') | SORT _score DESC | LIMIT 50 | RERANK \\"how to configure SSO\\" ON content, title WITH {{ \\"inference_id\\": \\".rerank-v1-elasticsearch\\" }} | LIMIT 10 | KEEP article_id, _score, title, content, category"
+    }},
+    {{
+      "name": "RAG Answer Generation with COMPLETION",
+      "pain_point": "Users need synthesized answers, not just document lists",
+      "search_type": "rag_completion",
+      "required_datasets": ["knowledge_base_articles"],
+      "required_fields": {{
+        "knowledge_base_articles": ["title", "content"]
+      }},
+      "description": "Retrieve relevant documents and generate a synthesized answer using LLM",
+      "complexity": "expert",
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'password reset procedure') | SORT _score DESC | LIMIT 5 | EVAL prompt = CONCAT(\\"Based on this article, summarize the password reset steps:\\\\n\\\\nTitle: \\", title, \\"\\\\nContent: \\", content) | COMPLETION summary = prompt WITH {{ \\"inference_id\\": \\"completion-vulcan\\" }} | KEEP title, summary, _score"
     }},
     {{
       "name": "Fuzzy Search for Typo Tolerance",
@@ -371,11 +420,11 @@ You MUST use these EXACT row_count ranges in your output:
       "search_type": "fuzzy",
       "required_datasets": ["knowledge_base_articles"],
       "required_fields": {{
-        "knowledge_base_articles": ["product_name", "description"]
+        "knowledge_base_articles": ["article_id", "title", "content"]
       }},
       "description": "Find results even when search terms contain typos",
       "complexity": "advanced",
-      "example_esql": "FROM products METADATA _score | WHERE MATCH(product_name, 'wireles headfones', {{'fuzziness': 'AUTO'}}) | KEEP product_name, category, price, _score | SORT _score DESC | LIMIT 20"
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(title, 'authentacation eror', {{'fuzziness': 'AUTO'}}) | KEEP article_id, _score, title, content, category | SORT _score DESC | LIMIT 20"
     }}
   ],
   "relationships": [
@@ -407,7 +456,14 @@ You MUST use these EXACT row_count ranges in your output:
 ❌ BAD: "Average response time by department" (that's analytics)
 
 **MANDATORY - Include Advanced Queries:**
-Of the 5-7 queries you design, AT LEAST 2-3 MUST be "advanced" complexity demonstrating:
+Of the 5-7 queries you design:
+
+**REQUIRED (at least 2 of these "expert" complexity queries):**
+- FORK + FUSE multi-branch hybrid search pipeline
+- RERANK for ML-based relevance reranking
+- COMPLETION for RAG answer generation/summarization
+
+**ALSO INCLUDE (at least 1-2 "advanced" complexity queries):**
 - Weighted hybrid search with boost parameters
 - Fuzzy search with fuzziness parameter
 - Precision control with minimum_should_match

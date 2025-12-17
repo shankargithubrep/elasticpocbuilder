@@ -19,37 +19,25 @@ def display_context_summary():
     progress, missing = tracker.calculate_progress(context)
     status = tracker.get_completion_status(context)
 
-    st.markdown("### 📋 Demo Context")
+    st.markdown("**Extracted Context**")
 
     # Show demo type if detected
     demo_type = context.get('demo_type')
     if demo_type:
         type_emoji = "🔍" if demo_type == "search" else "📊"
         type_label = "Search/RAG" if demo_type == "search" else "Analytics"
-        st.info(f"{type_emoji} **Demo Type:** {type_label}")
-
-    # Progress bar at top
-    st.progress(progress, text=f"{int(progress * 100)}% complete")
+        st.caption(f"{type_emoji} {type_label} Demo")
 
     # Display fields as simple list with emoji indicators
-    st.markdown("#### Extracted Context")
-
     for field_key, field_status in status.items():
         name = field_status['display_name']
         value = field_status['display_value']
 
         if field_status['is_complete']:
-            # Complete: show green checkmark
             st.markdown(f"✅ **{name}:** {value}")
         else:
-            # Incomplete: show red X
-            st.markdown(f"❌ **{name}:** *(not set)*")
+            st.markdown(f"⬜ **{name}**")
 
-    # Status message
-    st.markdown("---")
-
+    # Ready message directly after context (no divider)
     if tracker.is_ready_to_generate(context):
-        st.success("✅ Ready to generate!\n\nType **'generate'** to create your demo.")
-    else:
-        missing_count = len(missing)
-        st.warning(f"⚠️ Need more info ({missing_count} fields)")
+        st.success("Type **'generate'** to create your demo.")

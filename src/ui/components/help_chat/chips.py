@@ -9,12 +9,20 @@ from typing import List, Dict, Any
 
 # Chip configurations by context
 CONTEXT_CHIPS: Dict[str, List[str]] = {
+    # New user chips (no demos created yet)
+    "new_user": [
+        "How do I use this app?",
+        "What is Vulcan?",
+        "Search vs Analytics demos?",
+        "Show me an example prompt",
+    ],
+
     # Create mode chips
     "create": [
+        "How do I use this app?",
         "How should I format my prompt?",
-        "Search vs Analytics demos?",
-        "What makes a good description?",
         "What is expanded mode?",
+        "Search vs Analytics demos?",
     ],
 
     # Browse mode - Config tab
@@ -36,6 +44,14 @@ CONTEXT_CHIPS: Dict[str, List[str]] = {
         "How do I test a query?",
         "What does validation mean?",
         "How to edit and re-run?",
+    ],
+
+    # Browse mode - Queries tab with errors (shown when query validation has failures)
+    "browse_queries_errors": [
+        "Why did my query return 0 results?",
+        "How do I fix ES|QL syntax errors?",
+        "What is integer division in ES|QL?",
+        "How do I handle NULL values?",
     ],
 
     # Browse mode - Tools tab
@@ -61,15 +77,15 @@ CONTEXT_CHIPS: Dict[str, List[str]] = {
 
     # Generic browse (no specific tab or unknown tab)
     "browse": [
+        "How do I use this app?",
         "How do I navigate this module?",
-        "What should I do first?",
         "How do I deploy to Agent Builder?",
     ],
 
     # Fallback for unknown context
     "default": [
+        "How do I use this app?",
         "What is Vulcan?",
-        "How do I get started?",
         "What can I build with this?",
     ],
 }
@@ -84,12 +100,19 @@ def get_chips_for_context(context: Dict[str, Any]) -> List[str]:
             - mode: "create" | "browse"
             - tab: (optional) Current tab name in browse mode
             - module_name: (optional) Currently selected module
+            - is_new_user: (optional) Whether user has no demos yet
+            - query_status: (optional) Dict with query validation status
 
     Returns:
         List of chip question strings
     """
     mode = context.get("mode", "").lower()
     tab = context.get("tab", "").lower()
+    is_new_user = context.get("is_new_user", False)
+
+    # New user gets special onboarding chips
+    if is_new_user:
+        return CONTEXT_CHIPS["new_user"]
 
     # Create mode
     if mode == "create":
@@ -97,6 +120,13 @@ def get_chips_for_context(context: Dict[str, Any]) -> List[str]:
 
     # Browse mode with specific tab
     if mode == "browse":
+        # Check for queries with errors
+        if tab == "queries":
+            query_status = context.get("query_status", {})
+            failed_count = query_status.get("failed", 0) if query_status else 0
+            if failed_count > 0:
+                return CONTEXT_CHIPS["browse_queries_errors"]
+
         # Map tab names to chip keys
         tab_key_map = {
             "config": "browse_config",
