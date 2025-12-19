@@ -225,6 +225,7 @@ class ModularDemoOrchestrator:
             Demo results including module path and test results
         """
         results = {'phases': {}}
+        text_fields_by_dataset = {}  # Fields needing 'text' type for MATCH queries
 
         # Phase 1: Generate Query Strategy (branch by demo_type)
         if progress_callback:
@@ -264,15 +265,48 @@ class ModularDemoOrchestrator:
                 'datasets_planned': len(query_strategy.get('datasets', []))
             }
             logger.info(f"Query strategy generated: {len(query_strategy.get('queries', []))} queries")
+
+            # Extract text fields from queries for proper field mapping
+            # Fields used in MATCH() need 'text' type, not 'keyword'
+            text_fields_by_dataset = self._extract_text_fields_from_queries(query_strategy)
+            if text_fields_by_dataset:
+                # Store in query_strategy for reference
+                query_strategy['text_fields'] = text_fields_by_dataset
+                logger.info(f"Text fields for MATCH queries: {text_fields_by_dataset}")
+
         except Exception as e:
             logger.error(f"Strategy generation failed: {e}", exc_info=True)
             raise ValueError(f"Failed to generate query strategy: {e}")
+
+        # Phase 1.5: Expand Data Specifications (NEW) - ONLY for search demos
+        data_specifications = None
+        if demo_type == 'search':
+            if progress_callback:
+                progress_callback(0.12, "🎯 Generating data specifications...")
+
+            try:
+                from src.services.data_specification_expander import DataSpecificationExpander
+                expander = DataSpecificationExpander(self.llm_client)
+
+                data_specifications = expander.expand_data_specifications(
+                    query_strategy,
+                    config
+                )
+
+                logger.info(f"Generated data specifications for {len(data_specifications.get('datasets', {}))} datasets")
+            except Exception as e:
+                logger.warning(f"Data specification expansion failed: {e}, using basic specifications")
+                # Continue without specifications (fallback to current behavior)
 
         # Phase 2: Generate Data Module ONLY (queries will be generated AFTER profiling)
         if progress_callback:
             progress_callback(0.15, "🤖 Generating data module...")
 
-        module_path = self.module_generator.generate_data_and_infrastructure_only(config, query_strategy)
+        module_path = self.module_generator.generate_data_and_infrastructure_only(
+            config,
+            query_strategy,
+            data_specifications=data_specifications  # NEW parameter
+        )
 
         # Phase 3: Load and Execute Data Generation ONLY (queries come later in Phase 5!)
         if progress_callback:
@@ -366,7 +400,8 @@ class ModularDemoOrchestrator:
                 datasets,  # ← Changed from exec_results['datasets']
                 semantic_fields,
                 index_modes,
-                progress_callback
+                progress_callback,
+                text_fields=text_fields_by_dataset  # Fields needing 'text' type for MATCH queries
             )
 
             results['phases']['indexing'] = indexing_results
@@ -601,6 +636,73 @@ class ModularDemoOrchestrator:
                     logger.debug(f"Found LOOKUP JOIN on dataset: {dataset_name}")
 
         return lookup_datasets
+
+    def _extract_text_fields_from_queries(self, query_strategy: Dict[str, Any]) -> Dict[str, List[str]]:
+        """Extract fields used in MATCH() calls - these need text type mapping
+
+        MATCH() only works on 'text' type fields, not 'keyword'. This function
+        parses queries to find fields used in MATCH() so they can be mapped
+        as 'text' type during indexing.
+
+        Args:
+            query_strategy: Query strategy dictionary containing queries
+
+        Returns:
+            Dictionary mapping dataset names to list of text fields
+        """
+        import re
+
+        # Map field names to dataset names
+        text_fields_by_dataset: Dict[str, set] = {}
+
+        # Build field-to-dataset mapping from dataset definitions
+        field_to_dataset = {}
+        for dataset in query_strategy.get('datasets', []):
+            dataset_name = dataset.get('name')
+            required_fields = dataset.get('required_fields', {})
+            # Support both dict format and list format
+            if isinstance(required_fields, dict):
+                for field_name in required_fields.keys():
+                    field_to_dataset[field_name] = dataset_name
+            elif isinstance(required_fields, list):
+                for field_name in required_fields:
+                    field_to_dataset[field_name] = dataset_name
+
+        # Parse all queries to find MATCH(field_name, ...) patterns
+        for query in query_strategy.get('queries', []):
+            esql_query = (
+                query.get('example_esql') or
+                query.get('esql') or
+                query.get('esql_query') or
+                query.get('query') or
+                ''
+            )
+
+            # Find all MATCH(field_name, ...) patterns
+            # Handles: MATCH(field, "term"), MATCH(field, 'term'), MATCH(field, 'term', {...})
+            matches = re.findall(r'MATCH\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)', esql_query)
+
+            for field_name in matches:
+                # Find which dataset this field belongs to
+                dataset_name = field_to_dataset.get(field_name)
+
+                # If not found in mapping, try to infer from required_datasets
+                if not dataset_name:
+                    required_datasets = query.get('required_datasets', [])
+                    if required_datasets:
+                        dataset_name = required_datasets[0]  # Use first required dataset
+
+                if dataset_name:
+                    if dataset_name not in text_fields_by_dataset:
+                        text_fields_by_dataset[dataset_name] = set()
+                    text_fields_by_dataset[dataset_name].add(field_name)
+                    logger.debug(f"Found MATCH on field '{field_name}' -> dataset '{dataset_name}'")
+
+        # Convert sets to lists
+        result = {name: list(fields) for name, fields in text_fields_by_dataset.items()}
+        if result:
+            logger.info(f"Extracted text fields for full-text search: {result}")
+        return result
 
     def save_conversation(
         self,

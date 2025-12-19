@@ -150,7 +150,12 @@ class ModuleGenerator:
         logger.info(f"Generated demo module with strategy at: {module_path}")
         return str(module_path)
 
-    def generate_data_and_infrastructure_only(self, config: Dict[str, Any], query_strategy: Dict[str, Any]) -> str:
+    def generate_data_and_infrastructure_only(
+        self,
+        config: Dict[str, Any],
+        query_strategy: Dict[str, Any],
+        data_specifications: Optional[Dict[str, Any]] = None
+    ) -> str:
         """Generate module infrastructure and data generator only (NO QUERIES YET)
 
         This is Phase 1 of the split generation workflow. Query generation happens later
@@ -159,6 +164,7 @@ class ModuleGenerator:
         Args:
             config: Demo configuration with customer context
             query_strategy: Pre-generated query strategy with data requirements
+            data_specifications: Optional domain-specific value specifications (for search demos)
 
         Returns:
             Path to the generated module directory (ready for data generation)
@@ -183,13 +189,24 @@ class ModuleGenerator:
         strategy_file.write_text(json.dumps(query_strategy, indent=2))
         logger.info("Saved query_strategy.json")
 
+        # Save data specifications if provided (for search demos)
+        if data_specifications:
+            specs_file = module_path / 'data_specifications.json'
+            specs_file.write_text(json.dumps(data_specifications, indent=2))
+            logger.info("Saved data_specifications.json")
+
         # Extract data requirements from strategy
         from src.services.query_strategy_generator import QueryStrategyGenerator
         strategy_gen = QueryStrategyGenerator(self.llm_client)
         data_requirements = strategy_gen.extract_data_requirements(query_strategy)
 
         # Generate ONLY data module and supporting files (NO QUERIES)
-        self._generate_data_module_with_requirements(config, module_path, data_requirements)
+        self._generate_data_module_with_requirements(
+            config,
+            module_path,
+            data_requirements,
+            data_specifications=data_specifications  # Pass specifications
+        )
         self._generate_guide_module(config, module_path)
         self._generate_config_file(config, module_path)
 
@@ -259,20 +276,29 @@ class ModuleGenerator:
         size_preference = config.get('dataset_size_preference', 'medium')
         size_ranges = {
             'small': {
-                'timeseries_max': 5000,
-                'timeseries_typical': '1000-3000',
+                'total_max': 5000,
+                'per_dataset_max': 1000,
+                'per_dataset_typical': '200-500',
+                'timeseries_max': 3000,
+                'timeseries_typical': '1000-2000',
                 'reference_max': 500,
                 'reference_typical': '50-200'
             },
             'medium': {
-                'timeseries_max': 15000,
-                'timeseries_typical': '5000-10000',
+                'total_max': 15000,
+                'per_dataset_max': 3000,
+                'per_dataset_typical': '500-1500',
+                'timeseries_max': 10000,
+                'timeseries_typical': '3000-6000',
                 'reference_max': 2000,
                 'reference_typical': '200-1000'
             },
             'large': {
-                'timeseries_max': 50000,
-                'timeseries_typical': '15000-30000',
+                'total_max': 50000,
+                'per_dataset_max': 10000,
+                'per_dataset_typical': '2000-5000',
+                'timeseries_max': 30000,
+                'timeseries_typical': '10000-20000',
                 'reference_max': 5000,
                 'reference_typical': '500-2000'
             }
@@ -306,9 +332,13 @@ CRITICAL - TIMESTAMP REQUIREMENTS:
 - This ensures ES|QL queries with "NOW() - X days" will return results (stay within 120-day window)
 
 CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
-- Primary timeseries datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
+***** STRICT TOTAL LIMIT: {ranges['total_max']:,} documents MAXIMUM across ALL datasets combined *****
+- Each individual dataset: {ranges['per_dataset_typical']} rows (NEVER exceed {ranges['per_dataset_max']:,} per dataset)
+- For demos with 5-6 datasets, aim for {ranges['per_dataset_max'] // 3:,}-{ranges['per_dataset_max'] // 2:,} rows each to stay under total
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
-- Use realistic cardinality for the industry, but keep within size limits above
+- DO NOT generate thousands of records per dataset - keep datasets SMALL for demo purposes
+- Example for {size_preference.upper()}: 6 datasets x 1000 rows = 6000 total (GOOD)
+- WRONG for {size_preference.upper()}: 6 datasets x 6000 rows = 36000 total (EXCEEDS LIMIT!)
 
 CRITICAL - STRING TEMPLATE FORMATTING:
 When using string templates with .format(), ensure placeholder names EXACTLY match the keyword arguments:
@@ -1468,38 +1498,143 @@ class {company_class}DemoGuide(DemoGuideModule):
         module_file = module_path / 'demo_guide.py'
         module_file.write_text(code)
 
+    def _format_field_specifications_for_prompt(self, data_specifications: Dict[str, Any]) -> str:
+        """Format data specifications into rich prompt guidance for LLM
+
+        Transforms data_specifications.json structure into detailed field requirements
+        with examples, cardinality, content patterns, and diversity guidance.
+
+        Args:
+            data_specifications: Domain-specific value specifications from expander
+
+        Returns:
+            Formatted string with rich field guidance for data generation prompt
+        """
+        sections = []
+
+        datasets = data_specifications.get('datasets', {})
+
+        for dataset_name, dataset_spec in datasets.items():
+            sections.append(f"\n## Dataset: {dataset_name}")
+
+            fields_spec = dataset_spec.get('fields', {})
+
+            if not fields_spec:
+                sections.append("  (No field specifications provided)")
+                continue
+
+            sections.append("\n**Field Specifications:**\n")
+
+            for field_name, field_spec in fields_spec.items():
+                field_type = field_spec.get('type', 'unknown')
+
+                # Start with field name and type
+                sections.append(f"- **{field_name}** ({field_type}):")
+
+                # Add description if available
+                if 'description' in field_spec:
+                    sections.append(f"  - Description: {field_spec['description']}")
+
+                # Type-specific formatting
+                if field_type == 'keyword':
+                    # Cardinality
+                    if 'cardinality' in field_spec:
+                        sections.append(f"  - Cardinality: {field_spec['cardinality']} distinct values")
+
+                    # Examples
+                    if 'examples' in field_spec:
+                        examples = field_spec['examples']
+                        examples_str = ", ".join([f'"{ex}"' for ex in examples[:8]])
+                        if len(examples) > 8:
+                            examples_str += f", ... ({len(examples)} total)"
+                        sections.append(f"  - Example Values: {examples_str}")
+
+                    # Diversity guidance
+                    if 'diversity_guidance' in field_spec:
+                        sections.append(f"  - Diversity: {field_spec['diversity_guidance']}")
+
+                elif field_type in ('text', 'semantic_text'):
+                    # Content pattern
+                    if 'content_pattern' in field_spec:
+                        sections.append(f"  - Content Pattern: {field_spec['content_pattern']}")
+
+                    # Query alignment (CRITICAL for semantic search)
+                    if 'query_alignment' in field_spec:
+                        sections.append(f"  - Query Alignment: {field_spec['query_alignment']}")
+
+                    # Diversity guidance
+                    if 'diversity_guidance' in field_spec:
+                        sections.append(f"  - Diversity: {field_spec['diversity_guidance']}")
+
+                    # Tiering guidance (for semantic_text)
+                    if field_type == 'semantic_text' and 'tiering_guidance' in field_spec:
+                        sections.append(f"  - Tiering: {field_spec['tiering_guidance']}")
+
+                else:
+                    # For other types (date, boolean, integer, float, etc.)
+                    if 'examples' in field_spec:
+                        examples_str = ", ".join([str(ex) for ex in field_spec['examples'][:5]])
+                        sections.append(f"  - Examples: {examples_str}")
+
+                    if 'value_range' in field_spec:
+                        sections.append(f"  - Range: {field_spec['value_range']}")
+
+                sections.append("")  # Blank line between fields
+
+        result = "\n".join(sections)
+        logger.debug(f"Formatted field specifications: {len(result)} characters")
+        return result
+
     def _generate_data_module_with_requirements(self, config: Dict[str, Any],
                                                  module_path: Path,
-                                                 data_requirements: Dict):
+                                                 data_requirements: Dict,
+                                                 data_specifications: Optional[Dict[str, Any]] = None):
         """Generate data module based on query strategy requirements
 
         Args:
             config: Demo configuration
             module_path: Path to module directory
             data_requirements: Data requirements extracted from query strategy
+            data_specifications: Optional domain-specific value specifications (for search demos)
         """
         from src.services.query_strategy_generator import QueryStrategyGenerator
         strategy_gen = QueryStrategyGenerator(self.llm_client)
-        formatted_requirements = strategy_gen.get_field_info_for_prompts(data_requirements)
+
+        # Use rich specifications if available, otherwise fall back to basic formatting
+        if data_specifications:
+            logger.info("Using rich data specifications for field guidance")
+            formatted_requirements = self._format_field_specifications_for_prompt(data_specifications)
+        else:
+            logger.info("Using basic field requirements (no specifications provided)")
+            formatted_requirements = strategy_gen.get_field_info_for_prompts(data_requirements)
 
         # Get dataset size preference and calculate ranges
         size_preference = config.get('dataset_size_preference', 'medium')
         size_ranges = {
             'small': {
-                'timeseries_max': 5000,
-                'timeseries_typical': '1000-3000',
+                'total_max': 5000,
+                'per_dataset_max': 1000,
+                'per_dataset_typical': '200-500',
+                'timeseries_max': 3000,
+                'timeseries_typical': '1000-2000',
                 'reference_max': 500,
                 'reference_typical': '50-200'
             },
             'medium': {
-                'timeseries_max': 15000,
-                'timeseries_typical': '5000-10000',
+                'total_max': 15000,
+                'per_dataset_max': 3000,
+                'per_dataset_typical': '500-1500',
+                'timeseries_max': 10000,
+                'timeseries_typical': '3000-6000',
                 'reference_max': 2000,
                 'reference_typical': '200-1000'
             },
             'large': {
-                'timeseries_max': 50000,
-                'timeseries_typical': '15000-30000',
+                'total_max': 50000,
+                'per_dataset_max': 10000,
+                'per_dataset_typical': '2000-5000',
+                'timeseries_max': 30000,
+                'timeseries_typical': '10000-20000',
                 'reference_max': 5000,
                 'reference_typical': '500-2000'
             }
@@ -1541,9 +1676,13 @@ CRITICAL - FIELD NAMING:
 - Match field types exactly (keyword, date, float, text)
 
 CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
-- Primary timeseries datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
+***** STRICT TOTAL LIMIT: {ranges['total_max']:,} documents MAXIMUM across ALL datasets combined *****
+- Each individual dataset: {ranges['per_dataset_typical']} rows (NEVER exceed {ranges['per_dataset_max']:,} per dataset)
+- For demos with 5-6 datasets, aim for {ranges['per_dataset_max'] // 3:,}-{ranges['per_dataset_max'] // 2:,} rows each to stay under total
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
-- Use realistic cardinality for the industry, but keep within size limits above
+- DO NOT generate thousands of records per dataset - keep datasets SMALL for demo purposes
+- Example for {size_preference.upper()}: 6 datasets x 1000 rows = 6000 total (GOOD)
+- WRONG for {size_preference.upper()}: 6 datasets x 6000 rows = 36000 total (EXCEEDS LIMIT!)
 
 CRITICAL - STRING TEMPLATE FORMATTING:
 When using string templates with .format(), ensure placeholder names EXACTLY match the keyword arguments:
@@ -1586,12 +1725,26 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
     def safe_choice(choices, size=None, weights=None, replace=True):
         \"\"\"Safer alternative to np.random.choice with automatic probability normalization.
 
-        WARNING: Do NOT use this for lists of lists with varying lengths!
-        For example, if you have networks = [['HMO', 'PPO'], ['PPO', 'EPO'], ['HMO']],
-        use Python's random.choice() instead:
-            import random
-            'networks': [','.join(random.choice(networks)) for _ in range(n)]
+        Automatically handles complex elements (lists, tuples, dicts) by falling back
+        to Python's random.choices when numpy would fail with shape errors.
         \"\"\"
+        # Check if choices contains complex elements that numpy can't handle
+        # numpy requires 1D arrays of simple types (strings, numbers)
+        use_python_random = False
+        if len(choices) > 0:
+            first_type = type(choices[0])
+            # Any list, tuple, or dict elements require Python's random.choices
+            if first_type in (list, tuple, dict):
+                use_python_random = True
+
+        # Use Python's random.choices for complex elements
+        if use_python_random:
+            if weights is not None:
+                return random.choices(choices, weights=weights, k=size if size else 1)
+            else:
+                return random.choices(choices, k=size if size else 1)
+
+        # Use numpy for simple 1D arrays (faster)
         if weights is not None:
             weights = np.array(weights, dtype=float)
 
