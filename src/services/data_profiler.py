@@ -759,6 +759,66 @@ FROM {dataset_name}
             return None
 
     @staticmethod
+    def format_profile_for_search_strategy(profile: Dict[str, Any]) -> str:
+        """Format profile data for search strategy generation (ultra-compact)
+
+        Returns ONLY what's needed for WHERE clause generation in search demos:
+        - 2-3 sample values per categorical field
+        - Sample multi-field combinations
+        - NO percentiles, NO numeric ranges, NO full value lists
+
+        Args:
+            profile: Profile dictionary
+
+        Returns:
+            Ultra-compact formatted string (~100-200 tokens)
+        """
+        if not profile or "datasets" not in profile:
+            return ""
+
+        lines = ["# Sample Data Values for WHERE Filters\n"]
+        lines.append("Use these ACTUAL values from indexed data. DO NOT invent values.\n")
+
+        for dataset_name, dataset_info in profile["datasets"].items():
+            if "error" in dataset_info:
+                continue
+
+            lines.append(f"\n## {dataset_name} ({dataset_info.get('total_records', 0)} records)\n")
+
+            # Sample field values - ONLY 2-3 values per field
+            if "fields" in dataset_info:
+                lines.append("**Sample values:**")
+
+                for field_name, field_info in dataset_info["fields"].items():
+                    # Skip timestamps and IDs in most cases
+                    if DataProfiler._should_skip_field(field_name):
+                        # But include ID fields with 1-2 examples for exact lookups
+                        if '_id' in field_name.lower() or field_name.lower() == 'id':
+                            if "unique_values" in field_info:
+                                sample = field_info["unique_values"][:2]
+                                values_str = ", ".join([f"'{v}'" for v in sample])
+                                lines.append(f"- **{field_name}**: {values_str}")
+                        continue
+
+                    if "unique_values" in field_info:
+                        # Only 2-3 sample values
+                        sample = field_info["unique_values"][:3]
+                        values_str = ", ".join([f"'{v}'" for v in sample])
+                        lines.append(f"- **{field_name}**: {values_str}")
+
+            # Multi-field combinations - TOP 3-5 only
+            if dataset_info.get("sample_combinations"):
+                lines.append("\n**Sample combinations (guaranteed results):**")
+                for i, combo in enumerate(dataset_info["sample_combinations"][:5], 1):
+                    combo_copy = combo.copy()
+                    combo_copy.pop('record_count', None)
+                    filter_parts = [f"{k}='{v}'" for k, v in combo_copy.items()]
+                    combo_str = " AND ".join(filter_parts)
+                    lines.append(f"{i}. {combo_str}")
+
+        return "\n".join(lines)
+
+    @staticmethod
     def format_profile_for_llm(profile: Dict[str, Any], compact: bool = True) -> str:
         """Format profile data for LLM consumption with smart sampling
 

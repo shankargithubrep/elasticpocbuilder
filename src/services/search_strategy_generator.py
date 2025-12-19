@@ -13,12 +13,12 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# Dataset size ranges by preference (per-dataset limits)
-# For search/RAG demos, we use 'documents' for main content and 'reference' for lookup tables
+# Fixed dataset sizes for search/RAG demos
+# Search demos need smaller datasets (500-1000) vs analytics (5000-50000)
+# because they only display top 10-20 results by relevance score
 SIZE_RANGES = {
-    'small': {'documents': '1000-3000', 'reference': '50-200'},
-    'medium': {'documents': '5000-10000', 'reference': '200-1000'},
-    'large': {'documents': '20000-50000', 'reference': '1000-5000'}
+    'documents': '500-1000',
+    'reference': '200-500'
 }
 
 
@@ -112,10 +112,9 @@ class SearchQueryStrategyGenerator:
         Returns:
             Prompt string
         """
-        # Get size ranges for the preference
-        size_ranges = SIZE_RANGES.get(size_preference, SIZE_RANGES['medium'])
-        documents_range = size_ranges['documents']
-        reference_range = size_ranges['reference']
+        # Fixed size ranges for search demos (size_preference ignored)
+        documents_range = SIZE_RANGES['documents']
+        reference_range = SIZE_RANGES['reference']
 
         # Check if we have rich technical context for high-fidelity generation
         full_context = context.get('full_technical_context')
@@ -159,14 +158,40 @@ While addressing the customer's pain points, ALWAYS include sophisticated querie
 **MANDATORY: Include at least 1-2 queries using these ADVANCED HYBRID SEARCH commands:**
 
 1. **FORK + FUSE Pipeline** - Multi-branch parallel search with score fusion
+
+   **Simple FUSE (RRF - recommended for hybrid queries):**
    ```esql
    FROM index METADATA _id, _index, _score
-   | FORK (WHERE field:"exact term" | SORT _score DESC | LIMIT 50)
-          (WHERE MATCH(semantic_field, "natural language query") | SORT _score DESC | LIMIT 50)
-   | FUSE LINEAR WITH {{ "weights": {{ "fork1": 0.3, "fork2": 0.7 }}, "normalizer": "minmax" }}
+   | FORK (WHERE MATCH(title, "exact term") | EVAL search_type = "bm25" | SORT _score DESC | LIMIT 50)
+          (WHERE MATCH(content_semantic, "natural language query") | EVAL search_type = "semantic" | SORT _score DESC | LIMIT 50)
+   | FUSE
+   | SORT _score DESC
    | LIMIT 20
+   | KEEP doc_id, title, content, _score, search_type
    ```
-   Use FORK to run lexical + semantic searches in parallel, FUSE to combine with weighted scoring.
+   Use `EVAL search_type = "..."` to label which branch each result came from. Include `search_type` in KEEP.
+
+   **⚠️ CRITICAL: SORT _score DESC MUST come AFTER FUSE and BEFORE the first LIMIT!**
+
+   **Key insight: FIELD TYPE determines search behavior:**
+   - MATCH on `text` field → BM25 (lexical/keyword search)
+   - MATCH on `semantic_text` field → semantic (vector similarity)
+   - True hybrid REQUIRES both a `text` field AND a `semantic_text` field in the dataset!
+
+   **Weighted LINEAR FUSE (for expert/sophisticated queries):**
+   ```esql
+   FROM index METADATA _id, _index, _score
+   | FORK (WHERE MATCH(title, "term") | EVAL search_type = "bm25" | SORT _score DESC | LIMIT 50)
+          (WHERE MATCH(content_semantic, "query") | EVAL search_type = "semantic" | SORT _score DESC | LIMIT 50)
+   | FUSE LINEAR WITH {{ "weights": {{ "fork1": 0.3, "fork2": 0.7 }}, "normalizer": "minmax" }}
+   | SORT _score DESC
+   | LIMIT 20
+   | KEEP doc_id, title, content, _score, search_type
+   ```
+
+   **FUSE Variety Guidelines:**
+   - `FUSE` (default RRF) - Use for "hybrid" complexity, position-based fusion
+   - `FUSE LINEAR WITH {{...}}` - Use for "sophisticated" complexity, explicit weight control
 
 2. **RERANK** - ML-based relevance reranking for precision
    ```esql
@@ -181,19 +206,31 @@ While addressing the customer's pain points, ALWAYS include sophisticated querie
    ```
    Use after retrieval to generate answers, summaries, or insights.
 
+**Search Type Definitions (for query classification):**
+| Search Type | Description | Pattern |
+|------------|-------------|---------|
+| `bm25` | BM25/keyword search on `text` field | `MATCH(text_field, "term")` |
+| `semantic` | Semantic search on `semantic_text` field | `MATCH(semantic_field, "query")` |
+| `fuzzy` | BM25 with typo tolerance | `MATCH(field, "term", {{"fuzziness": "AUTO"}})` |
+| `hybrid` | FORK+FUSE combining BM25 + semantic (simple RRF) | `FORK (...) (...) | FUSE | SORT _score DESC` |
+| `hybrid_weighted` | FORK+FUSE LINEAR with explicit weights | `FORK (...) (...) | FUSE LINEAR WITH {{...}} | SORT _score DESC` |
+| `rerank` | Pipeline with ML reranking | `MATCH | SORT | LIMIT | RERANK | LIMIT` |
+| `rag_completion` | Pipeline with LLM generation | `MATCH | LIMIT | EVAL prompt | COMPLETION` |
+
 **Also include these standard advanced features:**
 
-4. **Weighted Hybrid Search** - Use `MATCH` with `{{"boost": X}}` to balance semantic vs exact matching
-   Example: `MATCH(title_semantic, "term", {{"boost": 0.75}}) OR MATCH(title, "term", {{"boost": 0.25}})`
-
-5. **Fuzzy Search** - Use `{{"fuzziness": "AUTO"}}` to handle typos and misspellings
+4. **Fuzzy Search** - Use `{{"fuzziness": "AUTO"}}` to handle typos and misspellings
    Example: `MATCH(product_name, "wireles headfones", {{"fuzziness": "AUTO"}})`
 
-6. **Precision Control** - Use `{{"minimum_should_match": N}}` for multi-term queries
+5. **Precision Control** - Use `{{"minimum_should_match": N}}` for multi-term queries
    Example: `MATCH(content, "configure email notification settings", {{"operator": "OR", "minimum_should_match": 3}})`
 
+6. **Multi-field BM25 with Boost** - Weight multiple text fields (NOT hybrid - both are BM25)
+   Example: `MATCH(title, "term", {{"boost": 0.7}}) OR MATCH(summary, "term", {{"boost": 0.3}})`
+   Note: This is weighted multi-field BM25, NOT hybrid (no semantic search involved)
+
 **Query Complexity Targets (MANDATORY):**
-- At least 1-2 queries MUST use FORK + FUSE for hybrid search
+- At least 1-2 queries MUST use FORK + FUSE for true hybrid search (BM25 + semantic)
 - At least 1 query SHOULD use RERANK for ML reranking
 - At least 1 query SHOULD use COMPLETION for RAG/summarization
 - All queries should feel natural to the use case, not forced
@@ -201,18 +238,47 @@ While addressing the customer's pain points, ALWAYS include sophisticated querie
 **ES|QL Search Capabilities:**
 {esql_skill}
 
+**CRITICAL - ES|QL Syntax Rules (NOT Elasticsearch Query DSL):**
+❌ NEVER use colon syntax: `field:"value"` (this is Query DSL, NOT ES|QL!)
+✅ Use MATCH for full-text search: `WHERE MATCH(field, "search terms")`
+✅ Use LIKE for pattern matching: `WHERE field LIKE "*value*"`
+✅ Use == for exact keyword match: `WHERE field == "exact value"`
+
+Example of WRONG vs CORRECT:
+- WRONG: `WHERE provider_name:"Dr Smith"` ← Query DSL syntax, will fail!
+- CORRECT: `WHERE MATCH(provider_name, "Dr Smith")` ← ES|QL syntax
+- CORRECT: `WHERE provider_name LIKE "*Smith*"` ← Pattern matching
+
 **CRITICAL - This is a SEARCH Demo:**
 1. Queries should RETRIEVE specific documents/records (not aggregate)
-2. Use MATCH for semantic search, QSTR for complex searches, WHERE for exact matches
-3. Focus on RELEVANCE (use _score), not metrics
-4. Include semantic_text fields for vector search
-5. Limit results (5-50 documents)
-6. NO STATS, NO GROUP BY, NO aggregations (that's analytics, not search)
-7. Choose correct index_mode based on LOOKUP JOIN usage:
+2. Use MATCH for full-text search on `text` fields (NOT keyword fields!)
+3. Use LIKE for pattern matching on any string field
+4. Use == for exact matches on `keyword` fields
+5. Focus on RELEVANCE (use _score), not metrics
+6. Include semantic_text fields for vector search
+7. Limit results (5-50 documents)
+8. NO STATS, NO GROUP BY, NO aggregations (that's analytics, not search)
+9. Choose correct index_mode based on LOOKUP JOIN usage:
    - **index_mode: "lookup"** - If dataset will be used in ANY LOOKUP JOIN clause OR is reference data
    - **index_mode: "data_stream"** - If dataset is ONLY used in FROM clauses AND has a timestamp field
 
-**CRITICAL - semantic_text Field Pattern:**
+**CRITICAL - semantic_text Field Requirements for Hybrid Search:**
+
+**⚠️ MANDATORY: Each searchable dataset MUST include:**
+- At least one `text` field for BM25 search (names, titles, short text)
+- At least one `semantic_text` field for semantic search (descriptions, content, bios, summaries)
+
+**Without a semantic_text field, true hybrid search is IMPOSSIBLE!**
+
+Example dataset fields:
+```json
+{{
+  "provider_name": "text",              // For BM25 search
+  "provider_bio": "semantic_text"       // For semantic search - REQUIRED for hybrid!
+}}
+```
+
+**semantic_text Field Pattern:**
 For fields that need semantic search (vector embeddings):
 - **CORRECT**: Define ONLY ONE field as "semantic_text" type
   Example: "content": "semantic_text"
@@ -222,6 +288,40 @@ For fields that need semantic search (vector embeddings):
 - The data generator will create ONE column with text data
 - Elasticsearch will auto-generate embeddings using ELSER v2 (.elser-2-elasticsearch)
 - Reference: https://www.elastic.co/search-labs/blog/semantic-search-simplified-semantic-text
+
+**Good candidates for semantic_text:**
+- Descriptions, summaries, bios, overviews
+- Content, body, notes, details
+- Explanations, reasons, feedback
+- Any field with natural language that benefits from meaning-based search
+
+**🎯 CRITICAL: Content Diversity for Score Differentiation**
+
+For search demos to show meaningful score differences, data MUST have **tiered relevance**:
+
+**Tier 1 - Highly Relevant (~20% of docs):**
+- Exact keyword matches in titles/names
+- Dense topic coverage with specific terminology
+- Multiple mentions of key search terms
+
+**Tier 2 - Moderately Relevant (~40% of docs):**
+- Related but not exact terms (synonyms, related concepts)
+- Partial topic coverage
+- Some relevant keywords but not dominant
+
+**Tier 3 - Low Relevance (~40% of docs):**
+- Different topics entirely
+- Generic or unrelated content
+- No keyword overlap with common searches
+
+**Example tiering structure (adapt to customer's domain):**
+- Tier 1: [Profile with ALL key attributes - exact match for common queries]
+- Tier 2: [Profile with SOME key attributes - partial match]
+- Tier 3: [Profile with DIFFERENT attributes - low/no relevance]
+
+⚠️ Use terminology from the customer's actual use case, not these placeholders.
+
+Without tiered content, all documents score similarly and the demo fails to show relevance ranking!
 
 **CRITICAL Index Mode Decision Rule:**
 For each dataset, determine index_mode based on how it will be used:
@@ -248,6 +348,12 @@ Only use data_stream for high-volume event logs with timestamps.
 - Use SORT and LIMIT for ranking, not ROW_NUMBER()
 - Use _score for relevance ranking (automatically calculated by MATCH)
 - INLINESTATS is rarely needed in search (it's for analytics)
+
+**⚠️ IMPORTANT: _score is a COMPUTED field, not source data**
+- _score is calculated at query time by Elasticsearch for MATCH queries
+- DO NOT include _score in "required_fields" - it's not part of the indexed data
+- You access _score using METADATA _score clause in FROM statement
+- Only use _score in KEEP, SORT, and EVAL - it doesn't exist in the source documents
 
 **Example of CORRECT search ranking:**
 ```esql
@@ -348,7 +454,8 @@ You MUST use these EXACT row_count ranges in your output:
         "view_count": "long"
       }},
       "relationships": ["authors"],
-      "semantic_fields": ["content"]
+      "semantic_fields": ["content"],
+      "text_fields": ["title"]
     }},
     {{
       "name": "authors",
@@ -377,7 +484,7 @@ You MUST use these EXACT row_count ranges in your output:
       "description": "BM25 keyword search - fast but requires exact term matches",
       "complexity": "simple",
       "variant_group": "article_search",
-      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE title:\"password reset\" | KEEP article_id, _score, title, content, category | SORT _score DESC | LIMIT 10"
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(title, \"password reset\") | KEEP article_id, _score, title, content, category | SORT _score DESC | LIMIT 10"
     }},
     {{
       "name": "article_search_semantic",
@@ -398,37 +505,37 @@ You MUST use these EXACT row_count ranges in your output:
       "search_type": "hybrid",
       "required_datasets": ["knowledge_base_articles"],
       "required_fields": {{
-        "knowledge_base_articles": ["article_id", "title", "content", "category"]
+        "knowledge_base_articles": ["article_id", "title", "content", "category", "search_type"]
       }},
-      "description": "Hybrid search - combines keyword precision with semantic understanding",
+      "description": "True hybrid search - FORK/FUSE combining BM25 on text field with semantic on semantic_text field",
       "complexity": "advanced",
       "variant_group": "article_search",
-      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(title, 'password reset', {{'boost': 0.4}}) OR MATCH(content, 'password reset procedure', {{'boost': 0.6}}) | KEEP article_id, _score, title, content, category | SORT _score DESC | LIMIT 10"
+      "example_esql": "FROM knowledge_base_articles METADATA _id, _index, _score | FORK (WHERE MATCH(title, 'password reset') | EVAL search_type = 'bm25' | SORT _score DESC | LIMIT 50) (WHERE MATCH(content, 'forgot login help password') | EVAL search_type = 'semantic' | SORT _score DESC | LIMIT 50) | FUSE | SORT _score DESC | LIMIT 10 | KEEP article_id, _score, title, content, category, search_type"
     }},
     {{
       "name": "article_search_sophisticated",
       "pain_point": "Agents can't quickly find answers to customer questions",
-      "search_type": "hybrid_pipeline",
+      "search_type": "hybrid_weighted",
       "required_datasets": ["knowledge_base_articles"],
       "required_fields": {{
-        "knowledge_base_articles": ["article_id", "title", "content", "category"]
+        "knowledge_base_articles": ["article_id", "title", "content", "category", "search_type"]
       }},
-      "description": "Full pipeline - FORK/FUSE parallel search with ML reranking for maximum relevancy",
+      "description": "Sophisticated hybrid - FORK/FUSE LINEAR with explicit weights for tuned BM25/semantic balance",
       "complexity": "expert",
       "variant_group": "article_search",
-      "example_esql": "FROM knowledge_base_articles METADATA _id, _index, _score | FORK (WHERE title:\\\"password reset\\\" | SORT _score DESC | LIMIT 50) (WHERE MATCH(content, 'password reset forgot login', {{'fuzziness': 'AUTO'}}) | SORT _score DESC | LIMIT 50) | FUSE LINEAR WITH {{ \\\"weights\\\": {{ \\\"fork1\\\": 0.3, \\\"fork2\\\": 0.7 }}, \\\"normalizer\\\": \\\"minmax\\\" }} | LIMIT 15 | RERANK \\\"how to reset password\\\" ON content, title WITH {{ \\\"inference_id\\\": \\\".rerank-v1-elasticsearch\\\" }} | LIMIT 10 | KEEP article_id, _score, title, content, category"
+      "example_esql": "FROM knowledge_base_articles METADATA _id, _index, _score | FORK (WHERE MATCH(title, 'password reset') | EVAL search_type = 'bm25' | SORT _score DESC | LIMIT 50) (WHERE MATCH(content, 'forgot login help password') | EVAL search_type = 'semantic' | SORT _score DESC | LIMIT 50) | FUSE LINEAR WITH {{ 'weights': {{ 'fork1': 0.4, 'fork2': 0.6 }}, 'normalizer': 'minmax' }} | SORT _score DESC | LIMIT 10 | KEEP article_id, _score, title, content, category, search_type"
     }},
     {{
       "name": "Multi-Strategy Hybrid Search with FORK + FUSE",
       "pain_point": "Need to combine exact matching with semantic understanding",
-      "search_type": "hybrid_pipeline",
+      "search_type": "hybrid",
       "required_datasets": ["knowledge_base_articles"],
       "required_fields": {{
-        "knowledge_base_articles": ["article_id", "title", "content", "_score"]
+        "knowledge_base_articles": ["article_id", "title", "content", "search_type"]
       }},
-      "description": "Use FORK to run lexical and semantic searches in parallel, then FUSE to combine with weighted scoring",
-      "complexity": "expert",
-      "example_esql": "FROM knowledge_base_articles METADATA _id, _index, _score | FORK (WHERE title:\\"authentication\\" | SORT _score DESC | LIMIT 50) (WHERE MATCH(content, 'authentication login error', {{'fuzziness': 'AUTO'}}) | SORT _score DESC | LIMIT 50) | FUSE LINEAR WITH {{ \\"weights\\": {{ \\"fork1\\": 0.3, \\"fork2\\": 0.7 }}, \\"normalizer\\": \\"minmax\\" }} | LIMIT 15 | KEEP article_id, _score, title, content, category"
+      "description": "Use FORK to run BM25 and semantic searches in parallel with search_type labels, then FUSE (RRF) to combine results",
+      "complexity": "advanced",
+      "example_esql": "FROM knowledge_base_articles METADATA _id, _index, _score | FORK (WHERE MATCH(title, 'authentication') | EVAL search_type = 'bm25' | SORT _score DESC | LIMIT 50) (WHERE MATCH(content, 'authentication login error') | EVAL search_type = 'semantic' | SORT _score DESC | LIMIT 50) | FUSE | SORT _score DESC | LIMIT 20 | KEEP article_id, _score, title, content, search_type"
     }},
     {{
       "name": "Precision Search with ML Reranking",
@@ -488,36 +595,75 @@ You MUST use these EXACT row_count ranges in your output:
 - Include _score for relevance ranking
 - Focus on "finding the right document" not "counting documents"
 
+**🎯 CRITICAL: Data-Query Alignment for Meaningful Results:**
+
+Your queries will search for specific terms. The data generator MUST create content that:
+1. **Contains exact matches** for your search terms (for high scores)
+2. **Contains related content** (for medium scores)
+3. **Contains unrelated content** (for low scores - demonstrates contrast)
+
+When designing queries, consider:
+- What search terms will users type?
+- Does the dataset contain documents that will match those terms?
+- Will there be score diversity (some docs score 15, others score 3)?
+
+**Example of Good Data-Query Alignment:**
+- Query searches for "[specific topic from customer context]"
+- Dataset MUST contain:
+  - Documents directly about [that topic] (high relevance)
+  - Documents about [related/broader topic] (medium relevance)
+  - Documents about [tangentially related topic] (low relevance)
+
+**Example of BAD Alignment (will fail):**
+- Query searches for "[specific topic]"
+- Dataset only contains documents about unrelated topics
+- Result: No relevant documents found, demo fails!
+
+⚠️ **CRITICAL**: Use topics from the customer's actual domain/context. DO NOT copy these placeholder examples.
+
+When generating the query strategy, ensure the queries align with realistic content that the data generator can create.
+
 **🎯 CRITICAL: Multi-Strategy Query Variants (Required for 2-3 key queries)**
 
 For 2-3 of your most important queries, generate FOUR variants demonstrating the progression of search sophistication.
 This showcases Elastic's relevancy capabilities and helps SAs demonstrate "here's basic search vs sophisticated search."
 
-**Variant Naming Convention:**
-Use a suffix to indicate the strategy type:
-- `{query_name}_bm25` - Simple keyword/BM25 search (baseline)
-- `{query_name}_semantic` - Semantic/vector search
-- `{query_name}_hybrid` - Keyword + semantic combined
-- `{query_name}_sophisticated` - Full pipeline (FORK/FUSE + RERANK or COMPLETION)
+**Variant Naming Convention (Encouraged):**
+Use a suffix to indicate the search strategy:
+- `{{query_name}}_bm25` - Simple keyword/BM25 search on text field (baseline)
+- `{{query_name}}_semantic` - Semantic search on semantic_text field
+- `{{query_name}}_fuzzy` - BM25 with fuzziness for typo tolerance
+- `{{query_name}}_hybrid` - **FORK+FUSE (simple RRF)** combining BM25 + semantic
+- `{{query_name}}_sophisticated` - **FORK+FUSE LINEAR** with explicit weights
+- `{{query_name}}_rerank` - Pipeline with RERANK for ML reranking
+- `{{query_name}}_rag` or `{{query_name}}_completion` - Pipeline with COMPLETION for LLM generation
 
 **Example Variant Set:**
-For a "Provider Search" query, generate all four:
+For a "Provider Search" query, generate these variants:
 
 1. **provider_search_bm25** (complexity: "simple")
-   - Uses exact keyword matching: `WHERE provider_name:"Dr Smith"`
-   - Shows baseline - fast but literal, misses variations
+   - Uses BM25 on text field: `WHERE MATCH(provider_name, "Dr Smith")`
+   - Shows baseline keyword scoring
 
 2. **provider_search_semantic** (complexity: "medium")
-   - Uses semantic matching: `WHERE MATCH(provider_name, "heart doctor cardiologist")`
-   - Shows meaning understanding, synonym handling
+   - Uses semantic on semantic_text field: `WHERE MATCH(provider_bio, "heart specialist")`
+   - Shows meaning understanding
 
 3. **provider_search_hybrid** (complexity: "advanced")
-   - Combines both: `WHERE MATCH(provider_name, "Smith", {{"boost": 0.5}}) OR provider_name:"Smith"`
-   - Shows best-of-both-worlds approach
+   - Uses FORK+FUSE (simple RRF): `FORK (BM25) (semantic) | FUSE | SORT _score DESC`
+   - Shows true hybrid combining both approaches
 
 4. **provider_search_sophisticated** (complexity: "expert")
-   - Full pipeline with FORK/FUSE: `FORK (...) (...) | FUSE LINEAR ... | RERANK ...`
-   - Shows enterprise-grade relevancy
+   - Uses FORK+FUSE LINEAR with weights: `FORK (...) (...) | FUSE LINEAR WITH {{...}} | SORT _score DESC`
+   - Shows tunable weighting between BM25 and semantic
+
+5. **provider_search_rerank** (complexity: "expert")
+   - Pipeline with RERANK: `MATCH | SORT | LIMIT | RERANK | LIMIT`
+   - Shows ML-based relevance reranking
+
+6. **provider_search_rag** (complexity: "expert")
+   - Pipeline with COMPLETION: `MATCH | LIMIT | EVAL prompt | COMPLETION`
+   - Shows LLM-generated summaries/answers
 
 **Guidelines for Variant Selection:**
 - Choose 2-3 queries that best represent the customer's core search needs
@@ -536,19 +682,22 @@ For a "Provider Search" query, generate all four:
 **MANDATORY - Include Advanced Queries:**
 Of the 5-7 queries you design:
 
-**REQUIRED (at least 2 of these "expert" complexity queries):**
-- FORK + FUSE multi-branch hybrid search pipeline
-- RERANK for ML-based relevance reranking
-- COMPLETION for RAG answer generation/summarization
+**REQUIRED (must have these query types):**
+- At least 1 `_hybrid` query using FORK+FUSE (simple RRF) - complexity: "advanced"
+- At least 1 "expert" query from: `_sophisticated` (LINEAR), `_rerank`, OR `_rag`/`_completion`
 
-**ALSO INCLUDE (at least 1-2 "advanced" complexity queries):**
-- Weighted hybrid search with boost parameters
-- Fuzzy search with fuzziness parameter
-- Precision control with minimum_should_match
-- Multi-field search across semantic and text fields
-- Phrase matching with MATCH_PHRASE
+**ALSO INCLUDE (at least 1-2):**
+- Fuzzy search with `{{"fuzziness": "AUTO"}}` - complexity: "advanced"
+- Multi-field BM25 with boost parameters (NOT hybrid) - complexity: "medium"
+- Phrase matching with MATCH_PHRASE - complexity: "medium"
 
-Label these queries with "complexity": "advanced" and describe them as "best practices" or "optimization techniques".
+**Complexity Labeling:**
+- "simple": Basic BM25 or semantic search
+- "medium": Fuzzy, phrase matching, multi-field BM25
+- "advanced": True hybrid (FORK+FUSE RRF)
+- "expert": Sophisticated (LINEAR), RERANK, or COMPLETION
+
+**Important:** RERANK and COMPLETION are separate query types - don't force them together.
 
 Generate the complete SEARCH strategy as valid JSON:"""
 
@@ -669,21 +818,65 @@ ES|QL Search Commands:
 
         json_text = fix_quotes_in_value(json_text)
 
-        # Step 4: Remove trailing commas before closing brackets/braces
+        # Step 4: Fix malformed required_fields structure
+        # Pattern: "required_fields": { "field1": "value", "field2", "field3" }
+        # Should be: "required_fields": { "dataset_name": ["field1", "field2", "field3"] }
+        def fix_required_fields(text):
+            # Find required_fields blocks that don't have a dataset wrapper
+            # These have fields listed directly instead of inside a dataset key
+            pattern = r'"required_datasets":\s*\[(.*?)\].*?"required_fields":\s*\{([^}]+)\}'
+
+            def repair_fields(match):
+                datasets_str = match.group(1)
+                fields_str = match.group(2)
+
+                # Extract first dataset name (remove quotes)
+                dataset_match = re.search(r'"([^"]+)"', datasets_str)
+                if not dataset_match:
+                    return match.group(0)  # Can't fix without dataset name
+
+                dataset_name = dataset_match.group(1)
+
+                # Check if fields are already properly formatted with dataset wrapper
+                if f'"{dataset_name}"' in fields_str and '[' in fields_str:
+                    return match.group(0)  # Already correct
+
+                # Extract field names from malformed structure
+                # Pattern: "field1": "type", "field2", "field3"
+                field_names = []
+                for field_match in re.finditer(r'"([^"]+)"', fields_str):
+                    field_name = field_match.group(1)
+                    # Skip values like "keyword", "text", "_score" which are types/metadata
+                    if field_name not in ['keyword', 'text', 'long', 'date', 'semantic_text', '_score', 'double', 'integer', 'boolean']:
+                        field_names.append(field_name)
+
+                if not field_names:
+                    return match.group(0)  # No fields found
+
+                # Rebuild with proper structure
+                fields_array = ', '.join(f'"{f}"' for f in field_names)
+                fixed = f'"required_datasets": [{datasets_str}], "required_fields": {{"{dataset_name}": [{fields_array}]}}'
+                return fixed
+
+            return re.sub(pattern, repair_fields, text, flags=re.DOTALL)
+
+        json_text = fix_required_fields(json_text)
+
+        # Step 5: Remove trailing commas before closing brackets/braces
         json_text = re.sub(r',(\s*[}\]])', r'\1', json_text)
 
-        # Step 5: Ensure consistent quote usage (replace single quotes around keys/values)
+        # Step 6: Ensure consistent quote usage (replace single quotes around keys/values)
         # But be careful not to replace single quotes within string values
         json_text = re.sub(r"'([^']*)'(\s*:)", r'"\1"\2', json_text)  # Fix keys
         json_text = re.sub(r":\s*'([^']*)'", r': "\1"', json_text)    # Fix simple string values
 
-        # Step 6: Remove any BOM or zero-width spaces
+        # Step 7: Remove any BOM or zero-width spaces
         json_text = json_text.replace('\ufeff', '').replace('\u200b', '')
 
-        # Step 7: Handle common encoding issues
+        # Step 8: Handle common encoding issues
         json_text = json_text.encode('utf-8', errors='ignore').decode('utf-8')
 
-        logger.debug("Applied JSON fixes: truncation, newlines, trailing commas, quotes, encoding")
+        logger.debug("Applied JSON fixes: truncation, newlines, quotes, required_fields, trailing commas, encoding")
         return json_text
 
     def _complete_truncated_json(self, json_text: str) -> str:

@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from datetime import datetime
 import pandas as pd
+import numpy as np
 from elasticsearch import Elasticsearch, helpers
 from dotenv import load_dotenv
 
@@ -39,25 +40,32 @@ class FieldMapper:
     """Automatic field type detection and mapping generation"""
 
     @staticmethod
-    def analyze_dataframe(df: pd.DataFrame, semantic_fields: Optional[List[str]] = None) -> Dict[str, Any]:
+    def analyze_dataframe(
+        df: pd.DataFrame,
+        semantic_fields: Optional[List[str]] = None,
+        text_fields: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         """
         Analyze DataFrame and generate Elasticsearch mappings
 
         Args:
             df: pandas DataFrame to analyze
             semantic_fields: Optional list of fields to map as semantic_text
+            text_fields: Optional list of fields to map as text (for full-text search with MATCH)
 
         Returns:
             Dictionary with:
             - mappings: ES mapping configuration
             - is_timeseries: boolean
             - semantic_fields: list of semantic text fields
+            - text_fields: list of text fields for full-text search
         """
         mappings = {"properties": {}}
         detected_semantic_fields = []
 
         # Override semantic fields if provided
         semantic_field_set = set(semantic_fields or [])
+        text_field_set = set(text_fields or [])
 
         for col in df.columns:
             # Skip @timestamp as it's added automatically
@@ -77,6 +85,20 @@ class FieldMapper:
                     "type": "semantic_text"
                 }
                 detected_semantic_fields.append(col)
+                continue
+
+            # Check if explicitly marked as text (for full-text search with MATCH)
+            # Use multi-field mapping so field.keyword is available for STATS BY aggregations
+            if col in text_field_set:
+                mappings["properties"][col] = {
+                    "type": "text",
+                    "fields": {
+                        "keyword": {
+                            "type": "keyword",
+                            "ignore_above": 256
+                        }
+                    }
+                }
                 continue
 
             # Auto-detect semantic text (text fields with avg length > 50)
@@ -101,7 +123,8 @@ class FieldMapper:
         return {
             "mappings": mappings,
             "is_timeseries": is_timeseries,
-            "semantic_fields": detected_semantic_fields
+            "semantic_fields": detected_semantic_fields,
+            "text_fields": list(text_field_set)
         }
 
     @staticmethod
@@ -133,14 +156,44 @@ class FieldMapper:
             return {"type": "boolean"}
         elif pd.api.types.is_datetime64_any_dtype(dtype):
             return {"type": "date"}
+        elif dtype == 'object':
+            # Check first non-null value to determine type
+            first_val = series.dropna().iloc[0] if len(series.dropna()) > 0 else None
+            if isinstance(first_val, dict):
+                # Dict values map to geo_point if lat/lon, else object/flattened
+                if first_val and 'lat' in first_val and 'lon' in first_val:
+                    return {"type": "geo_point"}
+                else:
+                    return {"type": "flattened"}
+            elif isinstance(first_val, list):
+                # List values - check element type
+                if first_val and len(first_val) > 0 and isinstance(first_val[0], str):
+                    return {"type": "keyword"}  # Array of strings
+                return {"type": "flattened"}
+            elif isinstance(first_val, str):
+                # String column - check cardinality for keyword vs text
+                try:
+                    cardinality = series.nunique()
+                    total = len(series)
+                    if cardinality / total < 0.5:  # Low cardinality
+                        return {"type": "keyword"}
+                    else:
+                        return {"type": "text"}
+                except TypeError:
+                    return {"type": "keyword"}
+            else:
+                return {"type": "keyword"}  # Default for unknown object types
         elif pd.api.types.is_string_dtype(dtype):
             # Check cardinality for keyword vs text
-            cardinality = series.nunique()
-            total = len(series)
-            if cardinality / total < 0.5:  # Low cardinality
+            try:
+                cardinality = series.nunique()
+                total = len(series)
+                if cardinality / total < 0.5:  # Low cardinality
+                    return {"type": "keyword"}
+                else:
+                    return {"type": "text"}
+            except TypeError:
                 return {"type": "keyword"}
-            else:
-                return {"type": "text"}
         else:
             return {"type": "keyword"}  # Default
 
@@ -199,6 +252,7 @@ class ElasticsearchIndexer:
         df: pd.DataFrame,
         dataset_name: str,
         semantic_fields: Optional[List[str]] = None,
+        text_fields: Optional[List[str]] = None,
         index_mode: Optional[str] = None,
         progress_callback: Optional[callable] = None,
         stop_callback: Optional[callable] = None
@@ -210,6 +264,7 @@ class ElasticsearchIndexer:
             df: pandas DataFrame to index
             dataset_name: name for the index/data stream
             semantic_fields: optional list of fields to use semantic_text
+            text_fields: optional list of fields to map as text (for full-text search with MATCH)
             index_mode: optional explicit index mode ('data_stream' or 'lookup')
                        If not provided, will auto-detect based on timestamp fields
             progress_callback: optional callback(progress, message)
@@ -226,8 +281,8 @@ class ElasticsearchIndexer:
             if progress_callback:
                 progress_callback(0.05, "Checking ELSER deployment...")
 
-            # Analyze DataFrame with LLM-specified semantic fields
-            mapping_info = FieldMapper.analyze_dataframe(df, semantic_fields)
+            # Analyze DataFrame with LLM-specified semantic and text fields
+            mapping_info = FieldMapper.analyze_dataframe(df, semantic_fields, text_fields)
 
             # Pre-flight check: Ensure ELSER is ready if semantic fields are used
             if mapping_info["semantic_fields"]:
@@ -431,8 +486,15 @@ class ElasticsearchIndexer:
                         else:
                             doc["@timestamp"] = pd.Timestamp(value).isoformat()
                 else:
-                    # Handle NaN values
-                    if pd.notna(value):
+                    # Handle NaN values and array values
+                    # Check if value is a list/array first (pd.notna fails on arrays)
+                    if isinstance(value, (list, np.ndarray)):
+                        # Arrays/lists are valid values, include them directly
+                        if isinstance(value, np.ndarray):
+                            doc[col] = value.tolist()  # Convert numpy array to list
+                        else:
+                            doc[col] = value
+                    elif pd.notna(value):
                         # Convert numpy types to Python types
                         if isinstance(value, (pd.Timestamp, datetime)):
                             doc[col] = value.isoformat()

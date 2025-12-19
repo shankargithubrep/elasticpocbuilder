@@ -205,10 +205,22 @@ def render_progress_header(module_name: str):
 
     with col_data:
         # Data status - tooltip explains data indexing
-        data_tooltip = "✓ = Full dataset has been indexed to the connected Elasticsearch environment"
+        data_tooltip = "✓ = All datasets indexed. Shows successful/total datasets attempted."
+        d_success = progress["data"].get("datasets_success", 0)
+        d_failed = progress["data"].get("datasets_failed", 0)
+        d_total = progress["data"].get("datasets_total", 0)
+
         if progress["data"]["done"]:
+            # All datasets indexed successfully
             st.markdown(f'<span title="{data_tooltip}" style="cursor: help;">✅ <strong>Data</strong></span>', unsafe_allow_html=True)
+        elif d_failed > 0:
+            # Some datasets failed
+            st.markdown(f'<span title="{data_tooltip}" style="cursor: help;">❌ <strong>Data</strong> {d_success}/{d_total}</span>', unsafe_allow_html=True)
+        elif d_success > 0:
+            # Some indexed, none failed (partial progress)
+            st.markdown(f'<span title="{data_tooltip}" style="cursor: help;">🔶 <strong>Data</strong> {d_success}/{d_total}</span>', unsafe_allow_html=True)
         else:
+            # Nothing indexed yet
             st.markdown(f'<span title="{data_tooltip}" style="cursor: help;">⬜ <strong>Data</strong></span>', unsafe_allow_html=True)
 
     with col_queries:

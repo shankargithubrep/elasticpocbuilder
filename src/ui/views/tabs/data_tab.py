@@ -38,13 +38,20 @@ def render_data_tab():
             except AttributeError:
                 semantic_fields_spec = {}
 
-            # Load index_mode mapping from query_strategy.json
+            # Load index_mode mapping and text_fields from query_strategy.json
             index_mode_map = {}
+            text_fields_map = {}  # Fields needing 'text' type for MATCH queries
             try:
                 strategy_path = Path('demos') / st.session_state.current_demo_module / 'query_strategy.json'
                 if strategy_path.exists():
                     with open(strategy_path, 'r') as f:
                         query_strategy = json.load(f)
+
+                        # Load text_fields (extracted from MATCH queries)
+                        text_fields_map = query_strategy.get('text_fields', {})
+                        if text_fields_map:
+                            logger.info(f"Loaded text fields for MATCH queries: {text_fields_map}")
+
                         for dataset in query_strategy.get('datasets', []):
                             dataset_name = dataset.get('name')
                             if dataset_name:
@@ -73,11 +80,15 @@ def render_data_tab():
                     st.info(f"Starting batch indexing for {len(datasets)} datasets...")
 
                     indexer = ElasticsearchIndexer()
+                    batch_results = {}  # Track success/failure per dataset
                     for idx, (name, df) in enumerate(datasets.items(), 1):
                         st.markdown(f"**[{idx}/{len(datasets)}] Indexing {name}...**")
 
                         # Get semantic fields for this dataset
                         semantic_fields = semantic_fields_spec.get(name, [])
+
+                        # Get text fields for this dataset (for MATCH queries)
+                        text_fields = text_fields_map.get(name, [])
 
                         # Get index_mode for this dataset
                         index_mode = index_mode_map.get(name, 'lookup')  # Default to lookup
@@ -94,23 +105,41 @@ def render_data_tab():
                                 df,
                                 name,
                                 semantic_fields=semantic_fields,
+                                text_fields=text_fields,
                                 index_mode=index_mode,
                                 progress_callback=progress_callback
                             )
 
                             if result.success:
                                 st.success(f"✅ {name}: {result.documents_indexed:,} docs indexed in {result.duration_seconds}s")
+                                batch_results[name] = {"success": True}
                             else:
                                 st.error(f"❌ {name}: Indexing failed")
+                                batch_results[name] = {"success": False, "error": "Indexing failed"}
                         except Exception as e:
                             st.error(f"❌ {name}: {str(e)}")
+                            batch_results[name] = {"success": False, "error": str(e)}
 
-                    st.success("🎉 Batch indexing complete!")
-
-                    # Update progress tracking
+                    # Update progress tracking with per-dataset status
                     try:
                         progress_service = get_progress_service(st.session_state.current_demo_module)
-                        progress_service.mark_data_indexed()
+                        all_success = True
+                        for name, result in batch_results.items():
+                            progress_service.mark_dataset_indexed(
+                                name,
+                                success=result["success"],
+                                error=result.get("error")
+                            )
+                            if not result["success"]:
+                                all_success = False
+
+                        # Only mark data_indexed if ALL datasets succeeded
+                        if all_success and len(batch_results) == len(datasets):
+                            progress_service.mark_data_indexed()
+                            st.success("🎉 Batch indexing complete!")
+                        else:
+                            failed_count = sum(1 for r in batch_results.values() if not r["success"])
+                            st.warning(f"⚠️ Batch indexing finished with {failed_count} failure(s)")
                     except Exception as e:
                         logger.warning(f"Could not update progress tracking: {e}")
 
@@ -152,6 +181,9 @@ def render_data_tab():
                             # Get semantic fields for this dataset
                             semantic_fields = semantic_fields_spec.get(name, [])
 
+                            # Get text fields for this dataset (for MATCH queries)
+                            text_fields = text_fields_map.get(name, [])
+
                             # Get index_mode for this dataset
                             index_mode = index_mode_map.get(name, 'lookup')  # Default to lookup
 
@@ -182,6 +214,7 @@ def render_data_tab():
                                     df,
                                     name,
                                     semantic_fields=semantic_fields,
+                                    text_fields=text_fields,
                                     index_mode=index_mode,
                                     progress_callback=progress_callback,
                                     stop_callback=stop_callback
@@ -253,8 +286,20 @@ def render_data_tab():
                                     f"**Semantic fields:** {', '.join(result_data['semantic_fields']) if result_data['semantic_fields'] else 'None'}\n\n"
                                     f"**Duration:** {result_data['duration_seconds']}s"
                                 )
+                                # Track successful indexing
+                                try:
+                                    progress_service = get_progress_service(st.session_state.current_demo_module)
+                                    progress_service.mark_dataset_indexed(name, success=True)
+                                except Exception as e:
+                                    logger.warning(f"Could not update progress tracking: {e}")
                         else:
                             st.error(f"❌ Indexing failed:\n{chr(10).join(result_data['errors'])}")
+                            # Track failed indexing
+                            try:
+                                progress_service = get_progress_service(st.session_state.current_demo_module)
+                                progress_service.mark_dataset_indexed(name, success=False, error=chr(10).join(result_data['errors']))
+                            except Exception as e:
+                                logger.warning(f"Could not update progress tracking: {e}")
 
                     # Show semantic fields info if specified
                     if name in semantic_fields_spec and semantic_fields_spec[name]:

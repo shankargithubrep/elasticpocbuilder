@@ -66,6 +66,7 @@ class ProgressTrackingService:
             "last_updated": datetime.now().isoformat(),
             "data_indexed": False,
             "data_indexed_at": None,
+            "indexed_datasets": {},  # Per-dataset status: {name: {"success": bool, "indexed_at": str, "error": str}}
             "agent_deployed": False,
             "agent_deployed_at": None,
         }
@@ -103,7 +104,59 @@ class ProgressTrackingService:
         """Mark data as not indexed."""
         self.progress_data["data_indexed"] = False
         self.progress_data["data_indexed_at"] = None
+        self.progress_data["indexed_datasets"] = {}
         self._save_progress()
+
+    def mark_dataset_indexed(self, dataset_name: str, success: bool, error: str = None):
+        """Mark a specific dataset as indexed (or failed).
+
+        Args:
+            dataset_name: Name of the dataset
+            success: Whether indexing succeeded
+            error: Error message if failed
+        """
+        if "indexed_datasets" not in self.progress_data:
+            self.progress_data["indexed_datasets"] = {}
+
+        self.progress_data["indexed_datasets"][dataset_name] = {
+            "success": success,
+            "indexed_at": datetime.now().isoformat(),
+            "error": error
+        }
+        self._save_progress()
+
+    def get_indexed_datasets(self) -> Dict[str, Any]:
+        """Get per-dataset indexing status."""
+        return self.progress_data.get("indexed_datasets", {})
+
+    def get_indexing_summary(self, total_datasets: int) -> Tuple[int, int, int]:
+        """Get indexing progress summary.
+
+        Args:
+            total_datasets: Total number of datasets in the module
+
+        Returns:
+            Tuple of (success_count, failed_count, total_count)
+        """
+        indexed = self.progress_data.get("indexed_datasets", {})
+        success_count = sum(1 for d in indexed.values() if d.get("success", False))
+        failed_count = sum(1 for d in indexed.values() if not d.get("success", True))
+        return (success_count, failed_count, total_datasets)
+
+    def is_all_data_indexed(self, dataset_names: List[str]) -> bool:
+        """Check if ALL datasets have been successfully indexed.
+
+        Args:
+            dataset_names: List of expected dataset names
+
+        Returns:
+            True only if all datasets are indexed successfully
+        """
+        indexed = self.progress_data.get("indexed_datasets", {})
+        for name in dataset_names:
+            if name not in indexed or not indexed[name].get("success", False):
+                return False
+        return len(dataset_names) > 0
 
     # ========== Query Validation ==========
 
@@ -237,11 +290,20 @@ class ProgressTrackingService:
         # Calculate percentage (avoid division by zero, cap at 100%)
         percentage = min((total_done / total_items * 100), 100) if total_items > 0 else 0
 
+        # Get per-dataset status
+        indexed_datasets = self.get_indexed_datasets()
+        datasets_success = sum(1 for d in indexed_datasets.values() if d.get("success", False))
+        datasets_failed = sum(1 for d in indexed_datasets.values() if not d.get("success", True))
+        datasets_total = len(indexed_datasets)
+
         return {
             "percentage": round(percentage),
             "data": {
                 "done": data_done == 1,
                 "indexed_at": self.progress_data.get("data_indexed_at"),
+                "datasets_success": datasets_success,
+                "datasets_failed": datasets_failed,
+                "datasets_total": datasets_total,
             },
             "queries": {
                 "validated": queries_validated,

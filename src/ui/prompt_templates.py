@@ -228,12 +228,7 @@ Transform each pain point into a search-focused technical description that:
 - Quantifies impact (time wasted, escalations, customer complaints, compliance risk)
 - Uses 2-3 sentences per pain point
 
-Example transformations:
-- **Input**: "Hard to find provider information"
-- **Output**: "Provider directory search requires exact name matches, forcing agents to ask members to spell names letter-by-letter. Nicknames ('Dr. Bob' vs 'Robert'), maiden names, and phonetically similar spellings (Smith/Smyth/Smythe) cause 23% of searches to fail, resulting in escalations and extended call times."
-
-- **Input**: "Policy documents are hard to search"
-- **Output**: "Benefits policies exist as unstructured PDF and Word documents with no semantic search capability. Agents cannot ask natural language questions like 'Is gastric bypass covered for BMI over 40?' and must manually navigate table-of-contents structures, spending 3-5 minutes per policy lookup."
+🚨 **CRITICAL**: Extract and use ACTUAL terminology from the user's input. Do NOT invent new domain terms or use generic examples from this template.
 
 **3. Document Collections Section**
 
@@ -253,6 +248,7 @@ Structure each collection as:
   - Semantic search (meaning-based, natural language)
   - Geographic search (location-based with radius)
 * **Volume**: Approximate document count (hundreds, thousands, millions)
+* **Value Diversity Requirements**: For each `keyword` field, describe the variety needed (see guidance below)
 ```
 
 **Field Type Guidelines:**
@@ -261,8 +257,48 @@ Structure each collection as:
 - `semantic_text`: For vector embeddings enabling meaning-based search
 - `geo_point`: For location-based searches (provider locations, store locations)
 - `date`: For temporal filtering (effective dates, last updated)
-- `boolean`: For binary filters (active, accepting_new_patients)
-- `float`/`integer`: For numeric filtering and sorting (ratings, scores)
+- `boolean`: For binary filters (active/inactive, available/unavailable)
+- `float`/`integer`: For numeric filtering and sorting (ratings, scores, prices)
+
+**🚨 CRITICAL: Field Value Diversity Guidance**
+
+For each `keyword` field in your document collections, provide guidance on the VARIETY of values needed.
+
+**DO NOT provide specific hardcoded example values**. Instead, describe the VALUE SPACE:
+
+**Format**:
+```
+* **Value Diversity Requirements**:
+  - `field_name`: Need [number] distinct values representing [description of variety]
+    Actual values should be: [instructions for deriving realistic values from user's domain]
+```
+
+**Instructions**:
+
+1. **Extract from user input FIRST**: If user mentions specific entities, reference those explicitly
+2. **Describe VALUE SPACE, not specific values**:
+   - ✅ GOOD: "Need 8-10 distinct categories relevant to the user's mentioned domain"
+   - ❌ BAD: Listing specific values (these contaminate all demos)
+3. **Reference user context**: "Include user's mentioned [X] plus 4-6 related options"
+4. **Specify diversity needs**: How many values, what dimension they cover, any constraints
+
+**Example of GOOD guidance** (this shows format only - adapt to user's actual domain):
+```
+- `category_field`: Need 8-10 values representing the breadth of the user's product/service domain. Include the user's explicitly mentioned categories plus logically related options for variety.
+```
+
+**🚨 CRITICAL: Common Filter Combinations**
+
+Describe 2-3 **realistic search scenarios** where users combine multiple filters. Extract these from the user's pain points and use cases - do NOT invent generic scenarios.
+
+**Format**:
+```
+**Common Search Scenarios**:
+1. "[Describe realistic user search behavior derived from their input]"
+   - Combines: [list 3-4 field names that logically filter together in this domain]
+   - Why realistic: [explain based on user's described workflows or pain points]
+   - Guidance for data: Ensure adequate combinations of these fields are populated together
+```
 
 **4. Use Cases Section (4-6 search-focused use cases)**
 
@@ -278,9 +314,13 @@ Each use case should demonstrate a specific search capability:
 
 **Document Collection**: Which collection(s) are searched
 
-**Example Query Pattern**: A natural language description of what users search for
-- Example: "Find cardiologists near 90210 accepting new PPO patients"
-- Example: "Is bariatric surgery covered for BMI over 40?"
+**Example Query Pattern**: A query description using DOMAIN TERMS FROM USER INPUT
+
+🚨 **CRITICAL - USE USER'S TERMINOLOGY**:
+- Extract entities and terms from the user's actual input
+- Format: "[Action verb] [entity from user's domain] [with criteria from user's context]"
+- DO NOT use generic placeholders or examples from this template
+- VARY terms across different use cases (don't repeat the same entity in every example)
 
 **Success Criteria**: What makes search results "good"
 - Top result should be...
@@ -297,10 +337,11 @@ Each use case should demonstrate a specific search capability:
   3. Semantic search for meaning understanding
   4. Hybrid search combining keyword + semantic
   5. Advanced: RERANK for precision, COMPLETION for RAG
-- Each use case should map to a real user workflow
+- Each use case should map to a real user workflow FROM THEIR INPUT
 - Include at least one fuzzy/typo-tolerant search use case
 - Include at least one semantic/natural language use case
-- Include at least one use case combining multiple search strategies
+- Include at least one multi-criteria filtering use case (combining 3+ filters)
+- VARY the entities/terms across use cases (don't repeat the same terms)
 
 **5. Search Relevancy Requirements**
 
@@ -313,22 +354,27 @@ Describe what "good" search results mean for this customer:
 **Tone & Style Guidelines**
 
 - **Focus on SEARCH**: Every section should relate to finding/retrieving documents
-- **Be specific about content**: Describe actual document types and fields
+- **Extract from USER INPUT**: Use terminology, entities, and context from the user's prompt
+- **Be DESCRIPTIVE, not PRESCRIPTIVE**: Describe what kind of values to create, don't specify exact values
 - **Use search terminology**: relevancy, ranking, recall, precision, fuzzy, semantic
 - **No observability content**: Do NOT mention APM, Metricbeat, traces, infrastructure
 - **No query syntax**: Do not include ES|QL, KQL, or DSL examples
-- **Industry-specific examples**: Use realistic document types for the industry
+- **Industry-specific but user-derived**: Match the user's industry with terms from their input
 
 **Validation Checklist**
 
 Before finalizing, ensure:
 - ✓ All content is search/retrieval focused (no APM, metrics, monitoring)
 - ✓ Document collections have realistic field types
+- ✓ 🆕 Value diversity guidance describes TYPES of values, not specific hardcoded examples
+- ✓ 🆕 Common filter combinations are derived from user's pain points/use cases
 - ✓ Use cases demonstrate different search strategies
+- ✓ 🆕 Example query patterns use terminology from USER'S INPUT (not template examples)
 - ✓ Pain points describe search/retrieval failures
 - ✓ No ES|QL, KQL, or query syntax appears anywhere
 - ✓ Field names use appropriate types (text, keyword, semantic_text, geo_point)
-- ✓ Industry-specific document types are realistic
+- ✓ 🆕 Variety across use case examples (don't repeat same entity in every use case)
+- ✓ 🆕 No hardcoded domain values that could leak into every demo
 
 ---
 

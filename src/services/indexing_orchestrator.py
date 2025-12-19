@@ -32,7 +32,8 @@ class IndexingOrchestrator:
         datasets: Dict[str, pd.DataFrame],
         semantic_fields: Dict[str, List[str]],
         index_modes: Optional[Dict[str, str]] = None,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
+        text_fields: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Dict]:
         """Index all datasets with retry logic
 
@@ -41,6 +42,8 @@ class IndexingOrchestrator:
             semantic_fields: Dictionary mapping dataset names to semantic field lists
             index_modes: Optional dictionary mapping dataset names to index modes ('data_stream' or 'lookup')
             progress_callback: Optional progress callback function(progress, message)
+            text_fields: Optional dictionary mapping dataset names to fields needing 'text' type
+                         (for full-text search with MATCH). Extracted from query strategy.
 
         Returns:
             Dictionary with indexing results for each dataset
@@ -49,6 +52,8 @@ class IndexingOrchestrator:
         total = len(datasets)
 
         logger.info(f"Starting indexing of {total} datasets")
+        if text_fields:
+            logger.info(f"Text fields for full-text search: {text_fields}")
 
         for idx, (name, df) in enumerate(datasets.items()):
             # Calculate progress (50-100% range, assuming data gen was 0-50%)
@@ -58,6 +63,9 @@ class IndexingOrchestrator:
 
             # Get semantic fields for this dataset
             dataset_semantic_fields = semantic_fields.get(name, [])
+
+            # Get text fields for this dataset (for MATCH queries)
+            dataset_text_fields = text_fields.get(name, []) if text_fields else []
 
             # Get index mode for this dataset (if provided)
             dataset_index_mode = None
@@ -70,7 +78,8 @@ class IndexingOrchestrator:
                 df,
                 dataset_semantic_fields,
                 dataset_index_mode,
-                progress_callback
+                progress_callback,
+                dataset_text_fields
             )
 
             results[name] = result
@@ -88,7 +97,8 @@ class IndexingOrchestrator:
         df: pd.DataFrame,
         semantic_fields: List[str],
         index_mode: Optional[str] = None,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
+        text_fields: Optional[List[str]] = None
     ) -> Dict:
         """Index a dataset with retry logic
 
@@ -98,6 +108,7 @@ class IndexingOrchestrator:
             semantic_fields: List of semantic field names
             index_mode: Optional explicit index mode ('data_stream' or 'lookup')
             progress_callback: Optional progress callback
+            text_fields: Optional list of fields needing 'text' type for full-text search
 
         Returns:
             Result dictionary with status, index_name, doc_count, attempts, error
@@ -105,12 +116,15 @@ class IndexingOrchestrator:
         for attempt in range(self.max_retries):
             try:
                 logger.info(f"Indexing {dataset_name} (attempt {attempt + 1}/{self.max_retries})")
+                if text_fields:
+                    logger.info(f"Text fields for {dataset_name}: {text_fields}")
 
                 # Try to index
                 result: IndexingResult = self.indexer.index_dataset(
                     df=df,
                     dataset_name=dataset_name,
                     semantic_fields=semantic_fields,
+                    text_fields=text_fields,
                     index_mode=index_mode,
                     progress_callback=progress_callback
                 )

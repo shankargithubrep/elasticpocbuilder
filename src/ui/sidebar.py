@@ -172,53 +172,29 @@ def render_sidebar():
             st.session_state.ai_expansion_enabled = True  # Default to Expanded
         if "ai_expansion_used" not in st.session_state:
             st.session_state.ai_expansion_used = False
-        if "dataset_size_preference" not in st.session_state:
-            st.session_state.dataset_size_preference = "medium"
+        # Dataset size is now auto-determined by demo type (search=smaller, analytics=larger)
+        st.session_state.dataset_size_preference = "medium"
         # Always use enhanced generation (no toggle needed)
         st.session_state.use_enhanced_generation = True
 
         # Data Generation section header
         st.markdown("**Data Generation**")
 
-        col1, col2 = st.columns(2)
-
-        with col1:
-            complexity_options = ["Simple", "Expanded"]
-            complexity_index = 1 if st.session_state.ai_expansion_enabled else 0
-            selected_complexity = st.selectbox(
-                "Complexity",
-                options=complexity_options,
-                index=complexity_index,
-                disabled=st.session_state.ai_expansion_used,
-                key="complexity_select",
-                help="Expanded enhances brief prompts into detailed contexts"
-            )
-            st.session_state.ai_expansion_enabled = (selected_complexity == "Expanded")
-
-        with col2:
-            size_options = ["Small", "Medium", "Large"]
-            size_map = {"Small": "small", "Medium": "medium", "Large": "large"}
-            reverse_map = {"small": "Small", "medium": "Medium", "large": "Large"}
-            current_display = reverse_map[st.session_state.dataset_size_preference]
-            size_index = size_options.index(current_display)
-
-            selected_size = st.selectbox(
-                "Size",
-                options=size_options,
-                index=size_index,
-                key="size_select",
-                help="Dataset record count"
-            )
-            st.session_state.dataset_size_preference = size_map[selected_size]
+        complexity_options = ["Simple", "Expanded"]
+        complexity_index = 1 if st.session_state.ai_expansion_enabled else 0
+        selected_complexity = st.selectbox(
+            "Complexity",
+            options=complexity_options,
+            index=complexity_index,
+            disabled=st.session_state.ai_expansion_used,
+            key="complexity_select",
+            help="Expanded enhances brief prompts into detailed contexts"
+        )
+        st.session_state.ai_expansion_enabled = (selected_complexity == "Expanded")
 
         # Compact description
-        size_legends = {
-            "small": "< 5K records",
-            "medium": "5-15K records",
-            "large": "15-50K records"
-        }
         expansion_note = "LLM expands prompt" if st.session_state.ai_expansion_enabled else "Direct processing"
-        st.caption(f"{expansion_note} · {size_legends[st.session_state.dataset_size_preference]}")
+        st.caption(expansion_note)
 
         st.markdown("---")
 
