@@ -1570,6 +1570,22 @@ class {company_class}DemoGuide(DemoGuideModule):
                     if field_type == 'semantic_text' and 'tiering_guidance' in field_spec:
                         sections.append(f"  - Tiering: {field_spec['tiering_guidance']}")
 
+                elif field_type == 'geo_point':
+                    # Geographic region
+                    if 'geographic_region' in field_spec:
+                        sections.append(f"  - Region: {field_spec['geographic_region']}")
+
+                    # Clustering guidance
+                    if 'clustering_guidance' in field_spec:
+                        sections.append(f"  - Clustering: {field_spec['clustering_guidance']}")
+
+                    # Coordinate precision
+                    if 'coordinate_precision' in field_spec:
+                        sections.append(f"  - Precision: {field_spec['coordinate_precision']}")
+
+                    # Format requirement
+                    sections.append(f"  - Format: Dict with 'lat' and 'lon' keys (REQUIRED for geo_point mapping)")
+
                 else:
                     # For other types (date, boolean, integer, float, etc.)
                     if 'examples' in field_spec:
@@ -1673,7 +1689,27 @@ CRITICAL - TIMESTAMP REQUIREMENTS:
 CRITICAL - FIELD NAMING:
 - Use EXACT field names from requirements (case-sensitive!)
 - For timeseries datasets, use '@timestamp' not 'timestamp'
-- Match field types exactly (keyword, date, float, text)
+- Match field types exactly (keyword, date, float, text, geo_point)
+
+CRITICAL - GEO_POINT FIELDS:
+For fields with type 'geo_point', generate as DICT with 'lat' and 'lon' keys:
+- ✅ CORRECT: {{'lat': 34.0522, 'lon': -118.2437}}
+- ❌ WRONG: "34.0522,-118.2437" (will be detected as keyword, ST_DISTANCE queries will fail!)
+- ❌ WRONG: [-118.2437, 34.0522] (GeoJSON format not reliably detected)
+
+Example generation:
+```python
+locations = []
+for i in range(n):
+    lat = base_lat + np.random.normal(0, 0.05)  # Add jitter
+    lon = base_lon + np.random.normal(0, 0.05)
+    locations.append({{'lat': round(lat, 6), 'lon': round(lon, 6)}})
+
+df = pd.DataFrame({{
+    'location_field': locations,  # Dict format ensures geo_point mapping
+    ...
+}})
+```
 
 CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
 ***** STRICT TOTAL LIMIT: {ranges['total_max']:,} documents MAXIMUM across ALL datasets combined *****

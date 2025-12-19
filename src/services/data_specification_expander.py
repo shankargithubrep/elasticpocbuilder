@@ -214,6 +214,12 @@ Return a JSON object with this structure:
 - **Query alignment** - CRITICAL: List specific terms that queries will search for
 - **Tiering guidance** - Ensure 3-tier relevance distribution for score differentiation
 
+**For `geo_point` fields** (locations, addresses with coordinates):
+- Geographic region specification (e.g., "Los Angeles area (33.7-34.3°N, -118.7 to -118.0°W)")
+- Clustering guidance (e.g., "Create 5-8 clusters around major cities with random jitter")
+- Coordinate precision (typically 6 decimal places for ~0.1m accuracy)
+- CRITICAL: Must be generated as dict format with 'lat' and 'lon' keys for proper ES mapping
+
 **For other types** (date, boolean, integer, float):
 - Provide appropriate value ranges or examples
 
