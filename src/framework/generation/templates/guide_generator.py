@@ -549,7 +549,7 @@ This is the **CORE** of the search demo. Show the same search problem solved wit
 ```
 
 **Key Points:**
-- "The query 'heart doctor' now matches 'cardiologist'"
+- "The query '[common term]' now matches '[technical term]'" (use customer's actual terminology)
 - "Typos are handled because we're matching meaning"
 - "Uses ELSER v2 model for embeddings"
 

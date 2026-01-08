@@ -90,14 +90,33 @@ from faker import Faker
 fake = Faker()
 
 class {company_name}DataGenerator(DataGeneratorModule):
-    \"\"\"Data generator for {company_name} - Search/RAG mode\"\"\"
+    \"\"\"Data generator for {company_name} - Search/RAG mode
+
+    IMPORTANT: For search demos to show diverse relevance scores, content must have
+    TIERED RELEVANCE - not all documents should be equally relevant to search terms.
+
+    Tier 1 (~20%): Highly relevant - exact keyword matches, dense terminology
+    Tier 2 (~40%): Moderately relevant - related concepts, partial matches
+    Tier 3 (~40%): Low relevance - different topics, no keyword overlap
+    \"\"\"
 
     def generate_datasets(self) -> Dict[str, pd.DataFrame]:
-        \"\"\"Generate document collections for search/RAG demos\"\"\"
+        \"\"\"Generate document collections for search/RAG demos
+
+        For semantic_text fields:
+        - Create DIVERSE content, not templated identical phrases
+        - Vary vocabulary, sentence structure, and content length
+        - Include specialty-specific terminology for some docs, generic for others
+        - This ensures search results show meaningful score differentiation
+        \"\"\"
         datasets = {{}}
 
-        # Generate knowledge base or document collection
-        # Focus on text-heavy data with semantic_text fields
+        # Example pattern for tiered content generation:
+        # specialties = ['cardiology', 'dermatology', 'pediatrics', 'orthopedics', ...]
+        # for each record:
+        #   - 20% chance: Tier 1 (rich, specific content)
+        #   - 40% chance: Tier 2 (related but general)
+        #   - 40% chance: Tier 3 (different topic)
 
         return datasets
 
@@ -107,6 +126,14 @@ class {company_name}DataGenerator(DataGeneratorModule):
 
     def get_data_descriptions(self) -> Dict[str, str]:
         \"\"\"Describe each dataset\"\"\"
+        return {{}}
+
+    def get_semantic_fields(self) -> Dict[str, List[str]]:
+        \"\"\"Specify which fields should use semantic_text mapping
+
+        Returns:
+            Dict mapping dataset names to lists of semantic field names
+        \"\"\"
         return {{}}
 """
 

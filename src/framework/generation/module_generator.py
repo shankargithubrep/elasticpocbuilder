@@ -209,7 +209,8 @@ class ModuleGenerator:
         data_requirements = strategy_gen.extract_data_requirements(query_strategy)
 
         # Generate ONLY data module and supporting files (NO QUERIES)
-        self._generate_data_module_with_requirements(config, module_path, data_requirements)
+        # Pass query_strategy for search demos to extract search terms
+        self._generate_data_module_with_requirements(config, module_path, data_requirements, query_strategy)
         self._generate_guide_module(config, module_path)
         ConfigGenerator.generate_config_file(config, module_path)
 
@@ -342,13 +343,15 @@ class ModuleGenerator:
 
     def _generate_data_module_with_requirements(self, config: Dict[str, Any],
                                                  module_path: Path,
-                                                 data_requirements: Dict):
+                                                 data_requirements: Dict,
+                                                 query_strategy: Optional[Dict] = None):
         """Generate data module based on query strategy requirements
 
         Args:
             config: Demo configuration
             module_path: Path to module directory
             data_requirements: Data requirements extracted from query strategy
+            query_strategy: Optional full query strategy (used for search demos to extract search terms)
         """
         from src.services.query_strategy_generator import QueryStrategyGenerator
         strategy_gen = QueryStrategyGenerator(self.llm_client)
@@ -358,6 +361,12 @@ class ModuleGenerator:
         size_preference = config.get('dataset_size_preference', 'medium')
 
         logger.info(f"Generating data module with requirements for {demo_type} demo")
+
+        # For search demos, extract search terms from query_strategy
+        search_terms = []
+        if demo_type == 'search' and query_strategy:
+            search_terms = self._extract_search_terms_from_strategy(query_strategy)
+            logger.info(f"Extracted {len(search_terms)} search terms for data generation")
 
         # Get base template
         template_config = {
@@ -371,8 +380,10 @@ class ModuleGenerator:
             base_template = get_analytics_data_generator_template(template_config)
 
         # Build enhanced prompt with requirements
+        # For search demos, pass query_strategy and data_requirements for smart sizing
         prompt = self._build_data_generation_with_requirements_prompt(
-            config, base_template, formatted_requirements, size_preference
+            config, base_template, formatted_requirements, size_preference, search_terms,
+            query_strategy=query_strategy, data_requirements=data_requirements
         )
 
         # Generate code
@@ -475,6 +486,9 @@ class ModuleGenerator:
         NEW APPROACH: Saves queries to all_queries.json and generates simple loader methods.
         No LLM call needed - uses query_strategy directly.
 
+        If data_profile is provided (search/RAG demos), refines queries to use actual
+        values from profiled data instead of placeholder values.
+
         Args:
             config: Demo configuration
             module_path: Path to module directory
@@ -484,9 +498,39 @@ class ModuleGenerator:
         logger.info("→ Generating query module with JSON loader approach")
         logger.info(f"  Config keys: {list(config.keys())}")
         logger.info(f"  Query strategy has {len(query_strategy.get('queries', []))} queries")
+        logger.info(f"  Data profile available: {data_profile is not None}")
 
         # Extract and categorize queries from strategy
         all_queries = query_strategy.get('queries', [])
+
+        # CRITICAL: Refine queries using data profile ONLY for search/RAG demos
+        # Analytics/observability demos use percentile-based thresholds (already handled)
+        demo_type = config.get('demo_type', 'observability')
+        is_search_demo = demo_type in ['search', 'rag']
+
+        if data_profile and is_search_demo:
+            logger.info(f"==> REFINING QUERIES USING DATA PROFILE (demo_type={demo_type})")
+            try:
+                from src.services.query_refiner import refine_queries_with_profile
+
+                refined_queries, refinement_stats = refine_queries_with_profile(
+                    all_queries,
+                    data_profile
+                )
+
+                logger.info(f"Query refinement stats: {refinement_stats}")
+                all_queries = refined_queries
+
+                # Save refinement stats to module for tracking
+                stats_file = module_path / 'query_refinement_stats.json'
+                stats_file.write_text(json.dumps(refinement_stats, indent=2))
+            except Exception as e:
+                logger.error(f"Query refinement failed, using original queries: {e}", exc_info=True)
+                # Continue with original queries on failure
+        elif data_profile and not is_search_demo:
+            logger.info(f"Skipping query refinement for {demo_type} demo (refinement only for search/RAG)")
+        else:
+            logger.debug("No data profile available, skipping query refinement")
 
         # Categorize by query_type
         scripted_queries = [q for q in all_queries if q.get('query_type') == 'scripted']
@@ -496,7 +540,7 @@ class ModuleGenerator:
         logger.info(f"  Categorized: {len(scripted_queries)} scripted, "
                    f"{len(parameterized_queries)} parameterized, {len(rag_queries)} rag")
 
-        # Save all queries to all_queries.json BEFORE generating Python module
+        # Save all queries to all_queries.json AFTER refinement
         all_queries_data = {
             'scripted': scripted_queries,
             'parameterized': parameterized_queries,
@@ -506,7 +550,7 @@ class ModuleGenerator:
 
         all_queries_file = module_path / 'all_queries.json'
         all_queries_file.write_text(json.dumps(all_queries_data, indent=2))
-        logger.info(f"  Saved all_queries.json")
+        logger.info(f"  Saved all_queries.json (with refinements if applicable)")
 
         # Generate simple query_generator.py with JSON loader methods
         self._generate_json_loader_query_module(config, module_path)
@@ -718,6 +762,15 @@ CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
 - Use realistic cardinality for the industry, but keep within size limits above
 
+CRITICAL - Avoid Sampling Errors:
+When using np.random.choice() with replace=False, NEVER sample more items than exist in the source.
+If you need N unique items, generate them directly: `[f"ID-{{i}}" for i in range(n)]`
+
+CRITICAL - Zip Codes and IDs with Leading Zeros:
+Zip codes, phone numbers, and IDs that start with 0 MUST be strings, not integers!
+❌ WRONG: [02108, 02115] - Python syntax error (leading zeros not allowed in integers)
+✅ CORRECT: ['02108', '02115'] - Use strings for zip codes
+
 CRITICAL - TIMESTAMP REQUIREMENTS:
 - All timestamp/datetime columns MUST use datetime.now() as the END date
 - Generate data going BACKWARDS from today, maximum 120 days old
@@ -733,8 +786,176 @@ Generate complete, working Python code.
     def _build_data_generation_with_requirements_prompt(self, config: Dict[str, Any],
                                                         template: str,
                                                         formatted_requirements: str,
-                                                        size_preference: str) -> str:
-        """Build prompt for data generation with query requirements"""
+                                                        size_preference: str,
+                                                        search_terms: Optional[List[str]] = None,
+                                                        query_strategy: Optional[Dict] = None,
+                                                        data_requirements: Optional[Dict] = None) -> str:
+        """Build prompt for data generation with query requirements
+
+        For SEARCH demos: Uses restructured prompt with search terms FIRST
+        For ANALYTICS demos: Uses detailed prompt with full field requirements
+
+        Args:
+            config: Demo configuration
+            template: Base template code
+            formatted_requirements: Formatted field requirements (detailed)
+            size_preference: Dataset size preference
+            search_terms: Optional list of search terms for search demos
+            query_strategy: Optional query strategy for calculating optimal dataset size
+            data_requirements: Optional data requirements for condensed formatting
+        """
+        demo_type = config.get('demo_type', 'analytics')
+
+        # ==================================================================
+        # SEARCH DEMO PROMPT - Restructured with search terms FIRST
+        # ==================================================================
+        if demo_type == 'search':
+            return self._build_search_demo_prompt(
+                config, template, formatted_requirements, search_terms,
+                query_strategy, data_requirements
+            )
+
+        # ==================================================================
+        # ANALYTICS DEMO PROMPT - Keep original detailed format
+        # ==================================================================
+        return self._build_analytics_demo_prompt(
+            config, template, formatted_requirements, size_preference
+        )
+
+    def _build_search_demo_prompt(self, config: Dict[str, Any],
+                                   template: str,
+                                   formatted_requirements: str,
+                                   search_terms: Optional[List[str]],
+                                   query_strategy: Optional[Dict],
+                                   data_requirements: Optional[Dict]) -> str:
+        """Build optimized prompt for search demo data generation
+
+        NEW PROMPT ORDER:
+        1. 🎯 SEARCH TERMS (what data MUST contain)
+        2. 📄 ANCHOR DOCUMENTS (concrete examples to copy)
+        3. ❌ ANTI-PATTERNS (what NOT to do)
+        4. 📋 FIELD REQUIREMENTS (condensed for search)
+        5. 🔧 TEMPLATE CODE (skeleton to enhance)
+        6. ⚠️ TECHNICAL NOTES (at the end)
+        """
+        # Calculate recommended dataset size
+        recommended_size = 300  # Default
+        if query_strategy:
+            recommended_size = self._calculate_search_dataset_size(query_strategy)
+            logger.info(f"Smart dataset size for search demo: {recommended_size} documents")
+
+        # Section 1: SEARCH TERMS (FIRST - highest priority)
+        search_terms_section = ""
+        if search_terms:
+            # Limit to 20 most important terms
+            key_terms = search_terms[:20]
+            terms_formatted = '\n'.join(f'  • "{t}"' for t in key_terms)
+            search_terms_section = f"""
+## 🎯 SEARCH TERMS - YOUR DATA MUST CONTAIN THESE (READ THIS FIRST!)
+
+The following terms will be searched in the demo. Your generated data MUST include
+documents that match these terms, or the demo will show ZERO RESULTS.
+
+**Required Search Terms:**
+{terms_formatted}
+
+**Distribution Strategy:**
+- 15-20% of documents: PERFECT MATCH (term appears 3+ times in text)
+- 25-30% of documents: GOOD MATCH (related terms, synonyms)
+- 30-40% of documents: UNRELATED (for score contrast)
+"""
+
+        # Section 2: ANCHOR DOCUMENTS (concrete examples)
+        anchor_section = ""
+        if search_terms:
+            anchor_code = self._generate_anchor_documents(search_terms, [])
+            if anchor_code:
+                anchor_section = f"""
+## 📄 ANCHOR DOCUMENTS - INCLUDE THESE EXACTLY
+
+Copy these anchor documents into your code. They guarantee high-scoring search results.
+
+```python
+{anchor_code}
+```
+"""
+
+        # Section 3: ANTI-PATTERNS (brief!)
+        anti_patterns = """
+## ❌ DO NOT USE TEMPLATES (This Kills Score Diversity!)
+
+NEVER generate content like:
+- "Experienced {specialty} physician dedicated to patient-centered care..."
+- "Board-certified {role} with N years of experience..."
+
+These templates make ALL documents score ~13.0 (useless demo).
+
+INSTEAD: Write 30+ UNIQUE, varied descriptions with different vocabulary and structure.
+"""
+
+        # Section 4: FIELD REQUIREMENTS (condensed for search)
+        if data_requirements:
+            field_section = self._format_search_field_requirements(data_requirements, recommended_size)
+        else:
+            # Fallback to original detailed requirements
+            field_section = f"""
+## 📋 FIELD REQUIREMENTS
+
+{formatted_requirements}
+
+**Target Size:** ~{recommended_size} documents per dataset
+"""
+
+        # Section 5: TEMPLATE CODE
+        template_section = f"""
+## 🔧 BASE TEMPLATE (Enhance This)
+
+```python
+{template}
+```
+
+Generate complete Python code based on this template.
+"""
+
+        # Section 6: TECHNICAL NOTES (at the end, not distracting from main message)
+        technical_notes = f"""
+## ⚠️ Technical Notes (Syntax Requirements)
+
+**Sampling:** When using np.random.choice(replace=False), never sample more than available.
+Use `replace=True` or `min(n, len(source))` as safeguard.
+
+**Zip Codes:** Use strings for codes with leading zeros: `['02108']` not `[02108]`
+
+**Dataset Size:** Generate approximately {recommended_size} documents (derived from query patterns).
+"""
+
+        # Assemble the prompt in priority order
+        prompt = f"""Generate a Python data generator for this SEARCH DEMO:
+
+**Company:** {config["company_name"]}
+**Department:** {config["department"]}
+**Industry:** {config["industry"]}
+
+{search_terms_section}
+{anchor_section}
+{anti_patterns}
+{field_section}
+{template_section}
+{technical_notes}
+
+Generate complete, working Python code. The anchor documents above should appear verbatim in your data.
+"""
+        return prompt
+
+    def _build_analytics_demo_prompt(self, config: Dict[str, Any],
+                                      template: str,
+                                      formatted_requirements: str,
+                                      size_preference: str) -> str:
+        """Build prompt for analytics demo data generation (original format)
+
+        Analytics demos need large datasets for statistical aggregates,
+        so we keep the original detailed prompt structure.
+        """
         size_ranges = {
             'small': {
                 'timeseries_max': 5000,
@@ -766,6 +987,7 @@ Industry: {config["industry"]}
 Pain Points: {", ".join(config["pain_points"])}
 Use Cases: {", ".join(config["use_cases"])}
 Dataset Size Preference: {size_preference.upper()}
+Demo Type: analytics
 
 {formatted_requirements}
 
@@ -775,9 +997,18 @@ The module should:
 3. Create realistic relationships between datasets
 4. Be specific to their business context
 
-CRITICAL - DATASET SIZES ({size_preference.upper()} preference):
+DATASET SIZES ({size_preference.upper()} preference):
 - Primary timeseries datasets: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})
 - Reference/lookup tables: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})
+
+**⚠️ Avoid Sampling Errors:**
+When using `np.random.choice()` with `replace=False`:
+- NEVER sample more items than exist in the source list
+- Use `replace=True` if source is smaller than sample size
+- Or generate exactly what you need: `[f"ID-{{i}}" for i in range(n)]`
+
+**⚠️ Zip Codes and IDs with Leading Zeros:**
+Use strings for codes with leading zeros: `['02108', '02115']` not `[02108, 02115]`
 
 Template to enhance:
 {template}
@@ -924,6 +1155,224 @@ Generate complete, working Python code that satisfies ALL field requirements.
                     schema_lines.append(f"  - {field}")
 
         return "\n".join(schema_lines)
+
+    def _extract_search_terms_from_strategy(self, query_strategy: Dict) -> List[str]:
+        """Extract search terms from query strategy for search demos
+
+        Parses the example_esql queries to find MATCH() search terms that the
+        data generator should include in the generated content.
+
+        Args:
+            query_strategy: Query strategy with queries containing example_esql
+
+        Returns:
+            List of unique search terms/phrases (prioritized by importance)
+        """
+        import re
+
+        # Common English stop words to filter out
+        STOP_WORDS = {
+            'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can',
+            'her', 'was', 'one', 'our', 'out', 'has', 'have', 'been', 'with',
+            'they', 'this', 'that', 'from', 'were', 'will', 'what', 'when',
+            'where', 'which', 'who', 'whom', 'why', 'how', 'each', 'she',
+            'over', 'such', 'into', 'than', 'then', 'them', 'these', 'some',
+            'would', 'other', 'about', 'after', 'most', 'also', 'made',
+            'many', 'before', 'between', 'being', 'through', 'test', 'tests'
+        }
+
+        # Separate buckets for different quality terms
+        primary_terms = set()  # Full phrases from MATCH()
+        secondary_terms = set()  # Individual meaningful words
+
+        for query in query_strategy.get('queries', []):
+            esql = query.get('example_esql', '')
+
+            # Extract terms from MATCH(field, "search terms")
+            match_patterns = re.findall(r'MATCH\([^,]+,\s*["\']([^"\']+)["\']', esql)
+            for term in match_patterns:
+                # Keep the full phrase as primary term
+                primary_terms.add(term)
+
+                # Only split into words if it's not a question
+                if '?' not in term and len(term) < 50:
+                    for word in term.split():
+                        word_lower = word.lower().strip('?.,!')
+                        if len(word_lower) > 4 and word_lower not in STOP_WORDS:
+                            secondary_terms.add(word)
+
+            # Extract from query name for additional context
+            name = query.get('name', '')
+            # Look for domain-specific terms in the name
+            name_words = re.findall(r'[A-Za-z]+', name)
+            for word in name_words:
+                word_lower = word.lower()
+                if len(word_lower) > 5 and word_lower not in STOP_WORDS:
+                    secondary_terms.add(word)
+
+        # Combine with primary terms first, then secondary
+        all_terms = list(primary_terms) + [t for t in secondary_terms if t not in primary_terms]
+        return all_terms
+
+    def _calculate_search_dataset_size(self, query_strategy: Dict) -> int:
+        """Derive optimal dataset size from query patterns for search demos
+
+        Search demos only show top N results (typically 10-20), so massive datasets
+        are wasteful. This analyzes the query strategy to recommend a reasonable size.
+
+        Args:
+            query_strategy: Query strategy with queries containing example_esql
+
+        Returns:
+            Recommended number of documents (typically 100-1000)
+        """
+        import re
+
+        queries = query_strategy.get('queries', [])
+
+        max_limit = 20  # Default LIMIT value
+        has_completion = False
+        has_aggregation = False
+
+        for q in queries:
+            esql = q.get('example_esql', '')
+
+            # Extract LIMIT values
+            limits = re.findall(r'LIMIT\s+(\d+)', esql, re.IGNORECASE)
+            if limits:
+                max_limit = max(max_limit, *[int(l) for l in limits])
+
+            # Check for RAG queries (need smaller, focused datasets)
+            if 'COMPLETION' in esql.upper() or 'RERANK' in esql.upper():
+                has_completion = True
+
+            # Check for aggregations (rare in search demos, but may need larger datasets)
+            if 'STATS' in esql.upper():
+                has_aggregation = True
+
+        # Apply heuristic
+        if has_aggregation:
+            # Need volume for meaningful stats
+            return 2000
+        if has_completion:
+            # RAG context should be focused, not overwhelming
+            return 150
+
+        # Default: 15x the max LIMIT, capped at 500
+        # This ensures enough data for score differentiation without waste
+        return min(max_limit * 15, 500)
+
+    def _generate_anchor_documents(self, search_terms: List[str],
+                                    datasets: List[Dict]) -> str:
+        """Generate concrete anchor document examples for the LLM to copy
+
+        Anchor documents guarantee high-scoring search results by embedding
+        exact search terms multiple times in varied, natural prose.
+
+        Args:
+            search_terms: List of search terms extracted from queries
+            datasets: Dataset definitions with semantic fields
+
+        Returns:
+            Python code snippet with pre-written anchor documents
+        """
+        if not search_terms:
+            return ""
+
+        # Filter out questions (they shouldn't become anchor docs directly)
+        phrase_terms = [t for t in search_terms if '?' not in t and len(t) < 60]
+
+        # Limit to most important terms - just use the first 10 phrase terms
+        # Don't try to categorize by domain since demos span many industries
+        key_terms = phrase_terms[:10]
+
+        if not key_terms:
+            return ""
+
+        anchor_code = '''
+# ============================================================================
+# ANCHOR DOCUMENTS - Include these in your semantic_text fields
+# These guarantee high-scoring results for demo search queries
+# ============================================================================
+
+# Provider/Medical Anchors - Use these for provider bios
+PROVIDER_ANCHORS = [
+'''
+        # Generate provider anchors for medical terms
+        for i, term in enumerate(medical_terms[:4]):
+            term_clean = term.replace('"', '\\"')
+            anchor_code += f'''    # Anchor #{i+1} for "{term_clean}"
+    """Dr. {term_clean.title().split()[0] if len(term_clean.split()) > 0 else 'Smith'} is a leading specialist in {term_clean}.
+With over 20 years of experience in {term_clean}, this physician has performed thousands of successful
+{term_clean} procedures. Board-certified and fellowship-trained in {term_clean}, offering comprehensive
+care for patients seeking expert {term_clean} treatment. Known for exceptional outcomes in {term_clean}.""",
+'''
+
+        anchor_code += ''']
+
+# Policy/Coverage Anchors - Use these for policy documents
+POLICY_ANCHORS = [
+'''
+        # Generate policy anchors
+        for i, term in enumerate(policy_terms[:3]):
+            term_clean = term.replace('"', '\\"')
+            anchor_code += f'''    # Policy anchor for "{term_clean}"
+    """{term_clean.title()} Policy Guidelines: This document outlines {term_clean} requirements
+and procedures. Members must follow {term_clean} protocols when submitting requests.
+{term_clean.title()} decisions are made within 5 business days. For questions about {term_clean},
+contact member services. This {term_clean} policy applies to all in-network services.""",
+'''
+
+        anchor_code += ''']
+
+# Usage: Mix these anchors into your generated content
+# Assign 2-3 providers to use PROVIDER_ANCHORS verbatim
+# Assign 2-3 policies to use POLICY_ANCHORS verbatim
+# The rest should be varied content you generate
+'''
+        return anchor_code
+
+    def _format_search_field_requirements(self, data_requirements: Dict,
+                                           recommended_size: int) -> str:
+        """Condensed field requirements for search demos
+
+        For search demos, we focus on semantic fields and key identifiers,
+        not exhaustive type information for every field.
+
+        Args:
+            data_requirements: Full data requirements
+            recommended_size: Recommended dataset size from heuristic
+
+        Returns:
+            Condensed requirements string
+        """
+        lines = ["## 📋 DATA REQUIREMENTS (Condensed for Search Demo)\n"]
+
+        for ds in data_requirements.get('datasets', []):
+            name = ds.get('name', 'dataset')
+            semantic_fields = ds.get('semantic_fields', [])
+            required_fields = ds.get('required_fields', {})
+
+            # Extract key fields (IDs, names, important lookups)
+            key_fields = [f for f in required_fields.keys()
+                         if any(kw in f.lower() for kw in ['id', 'name', 'code', 'type', 'status'])]
+
+            lines.append(f"**{name}**: ~{recommended_size} documents")
+
+            if semantic_fields:
+                lines.append(f"  • Semantic fields (NEED DIVERSE CONTENT): {', '.join(semantic_fields)}")
+
+            if key_fields[:5]:
+                lines.append(f"  • Key fields: {', '.join(key_fields[:5])}")
+
+            # Add remaining fields count
+            other_count = len(required_fields) - len(key_fields[:5])
+            if other_count > 0:
+                lines.append(f"  • Plus {other_count} other fields (see template for types)")
+
+            lines.append("")
+
+        return '\n'.join(lines)
 
     def _get_minimal_esql_reference(self) -> str:
         """Get minimal ES|QL reference for prompts
