@@ -14,15 +14,60 @@ logger = logging.getLogger(__name__)
 def render_create_demo_view():
     """Render the demo creation interface"""
 
+    # Initialize state for complexity selection
+    if "ai_expansion_enabled" not in st.session_state:
+        st.session_state.ai_expansion_enabled = None  # Force user to choose
+    if "ai_expansion_used" not in st.session_state:
+        st.session_state.ai_expansion_used = False
+    if "complexity_selection_required" not in st.session_state:
+        st.session_state.complexity_selection_required = True
+
     # Display messages
     if not st.session_state.messages:
         st.markdown("""
         ### 👋 Get Started
 
-        Review the Demo Generation Options in the sidebar, then in the form below, provide a customer name & department/role, and provide key use cases, pain points, and key metrics. The more context you can provide in the prompt the better.
+        Review the Demo Generation Options in the sidebar, then choose your Demo Complexity mode below before entering your customer description.
 
         **Note:** Since module generation is LLM-assisted, some variance is expected even with identical inputs. This is still an experimental utility, so if generation fails you may need to try again (and consider using a smarter model).
         """)
+
+        # Demo Complexity Control (REQUIRED before input)
+        st.markdown("**Demo Complexity** *(required)*")
+
+        complexity_options = ["Simple", "Expanded"]
+
+        # Determine current index based on session state
+        if st.session_state.ai_expansion_enabled is None:
+            current_index = None
+        else:
+            current_index = 1 if st.session_state.ai_expansion_enabled else 0
+
+        selected_complexity = st.radio(
+            "Choose how the LLM should process your input:",
+            options=complexity_options,
+            index=current_index,
+            disabled=st.session_state.ai_expansion_used,
+            key="complexity_radio",
+            help="**Simple**: Direct processing of your prompt\n\n**Expanded**: LLM enhances brief prompts into detailed technical contexts",
+            horizontal=True
+        )
+
+        # Update session state based on selection
+        if selected_complexity == "Simple":
+            st.session_state.ai_expansion_enabled = False
+            st.session_state.complexity_selection_required = False
+        elif selected_complexity == "Expanded":
+            st.session_state.ai_expansion_enabled = True
+            st.session_state.complexity_selection_required = False
+
+        # Show description of selected mode
+        if st.session_state.ai_expansion_enabled is True:
+            st.info("💡 **Expanded mode**: Your brief prompt will be enhanced into a detailed technical context")
+        elif st.session_state.ai_expansion_enabled is False:
+            st.info("💡 **Simple mode**: Your prompt will be processed directly without expansion")
+
+        st.markdown("")  # Spacing
 
         # Expandable section for detailed prompt guidance
         with st.expander("🔍 View Demo Complexity Expansion Prompt"):
@@ -241,8 +286,15 @@ def render_create_demo_view():
                     st.session_state.messages.append({"role": "assistant", "content": response})
                     st.rerun()
 
-    # Chat input
+    # Chat input with validation
     if prompt := st.chat_input("Paste your customer description or type your response..."):
+        # Validate that complexity has been selected (only for first message)
+        if (len(st.session_state.messages) == 0 and
+            st.session_state.ai_expansion_enabled is None):
+            # Show error and don't process input
+            st.error("⚠️ **Please select a Demo Complexity mode** (Simple or Expanded) above before submitting your customer description.")
+            st.stop()
+
         # Add user message
         st.session_state.messages.append({"role": "user", "content": prompt})
 

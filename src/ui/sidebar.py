@@ -19,11 +19,13 @@ def _render_status_section():
 
     status = st.session_state.app_status
 
-    # Status header with overall indicator
+    # Status header with overall indicator and Vulcan branding
     status_emoji = "✅" if status.all_ok else "❌"
-    status_label = f"Status {status_emoji}"
+    status_label = f"🌋 Vulcan · Status {status_emoji}"
 
     with st.expander(status_label, expanded=False):
+        st.caption("Vulcan helps create custom demo modules containing sample data, queries, and agentic tools.")
+        st.divider()
         # LLM Config - compact single line
         llm_emoji = "✅" if status.llm.is_ok else "❌"
         st.markdown(f"{llm_emoji} **LLM:** {status.llm.detail}")
@@ -110,10 +112,7 @@ def _render_status_section():
 def render_sidebar():
     """Render the sidebar with mode toggle and context display"""
 
-    # Vulcan header with tooltip
-    st.markdown("### Vulcan", help="Vulcan helps create custom demo modules containing sample data, queries, and agentic tools.")
-
-    # Status section at top (collapsible)
+    # Status section at top (collapsible) - includes Vulcan branding
     _render_status_section()
 
     # Initialize help toggle state
@@ -168,33 +167,10 @@ def render_sidebar():
         st.markdown("---")
 
         # Initialize state
-        if "ai_expansion_enabled" not in st.session_state:
-            st.session_state.ai_expansion_enabled = True  # Default to Expanded
-        if "ai_expansion_used" not in st.session_state:
-            st.session_state.ai_expansion_used = False
         # Dataset size is now auto-determined by demo type (search=smaller, analytics=larger)
         st.session_state.dataset_size_preference = "medium"
         # Always use enhanced generation (no toggle needed)
         st.session_state.use_enhanced_generation = True
-
-        # Data Generation section header
-        st.markdown("**Data Generation**")
-
-        complexity_options = ["Simple", "Expanded"]
-        complexity_index = 1 if st.session_state.ai_expansion_enabled else 0
-        selected_complexity = st.selectbox(
-            "Complexity",
-            options=complexity_options,
-            index=complexity_index,
-            disabled=st.session_state.ai_expansion_used,
-            key="complexity_select",
-            help="Expanded enhances brief prompts into detailed contexts"
-        )
-        st.session_state.ai_expansion_enabled = (selected_complexity == "Expanded")
-
-        # Compact description
-        expansion_note = "LLM expands prompt" if st.session_state.ai_expansion_enabled else "Direct processing"
-        st.caption(expansion_note)
 
         st.markdown("---")
 
