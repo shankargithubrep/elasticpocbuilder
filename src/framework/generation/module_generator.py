@@ -831,6 +831,7 @@ Generate complete, working Python code.
         """Build optimized prompt for search demo data generation
 
         NEW PROMPT ORDER:
+        0. 🔍 SEARCH NARRATIVE (key search scenarios - NEW!)
         1. 🎯 SEARCH TERMS (what data MUST contain)
         2. 📄 ANCHOR DOCUMENTS (concrete examples to copy)
         3. ❌ ANTI-PATTERNS (what NOT to do)
@@ -843,6 +844,114 @@ Generate complete, working Python code.
         if query_strategy:
             recommended_size = self._calculate_search_dataset_size(query_strategy)
             logger.info(f"Smart dataset size for search demo: {recommended_size} documents")
+
+        # Section 0: SEARCH NARRATIVE (NEW - defines key search scenarios)
+        narrative_section = ""
+        search_narrative = None
+        if query_strategy and "search_narrative" in query_strategy:
+            import json
+            search_narrative = query_strategy["search_narrative"]
+            logger.info("Including search narrative in data generation prompt")
+
+            narrative_section = f"""
+## 🔍 SEARCH NARRATIVE - CRITICAL FOR DATA ALIGNMENT
+
+This demo has specific search scenarios. Your generated data MUST support these scenarios
+to ensure search queries return relevant, high-scoring results.
+
+**Search Scenarios:**
+{json.dumps(search_narrative, indent=2)}
+
+**IMPLEMENTATION REQUIREMENTS:**
+
+For each scenario, distribute documents according to target_distribution:
+- **exact_matches**: Include exact_phrases VERBATIM in descriptions (for BM25 matches)
+- **semantic_matches**: Include semantic_phrases naturally (for semantic search)
+- **noise**: Include unrelated content (for score contrast)
+
+**Example for scenario "{search_narrative['search_scenarios'][0]['scenario_id']}":**
+
+If exact_phrases includes "Italian food":
+✅ GOOD: "Professional food photography showcasing Italian food and pasta dishes..."
+✅ GOOD: "Authentic Italian food imagery featuring wood-fired pizza and fresh pasta..."
+❌ BAD:  "High-quality Image asset for Holiday Sale campaign..." (no specific keywords!)
+
+**Use the keyword seeding approach:**
+```python
+from src.services.domain_keyword_library import (
+    seed_description_with_keywords,
+    generate_noise_description
+)
+
+# Import at top of your data generator
+# Then use in generate_datasets() method:
+
+# Track document index for distribution
+doc_idx = 0
+
+# For scenario 1 exact matches
+scenario_1 = {search_narrative['search_scenarios'][0]}
+for i in range(scenario_1['target_distribution']['exact_matches']):
+    description = seed_description_with_keywords(scenario_1, use_exact=True, asset_type="image", index=doc_idx)
+    doc_idx += 1
+
+# For scenario 1 semantic matches
+for i in range(scenario_1['target_distribution']['semantic_matches']):
+    description = seed_description_with_keywords(scenario_1, use_exact=False, asset_type="image", index=doc_idx)
+    doc_idx += 1
+
+# For noise documents
+for i in range(scenario_1['target_distribution']['noise']):
+    description = generate_noise_description(asset_type="image")
+    doc_idx += 1
+```
+
+CRITICAL: This is NOT optional - the demo will fail without realistic search term distribution!
+"""
+
+        # Section 0.5: CUSTOM DOMAIN LIBRARY (NEW - domain-specific keywords)
+        library_section = ""
+        custom_library = None
+        if query_strategy and "custom_domain_library" in query_strategy:
+            import json
+            custom_library = query_strategy["custom_domain_library"]
+            logger.info(f"Including custom domain library ({len(custom_library)} categories) in data generation prompt")
+
+            # Show sample keywords from each category (first 5 from each)
+            library_preview = {}
+            for category, keywords in list(custom_library.items())[:6]:  # Show up to 6 categories
+                library_preview[category] = keywords[:5] + (["..."] if len(keywords) > 5 else [])
+
+            library_section = f"""
+## 📚 CUSTOM DOMAIN LIBRARY - KEYWORDS FOR THIS DEMO
+
+You have access to a custom keyword library generated specifically for this demo.
+Use these domain-specific keywords to create rich, realistic descriptions.
+
+**Custom Library** ({len(custom_library)} categories):
+{json.dumps(library_preview, indent=2)}
+
+**CRITICAL - Pass custom library to keyword seeding functions:**
+
+```python
+from src.services.domain_keyword_library import seed_description_with_keywords
+
+# Define the custom library at module level (outside generate_datasets method)
+CUSTOM_LIBRARY = {json.dumps(custom_library)}
+
+# Then in generate_datasets() method, pass it to seeding functions:
+description = seed_description_with_keywords(
+    scenario=scenario_1,
+    use_exact=True,
+    asset_type="image",
+    index=doc_idx,
+    custom_library=CUSTOM_LIBRARY  # ← PASS THE CUSTOM LIBRARY!
+)
+```
+
+This library contains domain-appropriate keywords extracted from your search scenarios.
+Using it ensures descriptions sound professional and use terminology specific to {config.get('industry', 'this industry')}.
+"""
 
         # Section 1: SEARCH TERMS (FIRST - highest priority)
         search_terms_section = ""
@@ -936,6 +1045,8 @@ Use `replace=True` or `min(n, len(source))` as safeguard.
 **Department:** {config["department"]}
 **Industry:** {config["industry"]}
 
+{narrative_section}
+{library_section}
 {search_terms_section}
 {anchor_section}
 {anti_patterns}
@@ -943,7 +1054,7 @@ Use `replace=True` or `min(n, len(source))` as safeguard.
 {template_section}
 {technical_notes}
 
-Generate complete, working Python code. The anchor documents above should appear verbatim in your data.
+Generate complete, working Python code. Use the keyword seeding approach from the search narrative section and pass the custom library to all seeding functions.
 """
         return prompt
 

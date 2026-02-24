@@ -140,28 +140,68 @@ def get_sample_values_for_parameters(data_profile: dict, parameters: List[Dict])
 
     sample_values = {}
 
+    # Common parameter name patterns to field name mappings
+    field_mapping_patterns = {
+        'search_terms': ['title', 'description', 'name', 'content', 'text'],
+        'search_query': ['title', 'description', 'name', 'content', 'text'],
+        'query': ['title', 'description', 'name', 'content'],
+        'brand_filter': ['brand', 'brand_name'],
+        'brand_name': ['brand', 'brand_name'],
+        'min_engagement': ['engagement_score', 'engagement', 'score'],
+        'min_downloads': ['download_count', 'downloads'],
+        'campaign_name': ['campaign_name', 'campaign', 'campaign_theme'],
+        'asset_type': ['asset_type', 'type', 'content_type'],
+        'file_format': ['file_format', 'format', 'extension']
+    }
+
     for param in parameters:
         param_name = param.get('name', '')
         param_type = param.get('type', 'string')
+        param_desc = param.get('description', '').lower()
 
         # Search across all datasets for matching fields
         matches = []
         for dataset_name, dataset_info in data_profile['datasets'].items():
             fields = dataset_info.get('fields', {})
 
-            # Look for exact match first
+            # Strategy 1: Exact match
             if param_name in fields:
                 field_data = fields[param_name]
                 unique_vals = field_data.get('unique_values', [])
                 if unique_vals:
-                    matches.extend(unique_vals[:10])  # Take first 10
-            else:
-                # Look for partial match (e.g., "session_id" in "user_session_id")
-                for field_name, field_data in fields.items():
-                    if param_name in field_name or field_name in param_name:
+                    matches.extend(unique_vals[:10])
+                    continue  # Found exact match, move to next parameter
+
+            # Strategy 2: Check predefined mapping patterns
+            if param_name in field_mapping_patterns:
+                for candidate_field in field_mapping_patterns[param_name]:
+                    if candidate_field in fields:
+                        field_data = fields[candidate_field]
                         unique_vals = field_data.get('unique_values', [])
                         if unique_vals:
                             matches.extend(unique_vals[:10])
+                            break  # Found via pattern, continue to next dataset
+                if matches:
+                    continue  # Found via pattern, move to next parameter
+
+            # Strategy 3: Partial substring match
+            for field_name, field_data in fields.items():
+                if param_name in field_name or field_name in param_name:
+                    unique_vals = field_data.get('unique_values', [])
+                    if unique_vals:
+                        matches.extend(unique_vals[:10])
+
+            # Strategy 4: For text search parameters, grab values from text fields
+            if not matches and param_type == 'string' and any(keyword in param_desc for keyword in ['search', 'query', 'terms', 'text']):
+                # Look for likely text search fields
+                for field_name in ['title', 'description', 'name', 'content', 'text']:
+                    if field_name in fields:
+                        field_data = fields[field_name]
+                        unique_vals = field_data.get('unique_values', [])
+                        if unique_vals:
+                            # For text fields, generate sample search queries from unique values
+                            matches.extend(unique_vals[:5])
+                            break
 
         # Deduplicate and limit to first 5-7 unique values
         if matches:

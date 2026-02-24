@@ -124,7 +124,7 @@ JSON:"""
         return f"❌ Error generating suggestions: {e}\n\nPlease provide the missing information manually."
 
 
-def expand_brief_prompt(brief_prompt: str, force_demo_type: str = None) -> str:
+def expand_brief_prompt(brief_prompt: str, force_demo_type: str = None, skip_size_check: bool = False) -> str:
     """
     Expand a brief user prompt into detailed customer context using the appropriate template.
 
@@ -135,6 +135,7 @@ def expand_brief_prompt(brief_prompt: str, force_demo_type: str = None) -> str:
     Args:
         brief_prompt: The user's brief input to expand
         force_demo_type: Optional override for demo type ('search' or 'observability')
+        skip_size_check: If True, bypass the 3000 char limit (for guided expansion enriched prompts)
 
     Returns:
         Expanded detailed context document
@@ -145,7 +146,7 @@ def expand_brief_prompt(brief_prompt: str, force_demo_type: str = None) -> str:
         # Simple character limit check - block expansion for large inputs
         MAX_EXPANSION_SIZE = 3000
 
-        if len(brief_prompt) >= MAX_EXPANSION_SIZE:
+        if not skip_size_check and len(brief_prompt) >= MAX_EXPANSION_SIZE:
             logger.info(f"Input too large for expansion ({len(brief_prompt)} chars), blocking")
             return f"""❌ **Input too large for AI expansion** ({len(brief_prompt):,} characters)
 
@@ -322,14 +323,17 @@ You MUST return valid JSON in this EXACT format. No other text before or after t
       - Remind them they can build the other type in a second run
       - Keep this response concise (2-3 sentences max)
    - **NORMAL CASE - Single Demo Type:**
-      - If ≥80% complete: Say ready and ask them to type 'generate' (just the word "generate")
-      - If 50-79%: Acknowledge what was captured, then ask for missing fields AS BULLETS
-      - If <50%: Welcome and ask for key info AS BULLETS
+      - If ≥80% complete: Say ready and ask them to type 'generate' (just the word "generate"). DO NOT include the skip option.
+      - If 50-79%: Acknowledge what was captured, then ask for missing fields AS BULLETS. End with skip option.
+      - If <50%: Welcome and ask for key info AS BULLETS. End with skip option.
       - Be specific about what was found
       - When asking for missing info, format as bullet points (one per field)
-      - ALWAYS end with: "💡 Don't have all the details? Just type **'skip'** and I'll use reasonable defaults."
+      - ONLY include skip option when completeness < 80%: "💡 Don't have all the details? Just type **'skip'** and I'll use reasonable defaults."
 
-**Example user_response format when info is missing:**
+**Example user_response format when 100% ready:**
+"You're 100% ready! Type **'generate'** to create your Elastic Agent Builder demo."
+
+**Example user_response format when info is missing (<80% complete):**
 "Great! I've captured [what you found]. To complete the demo, I need:
 
 • **Metrics:** What KPIs matter most? (e.g., response time, conversion rate)

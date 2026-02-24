@@ -66,10 +66,13 @@ class DataSpecificationExpander:
         prompt = self._build_expansion_prompt(query_strategy, customer_context)
 
         # Call LLM to generate specifications
+        # Increased max_tokens to handle complex nested JSON structures
+        max_tokens = 24000
+
         try:
             response = self.llm_client.messages.create(
                 model="claude-sonnet-4-5-20250929",
-                max_tokens=4000,
+                max_tokens=max_tokens,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -81,10 +84,18 @@ class DataSpecificationExpander:
             # Extract JSON from response
             specifications = self._extract_json(response_text)
 
+            # Validate that we got something useful
+            if not specifications or 'datasets' not in specifications:
+                raise ValueError("Invalid specifications structure: missing 'datasets' key")
+
             logger.info(f"Generated data specifications for {len(specifications.get('datasets', {}))} datasets")
 
             return specifications
 
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error: {e}")
+            logger.error(f"Response may have been truncated. Length: {len(response_text)} chars")
+            raise ValueError(f"Invalid JSON in LLM response: {e}")
         except Exception as e:
             logger.error(f"Failed to expand data specifications: {e}", exc_info=True)
             raise
@@ -266,7 +277,7 @@ Generate realistic, domain-appropriate value specifications that will create hig
         return prompt
 
     def _extract_json(self, text: str) -> Dict:
-        """Extract JSON from LLM response text
+        """Extract JSON from LLM response text with multiple fallback strategies
 
         Args:
             text: LLM response text potentially containing JSON
@@ -277,25 +288,52 @@ Generate realistic, domain-appropriate value specifications that will create hig
         Raises:
             ValueError: If JSON cannot be extracted or parsed
         """
-        # Try to find JSON in code blocks first
         import re
-        json_blocks = re.findall(r'```(?:json)?\n(.*?)\n```', text, re.DOTALL)
+
+        # Strategy 1: Try to find JSON in code blocks first (most reliable)
+        json_blocks = re.findall(r'```(?:json)?\s*\n(.*?)\n```', text, re.DOTALL)
 
         if json_blocks:
-            for block in json_blocks:
+            for i, block in enumerate(json_blocks):
                 try:
-                    return json.loads(block)
-                except json.JSONDecodeError:
+                    parsed = json.loads(block)
+                    logger.debug(f"Successfully parsed JSON from code block {i+1}")
+                    return parsed
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Code block {i+1} is not valid JSON: {e}")
                     continue
 
-        # Try to find JSON object in text (between curly braces)
+        # Strategy 2: Try to find outermost JSON object
+        # Look for { ... } pattern, being greedy to get the full object
         json_match = re.search(r'\{.*\}', text, re.DOTALL)
         if json_match:
             try:
-                return json.loads(json_match.group(0))
+                parsed = json.loads(json_match.group(0))
+                logger.debug("Successfully parsed JSON from outermost braces")
+                return parsed
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON: {e}")
-                logger.error(f"JSON text preview: {json_match.group(0)[:500]}")
-                raise ValueError(f"Invalid JSON in LLM response: {e}")
+                logger.error(f"Failed to parse JSON from outermost braces: {e}")
+                # Show preview of where error occurred
+                error_pos = getattr(e, 'pos', 0)
+                start = max(0, error_pos - 100)
+                end = min(len(json_match.group(0)), error_pos + 100)
+                context = json_match.group(0)[start:end]
+                logger.error(f"Error context: ...{context}...")
 
-        raise ValueError("No JSON found in LLM response")
+        # Strategy 3: Try to find JSON starting with { "datasets"
+        datasets_match = re.search(r'\{\s*"datasets"\s*:.*\}', text, re.DOTALL)
+        if datasets_match:
+            try:
+                parsed = json.loads(datasets_match.group(0))
+                logger.debug("Successfully parsed JSON starting with 'datasets' key")
+                return parsed
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse datasets-first JSON: {e}")
+
+        # If all strategies failed, provide helpful error
+        logger.error(f"Unable to extract valid JSON from response")
+        logger.error(f"Response length: {len(text)} characters")
+        logger.error(f"Response preview (first 500 chars): {text[:500]}")
+        logger.error(f"Response preview (last 500 chars): {text[-500:]}")
+
+        raise ValueError("No valid JSON found in LLM response after trying multiple extraction strategies")

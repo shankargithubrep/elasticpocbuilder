@@ -7,6 +7,7 @@ import logging
 
 from src.framework import ModularDemoOrchestrator
 from ..message_processor import process_smart_message, expand_brief_prompt
+from ..guided_expansion_flow import run_guided_expansion
 
 logger = logging.getLogger(__name__)
 
@@ -286,6 +287,60 @@ def render_create_demo_view():
                     st.session_state.messages.append({"role": "assistant", "content": response})
                     st.rerun()
 
+    # Check if guided expansion is in progress (BEFORE chat input)
+    # This allows validation UI to render even after reruns
+    if 'guided_expansion' in st.session_state and st.session_state.guided_expansion['stage'] in ['extracting', 'validating', 'expanding']:
+        # Guided expansion in progress - get stored prompt
+        stored_prompt = st.session_state.guided_expansion.get('original_prompt', '')
+
+        # Run guided expansion flow (continues from current stage)
+        expanded_content = run_guided_expansion(stored_prompt)
+
+        if expanded_content:
+            # Expansion complete - add messages and store result
+            st.session_state.messages.append({"role": "user", "content": stored_prompt})
+
+            # STEP 1: Extract basic context from ORIGINAL prompt
+            with st.chat_message("user"):
+                st.markdown(stored_prompt)
+
+            with st.chat_message("assistant"):
+                with st.spinner("📊 Extracting basic context..."):
+                    response = process_smart_message(stored_prompt)
+                    st.markdown(response)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+
+            # STEP 2: Show validation summary (what user reviewed/edited)
+            ge_state = st.session_state.get('guided_expansion', {})
+            validation_summary = ge_state.get('validation_summary', '')
+
+            if validation_summary:
+                with st.chat_message("assistant"):
+                    st.markdown(validation_summary)
+                    st.session_state.messages.append({"role": "assistant", "content": validation_summary})
+
+            # STEP 3: Show expanded content
+            with st.chat_message("assistant"):
+                st.markdown("### 📝 Expanded Technical Context")
+                with st.expander("View full expanded context", expanded=False):
+                    st.markdown(expanded_content)
+
+                st.session_state.messages.append({"role": "assistant", "content": f"### 📝 Expanded Technical Context\n\n{expanded_content}"})
+                st.session_state.ai_expansion_used = True  # Lock the feature
+
+                # STEP 4: Store expanded content as full_technical_context
+                st.session_state.demo_context['full_technical_context'] = expanded_content
+
+                # Mark as rich document for high-fidelity generation
+                completion_msg = f"✅ **Rich technical context preserved** ({len(expanded_content):,} characters)"
+                st.caption(completion_msg)
+
+            st.rerun()
+        else:
+            # Still in validation or extraction - validation UI is showing
+            # Don't process chat input, just let the UI persist
+            st.stop()
+
     # Chat input with validation
     if prompt := st.chat_input("Paste your customer description or type your response..."):
         # Validate that complexity has been selected (only for first message)
@@ -295,41 +350,29 @@ def render_create_demo_view():
             st.error("⚠️ **Please select a Demo Complexity mode** (Simple or Expanded) above before submitting your customer description.")
             st.stop()
 
-        # Add user message
+        # Handle AI expansion if enabled (only for first message)
+        # Store prompt and initialize guided expansion state
+        if (st.session_state.ai_expansion_enabled and
+            not st.session_state.ai_expansion_used and
+            len(st.session_state.messages) == 0):  # First message only (before adding to messages)
+
+            # Initialize guided expansion with original prompt
+            st.session_state.guided_expansion = {
+                'stage': 'extracting',
+                'original_prompt': prompt,  # Store prompt for reruns
+                'extraction': None,
+                'validated_extraction': None,
+                'expanded_content': None
+            }
+
+            # Trigger rerun to start guided expansion flow
+            st.rerun()
+
+        # Add user message (if not in guided expansion flow)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         with st.chat_message("user"):
             st.markdown(prompt)
-
-        # Handle AI expansion if enabled (only for first message)
-        if (st.session_state.ai_expansion_enabled and
-            not st.session_state.ai_expansion_used and
-            len(st.session_state.messages) == 1):  # First message only
-
-            # STEP 1: Extract basic context from ORIGINAL prompt (JSON or brief text)
-            with st.chat_message("assistant"):
-                with st.spinner("📊 Extracting basic context..."):
-                    response = process_smart_message(prompt)
-                    st.markdown(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-
-            # STEP 2: Expand the original prompt into rich technical document
-            with st.chat_message("assistant"):
-                with st.spinner("🤖 Expanding into detailed customer context..."):
-                    expanded_content = expand_brief_prompt(prompt)
-                    st.markdown(expanded_content)
-                    st.session_state.messages.append({"role": "assistant", "content": expanded_content})
-                    st.session_state.ai_expansion_used = True  # Lock the feature
-
-                    # STEP 3: Store expanded content as full_technical_context (don't re-extract)
-                    st.session_state.demo_context['full_technical_context'] = expanded_content
-
-                    # Mark as rich document for high-fidelity generation
-                    completion_msg = f"✅ **Rich technical context preserved** ({len(expanded_content):,} characters)"
-                    st.caption(completion_msg)
-
-            st.rerun()
-            return
 
         # Check if this is a generate command
         if prompt.lower().strip() == "generate" and st.session_state.conversation_phase == "ready_to_generate":

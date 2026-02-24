@@ -296,7 +296,15 @@ class ModularDemoOrchestrator:
                 logger.info(f"Generated data specifications for {len(data_specifications.get('datasets', {}))} datasets")
             except Exception as e:
                 logger.warning(f"Data specification expansion failed: {e}, using basic specifications")
-                # Continue without specifications (fallback to current behavior)
+                # CRITICAL: Even if expansion fails, preserve search_narrative from query_strategy
+                # This ensures keyword seeding works even without detailed specifications
+                if 'search_narrative' in query_strategy:
+                    logger.info("Preserving search_narrative despite expansion failure for keyword seeding")
+                    data_specifications = {
+                        'datasets': {},
+                        'search_narrative': query_strategy['search_narrative']
+                    }
+                # Continue without detailed specifications (fallback to current behavior)
 
         # Phase 2: Generate Data Module ONLY (queries will be generated AFTER profiling)
         if progress_callback:

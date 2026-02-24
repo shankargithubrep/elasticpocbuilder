@@ -67,6 +67,39 @@ class SearchQueryStrategyGenerator:
         """
         logger.info(f"Generating SEARCH strategy for {context.get('company_name')}")
 
+        # STEP 1: Generate search narrative FIRST (new)
+        # This defines the key search scenarios and target phrases
+        from src.services.search_narrative_generator import SearchNarrativeGenerator
+
+        narrative_gen = SearchNarrativeGenerator(self.llm_client)
+        search_narrative = narrative_gen.generate_narrative({
+            "industry": context.get("industry"),
+            "business_category": context.get("business_category", context.get("department")),
+            "pain_points": context.get("pain_points", []),
+            "use_cases": context.get("use_cases", [])
+        })
+
+        logger.info(f"Generated search narrative with {len(search_narrative['search_scenarios'])} scenarios")
+
+        # Add narrative to context for use in prompts
+        context["search_narrative"] = search_narrative
+
+        # STEP 2: Generate CUSTOM domain library from narrative and context
+        # This creates domain-specific keywords extracted from the search scenarios
+        from src.services.custom_domain_library_generator import CustomDomainLibraryGenerator
+
+        library_gen = CustomDomainLibraryGenerator(self.llm_client)
+        custom_library = library_gen.generate_library(
+            customer_context=context,
+            search_narrative=search_narrative
+        )
+
+        logger.info(f"Generated custom domain library with {len(custom_library)} categories, "
+                   f"{sum(len(v) for v in custom_library.values())} total keywords")
+
+        # Add custom library to context for use in data generation
+        context["custom_domain_library"] = custom_library
+
         # Extract dataset size preference (default to 'medium' if not specified)
         size_preference = context.get('dataset_size_preference', 'medium')
         logger.info(f"Using dataset size preference: {size_preference}")
@@ -80,7 +113,7 @@ class SearchQueryStrategyGenerator:
         try:
             response = self.llm_client.messages.create(
                 model="claude-sonnet-4-5-20250929",
-                max_tokens=8000,
+                max_tokens=16000,  # Increased from 8000 to accommodate search narrative + full strategy
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -92,6 +125,10 @@ class SearchQueryStrategyGenerator:
             logger.debug(f"Search strategy preview: {strategy_text[:500]}")
 
             strategy_json = self._extract_json(strategy_text)
+
+            # Add search narrative and custom library to strategy
+            strategy_json["search_narrative"] = search_narrative
+            strategy_json["custom_domain_library"] = custom_library
 
             logger.info(f"Generated SEARCH strategy with {len(strategy_json.get('queries', []))} queries")
             return strategy_json

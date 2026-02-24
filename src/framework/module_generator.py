@@ -2124,10 +2124,19 @@ Generate the complete implementation with ALL required fields:"""
         # Extract and categorize queries from strategy
         all_queries = query_strategy.get('queries', [])
 
-        # Categorize by query_type
-        scripted_queries = [q for q in all_queries if q.get('query_type') == 'scripted']
-        parameterized_queries = [q for q in all_queries if q.get('query_type') == 'parameterized']
-        rag_queries = [q for q in all_queries if q.get('query_type') == 'rag']
+        # Categorize by query_type OR search_type (handle both naming conventions)
+        def get_type(q):
+            """Get query type - handles both query_type and search_type fields"""
+            return q.get('query_type') or q.get('search_type', '')
+
+        # Parameterized: explicitly marked as parameterized
+        parameterized_queries = [q for q in all_queries if get_type(q) == 'parameterized']
+
+        # RAG: marked as 'rag' or search_type contains 'rag' or 'completion'
+        rag_queries = [q for q in all_queries if get_type(q) in ['rag', 'rag_completion', 'rag_rerank']]
+
+        # Scripted: everything else (bm25, semantic, hybrid, fuzzy, rerank, etc.)
+        scripted_queries = [q for q in all_queries if q not in parameterized_queries and q not in rag_queries]
 
         logger.info(f"  Categorized: {len(scripted_queries)} scripted, "
                    f"{len(parameterized_queries)} parameterized, {len(rag_queries)} rag")
@@ -2368,6 +2377,12 @@ This may result in field name mismatches or typos. Use extreme care with field n
             "  Example: query = f\"\"\"FROM index | WHERE MATCH(field, \"term\", {{\"boost\": 1.5}})\"\"\"",
             "- IMPORTANT: The final ES|QL syntax must always have SINGLE braces {} in the query string",
             "",
+            "CRITICAL - METHOD SEPARATION RULES:",
+            "1. generate_queries() → ONLY scripted queries with HARDCODED values (no ?parameters)",
+            "2. generate_parameterized_queries() → ONLY queries with ?parameter syntax",
+            "3. generate_rag_queries() → ONLY RAG queries with MATCH/RERANK/COMPLETION",
+            "4. DO NOT mix these - each query goes in EXACTLY ONE method based on its type",
+            "",
             "Template - MUST IMPLEMENT ALL THREE METHODS:",
             "```python",
             "from src.framework.base import QueryGeneratorModule, DemoConfig",
@@ -2381,37 +2396,45 @@ This may result in field name mismatches or typos. Use extreme care with field n
             "    # self.config, self.datasets",
             "",
             "    def generate_queries(self) -> List[Dict[str, Any]]:",
-            "        \"\"\"Generate ALL ES|QL queries from pre-planned strategy",
+            "        \"\"\"Generate SCRIPTED ES|QL queries with hardcoded values (no user parameters)",
             "",
-            "        CRITICAL: Categorize each query with query_type field:",
-            "        - \"scripted\": Basic queries that don't take user parameters",
-            "        - \"parameterized\": Queries that can be customized with user input",
-            "        - \"rag\": RAG queries using MATCH -> RERANK -> COMPLETION pipeline",
+            "        CRITICAL RULES FOR THIS METHOD:",
+            "        - ONLY include queries with HARDCODED values (e.g., WHERE status == \"active\")",
+            "        - DO NOT include queries with ?parameter syntax - those go in generate_parameterized_queries()",
+            "        - DO NOT include RAG/COMPLETION queries - those go in generate_rag_queries()",
+            "        - Each query MUST have query_type=\"scripted\"",
+            "        - These queries can be run immediately without user input",
             "        \"\"\"",
             "        queries = []",
             "",
-            "        # Implement SCRIPTED queries (simple, no parameters)",
-            "        # Each query should have: name, description, tool_metadata, query, query_type=\"scripted\"",
-            "",
-            "        # Implement PARAMETERIZED queries (user can customize)",
-            "        # Each query should have: name, description, tool_metadata, query, query_type=\"parameterized\", parameters",
-            "",
-            "        # Implement RAG queries for semantic_text fields",
-            "        # Each query should have: name, description, tool_metadata, query, query_type=\"rag\"",
-            "        # RAG queries MUST use: MATCH -> RERANK (optional) -> COMPLETION pipeline",
+            "        # SCRIPTED QUERIES - Ready to run with hardcoded filter values",
+            "        # Example: WHERE campaign_theme == \"summer_promotion\" (NOT ?campaign_theme)",
+            "        # Each query: name, description, tool_metadata, query, query_type=\"scripted\"",
             "",
             "        return queries",
             "",
             "    def generate_parameterized_queries(self) -> List[Dict[str, Any]]:",
-            "        \"\"\"Generate parameterized queries that accept user input",
+            "        \"\"\"Generate parameterized queries with ?parameter syntax for user customization",
             "",
-            "        These are Agent Builder Tool queries that let users customize parameters.",
-            "        Include parameter definitions for each query.",
+            "        CRITICAL RULES FOR THIS METHOD:",
+            "        - MUST use ?parameter syntax in ES|QL queries (e.g., WHERE brand == ?brand_name)",
+            "        - Each query MUST have query_type=\"parameterized\"",
+            "        - Each query MUST have 'parameters' list defining each ?parameter",
+            "        - Parameters define: name, type (string/long/double/boolean), description, required",
+            "        - These become Agent Builder tools that accept user input",
+            "",
+            "        Example:",
+            "        {",
+            "            'name': 'search_by_brand',",
+            "            'query_type': 'parameterized',",
+            "            'parameters': [{'name': 'brand_name', 'type': 'string', 'required': True}],",
+            "            'query': \"FROM assets | WHERE brand == ?brand_name | LIMIT 10\"",
+            "        }",
             "        \"\"\"",
             "        queries = []",
             "",
-            "        # Implement parameterized queries from strategy",
-            "        # Each should define parameters users can customize",
+            "        # PARAMETERIZED QUERIES - Use ?parameter syntax, define parameters list",
+            "        # Each query: name, description, tool_metadata, query_type=\"parameterized\", parameters, query with ?params",
             "",
             "        return queries",
             "",
