@@ -38,7 +38,7 @@ class SearchNarrativeGenerator:
         # Call LLM with increased tokens to handle 8-10 scenarios
         try:
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4-6",
                 max_tokens=8000,  # Increased from 4000 to handle more scenarios
                 temperature=0.7,
                 messages=[{

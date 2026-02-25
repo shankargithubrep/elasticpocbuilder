@@ -264,6 +264,10 @@ def render_create_demo_view():
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            # Render expandable content (e.g., technical plan) if stored
+            if "expanded_content" in message:
+                with st.expander("View comprehensive technical plan", expanded=False):
+                    st.markdown(message["expanded_content"])
 
     # Show "View Demo Details" button if a demo was just generated in this conversation
     if (st.session_state.current_demo_module and
@@ -319,13 +323,29 @@ def render_create_demo_view():
                     st.markdown(validation_summary)
                     st.session_state.messages.append({"role": "assistant", "content": validation_summary})
 
-            # STEP 3: Show expanded content
+            # STEP 3: Show expanded content with generate instructions
             with st.chat_message("assistant"):
-                st.markdown("### 📝 Expanded Technical Context")
-                with st.expander("View full expanded context", expanded=False):
+                generate_instruction = "Type **generate** and press Enter to create your demo."
+                st.markdown(f"### 📝 Expanded Technical Context\n\n{generate_instruction}")
+                with st.expander("View comprehensive technical plan", expanded=False):
                     st.markdown(expanded_content)
+                st.markdown(f"\n{generate_instruction}")
 
-                st.session_state.messages.append({"role": "assistant", "content": f"### 📝 Expanded Technical Context\n\n{expanded_content}"})
+                # Store summary + expandable content in chat history
+                # The message replay loop renders expanded_content via st.expander()
+                content_lines = len(expanded_content.splitlines())
+                stored_msg = (
+                    f"### 📝 Expanded Technical Context\n\n"
+                    f"{generate_instruction}\n\n"
+                    f"*Comprehensive technical plan generated ({len(expanded_content):,} characters, {content_lines} lines). "
+                    f"Expand below to review.*\n\n"
+                    f"{generate_instruction}"
+                )
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": stored_msg,
+                    "expanded_content": expanded_content
+                })
                 st.session_state.ai_expansion_used = True  # Lock the feature
 
                 # STEP 4: Store expanded content as full_technical_context
@@ -376,6 +396,12 @@ def render_create_demo_view():
 
         # Check if this is a generate command
         if prompt.lower().strip() == "generate" and st.session_state.conversation_phase == "ready_to_generate":
+            # Guard against duplicate generation (user typing 'generate' again kills in-flight work)
+            if st.session_state.get("generation_in_progress"):
+                st.warning("Generation is already in progress. Please wait for it to complete.")
+                st.stop()
+            st.session_state.generation_in_progress = True
+
             with st.chat_message("assistant"):
                 with st.spinner("🌋 Generating custom demo module..."):
                     try:
@@ -391,22 +417,32 @@ def render_create_demo_view():
                             "demo_type": context.get("demo_type", "analytics"),
                             "dataset_size_preference": st.session_state.get("dataset_size_preference", "medium"),
                             "use_enhanced_generation": True,  # Always use enhanced generation
-                            "full_technical_context": context.get("full_technical_context")  # Pass rich context for high-fidelity generation
+                            "full_technical_context": context.get("full_technical_context"),  # Pass rich context for high-fidelity generation
+                            "llm_model": st.session_state.get("llm_model")
                         }
 
                         # Create enhanced progress display with phase tracking using empty placeholders
                         st.markdown(f"### 🚀 Demo Generation Progress")
 
-                        # Define all 8 phases
+                        # Define all 8 pipeline phases
+                        # Progress ranges aligned to orchestrator callbacks:
+                        #   Strategy:    0.00-0.14  (strategy + data specs)
+                        #   Data Module: 0.15-0.29  (LLM code gen, per-dataset for split)
+                        #   Datasets:    0.30-0.44  (execute generated code)
+                        #   Indexing:    0.45-0.59  (index in ES, per-dataset sub-progress)
+                        #   Profiling:   0.60-0.64  (profile indexed data)
+                        #   Queries:     0.65-0.74  (generate ES|QL queries)
+                        #   Testing:     0.75-0.84  (test and fix queries)
+                        #   Finalizing:  0.85-1.00  (cleanup + save)
                         phases = [
-                            {"name": "Strategy", "icon": "🎯", "desc": "Planning query strategy"},
-                            {"name": "Data Module", "icon": "🤖", "desc": "Generating data module"},
+                            {"name": "Strategy", "icon": "🎯", "desc": "Planning query strategy and data specifications"},
+                            {"name": "Data Module", "icon": "🤖", "desc": "Generating data module code"},
                             {"name": "Datasets", "icon": "📦", "desc": "Creating datasets"},
                             {"name": "Indexing", "icon": "🔍", "desc": "Indexing in Elasticsearch"},
                             {"name": "Profiling", "icon": "📊", "desc": "Profiling indexed data"},
                             {"name": "Queries", "icon": "🔧", "desc": "Generating ES|QL queries"},
-                            {"name": "Testing", "icon": "🧪", "desc": "Testing queries"},
-                            {"name": "Cleanup", "icon": "✨", "desc": "Finalizing demo"}
+                            {"name": "Testing", "icon": "🧪", "desc": "Testing and fixing queries"},
+                            {"name": "Finalizing", "icon": "✨", "desc": "Finalizing demo"}
                         ]
 
                         # Create placeholders for dynamic updates
@@ -415,49 +451,55 @@ def render_create_demo_view():
                         current_status_placeholder = st.empty()
 
                         phase_status = {phase["name"]: "pending" for phase in phases}
+                        phase_start_times = {}  # Track when each phase started
+                        phase_durations = {}    # Track completed phase durations
+                        import time as _time
+                        gen_start_time = _time.monotonic()
                         last_update_state = {"progress": 0.0, "phase": None}
+
+                        # Phase boundary thresholds - aligned to orchestrator progress values
+                        PHASE_BOUNDARIES = [
+                            (0.15, "Strategy", 1),      # 0.00-0.14: strategy + data specs
+                            (0.30, "Data Module", 2),    # 0.15-0.29: LLM code gen
+                            (0.45, "Datasets", 3),       # 0.30-0.44: execute data gen
+                            (0.60, "Indexing", 4),        # 0.45-0.59: index in ES
+                            (0.65, "Profiling", 5),       # 0.60-0.64: profile data
+                            (0.75, "Queries", 6),         # 0.65-0.74: generate queries
+                            (0.85, "Testing", 7),         # 0.75-0.84: test queries
+                            (1.01, "Finalizing", 8),      # 0.85-1.00: cleanup + save
+                        ]
 
                         def update_progress(progress: float, message: str):
                             """Update progress with enhanced phase tracking (only updates changed elements)"""
-                            # Determine current phase based on progress and message
-                            if progress <= 0.05:
-                                current_phase = "Strategy"
-                                current_phase_num = 1
-                            elif progress <= 0.15:
-                                phase_status["Strategy"] = "complete"
-                                current_phase = "Data Module"
-                                current_phase_num = 2
-                            elif progress <= 0.3:
-                                phase_status["Data Module"] = "complete"
-                                current_phase = "Datasets"
-                                current_phase_num = 3
-                            elif progress <= 0.5:
-                                phase_status["Datasets"] = "complete"
-                                current_phase = "Indexing"
-                                current_phase_num = 4
-                            elif progress <= 0.6:
-                                phase_status["Indexing"] = "complete"
-                                current_phase = "Profiling"
-                                current_phase_num = 5
-                            elif progress <= 0.65:
-                                phase_status["Profiling"] = "complete"
-                                current_phase = "Queries"
-                                current_phase_num = 6
-                            elif progress <= 0.85:
-                                phase_status["Queries"] = "complete"
-                                current_phase = "Testing"
-                                current_phase_num = 7
-                            else:
-                                phase_status["Testing"] = "complete"
-                                current_phase = "Cleanup"
-                                current_phase_num = 8
+                            # Determine current phase from boundaries
+                            current_phase = "Strategy"
+                            current_phase_num = 1
+                            for threshold, phase_name, phase_num in PHASE_BOUNDARIES:
+                                if progress < threshold:
+                                    current_phase = phase_name
+                                    current_phase_num = phase_num
+                                    break
 
-                            if current_phase in phase_status:
-                                phase_status[current_phase] = "in_progress"
+                            # Mark all prior phases as complete
+                            for _, phase_name, phase_num in PHASE_BOUNDARIES:
+                                if phase_num < current_phase_num:
+                                    phase_status[phase_name] = "complete"
 
-                            # Only update UI if phase changed OR progress increased by at least 5%
+                            phase_status[current_phase] = "in_progress"
+
+                            # Track phase start/end times
                             phase_changed = last_update_state["phase"] != current_phase
-                            progress_jump = progress - last_update_state["progress"] >= 0.05
+                            if phase_changed:
+                                now = _time.monotonic()
+                                # Record duration of previous phase
+                                prev_phase = last_update_state["phase"]
+                                if prev_phase and prev_phase in phase_start_times:
+                                    phase_durations[prev_phase] = round(now - phase_start_times[prev_phase], 1)
+                                # Start timing new phase
+                                phase_start_times[current_phase] = now
+
+                            # Only update UI if phase changed OR progress increased by at least 3%
+                            progress_jump = progress - last_update_state["progress"] >= 0.03
 
                             if not (phase_changed or progress_jump):
                                 return  # Skip update to reduce UI churn
@@ -476,17 +518,27 @@ def render_create_demo_view():
                                 with phases_placeholder.container():
                                     st.markdown("#### Pipeline Steps:")
                                     for idx, phase in enumerate(phases, 1):
-                                        status = phase_status.get(phase["name"], "pending")
+                                        pname = phase["name"]
+                                        status = phase_status.get(pname, "pending")
+                                        dur = phase_durations.get(pname)
+                                        dur_str = f" ({dur}s)" if dur is not None else ""
                                         if status == "complete":
-                                            st.markdown(f"**{idx}.** ✅ {phase['icon']} {phase['name']}")
+                                            st.markdown(f"**{idx}.** ✅ {phase['icon']} {pname}{dur_str}")
                                         elif status == "in_progress":
-                                            st.markdown(f"**{idx}.** 🔄 {phase['icon']} **{phase['name']}** - _{phase['desc']}_")
+                                            st.markdown(f"**{idx}.** 🔄 {phase['icon']} **{pname}** - _{phase['desc']}_")
                                         else:
-                                            st.markdown(f"**{idx}.** ⏸️ {phase['icon']} {phase['name']}")
+                                            st.markdown(f"**{idx}.** ⏸️ {phase['icon']} {pname}")
 
-                            # Always update current status (this is the only line that changes frequently)
-                            current_status_placeholder.info(f"**Current:** {message}")
+                            # Always update current status with timestamp and elapsed time
+                            from datetime import datetime
+                            ts = datetime.now().strftime("%H:%M:%S")
+                            elapsed_total = int(_time.monotonic() - gen_start_time)
+                            elapsed_min, elapsed_sec = divmod(elapsed_total, 60)
+                            elapsed_str = f"{elapsed_min}m {elapsed_sec}s" if elapsed_min else f"{elapsed_sec}s"
+                            current_status_placeholder.info(f"**Current:** {message}  \n_Updated {ts} | Elapsed: {elapsed_str}_")
 
+
+                        st.caption("⏳ Each LLM call takes 30-90 seconds. Please do not type or click anything during generation.")
 
                         # Generate demo using modular orchestrator
                         # Pass inference endpoints from sidebar configuration
@@ -504,13 +556,28 @@ def render_create_demo_view():
                             conversation=st.session_state.messages
                         )
 
+                        st.session_state.generation_in_progress = False
                         st.session_state.current_demo_module = results['module_name']
                         st.session_state.demo_just_generated = True  # Set flag to show "View Demo Details" button
 
                         st.balloons()
-                        st.success(f"✅ Demo module created: **{results['module_name']}**")
 
-                        response = f"""Your custom demo module is ready! 🎉
+                        # Build timing summary for display
+                        timing = results.get('timing', {})
+                        total_secs = timing.get('total_seconds', int(_time.monotonic() - gen_start_time))
+                        total_min, total_sec = divmod(int(total_secs), 60)
+                        total_str = f"{total_min}m {total_sec}s" if total_min else f"{total_sec}s"
+
+                        timing_lines = ""
+                        for p in timing.get('phases', []):
+                            secs = p['seconds']
+                            m, s = divmod(int(secs), 60)
+                            t = f"{m}m {s}s" if m else f"{s}s"
+                            timing_lines += f"  - {p['phase']}: {t}\n"
+
+                        st.success(f"✅ Demo module created: **{results['module_name']}** in {total_str}")
+
+                        response = f"""Your custom demo module is ready!
 
 **Module:** `{results['module_name']}`
 
@@ -519,6 +586,8 @@ def render_create_demo_view():
 - ✅ ES|QL queries ({len(results['queries'])} queries)
 - ✅ Demo guide and talk track
 
+**Generation Time:** {total_str}
+{timing_lines}
 **Next Steps:**
 1. Click "Browse Demos" in the sidebar to view all details
 2. Download the demo guide and queries
@@ -544,6 +613,7 @@ You can now refine the generated modules or start a new demo!"""
                             error_msg = f"Error generating demo: {str(e)}"
                         
                         st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                        st.session_state.generation_in_progress = False
 
         else:
             # Normal conversation

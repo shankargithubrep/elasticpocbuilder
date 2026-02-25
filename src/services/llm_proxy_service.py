@@ -40,6 +40,7 @@ class LLMProxyClient:
         """
         self.provider = provider or self._detect_provider()
         self.client = self._initialize_client()
+        self.model_override = None
         logger.info(f"Initialized LLM client with provider: {self.provider}")
     
     def _detect_provider(self) -> str:
@@ -146,13 +147,21 @@ class LLMProxyClient:
     def get_model_name(self, task: str = "default") -> str:
         """
         Get appropriate model name based on provider and task
-        
+
         Args:
             task: Type of task ('code_generation', 'conversation', 'fast', 'default')
-        
+
         Returns:
             Model name string
         """
+        # Apply model override for non-fast tasks (keep haiku for cheap operations)
+        if task != "fast":
+            if self.model_override:
+                return self.model_override
+            env_model = os.getenv("LLM_DEFAULT_MODEL")
+            if env_model:
+                return env_model
+
         if self.provider == "proxy":
             # LLM Proxy - use model names based on what's available in your proxy
             # You may need to adjust these based on your proxy configuration
@@ -166,10 +175,10 @@ class LLMProxyClient:
         
         elif self.provider == "anthropic":
             model_map = {
-                "code_generation": "claude-sonnet-4-5-20250929",
-                "conversation": "claude-sonnet-4-5-20250929",
+                "code_generation": "claude-sonnet-4-6",
+                "conversation": "claude-sonnet-4-6",
                 "fast": "claude-3-5-haiku-20241022",
-                "default": "claude-sonnet-4-5-20250929"
+                "default": "claude-sonnet-4-6"
             }
             return model_map.get(task, model_map["default"])
         
@@ -343,7 +352,15 @@ class UnifiedLLMClient:
         self.chat = self  # For OpenAI-style: client.chat.completions
         self.completions = self  # For OpenAI-style
     
-    def create(self, model=None, messages=None, max_tokens=4000, 
+    def set_model(self, model: str):
+        """Set a model override for all non-fast LLM calls"""
+        self._proxy_client.model_override = model
+
+    def get_model(self) -> str:
+        """Get the currently resolved model name"""
+        return self._proxy_client.get_model_name("default")
+
+    def create(self, model=None, messages=None, max_tokens=4000,
                temperature=0.7, system=None, **kwargs):
         """
         Unified create method that works for both Anthropic and OpenAI patterns

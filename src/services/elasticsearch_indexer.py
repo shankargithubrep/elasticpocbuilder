@@ -43,7 +43,8 @@ class FieldMapper:
     def analyze_dataframe(
         df: pd.DataFrame,
         semantic_fields: Optional[List[str]] = None,
-        text_fields: Optional[List[str]] = None
+        text_fields: Optional[List[str]] = None,
+        inference_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Analyze DataFrame and generate Elasticsearch mappings
@@ -52,6 +53,7 @@ class FieldMapper:
             df: pandas DataFrame to analyze
             semantic_fields: Optional list of fields to map as semantic_text
             text_fields: Optional list of fields to map as text (for full-text search with MATCH)
+            inference_id: Optional inference endpoint ID for semantic_text fields
 
         Returns:
             Dictionary with:
@@ -79,11 +81,10 @@ class FieldMapper:
 
             # Check if explicitly marked as semantic
             if col in semantic_field_set:
-                # On EIS, semantic_text automatically uses built-in ELSER
-                # No inference_id needed
-                mappings["properties"][col] = {
-                    "type": "semantic_text"
-                }
+                semantic_mapping = {"type": "semantic_text"}
+                if inference_id:
+                    semantic_mapping["inference_id"] = inference_id
+                mappings["properties"][col] = semantic_mapping
                 detected_semantic_fields.append(col)
                 continue
 
@@ -106,10 +107,9 @@ class FieldMapper:
                 avg_length = df[col].astype(str).str.len().mean()
                 if avg_length > 50 and col not in semantic_field_set:
                     # Long text might be semantic
-                    mappings["properties"][col] = {
-                        "type": "semantic_text",
-                        "inference_id": ".elser-2-elasticsearch"
-                    }
+                    auto_semantic_mapping = {"type": "semantic_text"}
+                    auto_semantic_mapping["inference_id"] = inference_id or ".elser-2-elasticsearch"
+                    mappings["properties"][col] = auto_semantic_mapping
                     detected_semantic_fields.append(col)
                 else:
                     # Short text is keyword
@@ -167,7 +167,9 @@ class FieldMapper:
                     return {"type": "flattened"}
             elif isinstance(first_val, list):
                 # List values - check element type
-                if first_val and len(first_val) > 0 and isinstance(first_val[0], str):
+                if first_val and isinstance(first_val[0], (int, float, np.integer, np.floating)):
+                    return {"type": "dense_vector", "dims": len(first_val)}
+                elif first_val and isinstance(first_val[0], str):
                     return {"type": "keyword"}  # Array of strings
                 return {"type": "flattened"}
             elif isinstance(first_val, str):
@@ -255,7 +257,8 @@ class ElasticsearchIndexer:
         text_fields: Optional[List[str]] = None,
         index_mode: Optional[str] = None,
         progress_callback: Optional[callable] = None,
-        stop_callback: Optional[callable] = None
+        stop_callback: Optional[callable] = None,
+        inference_id: Optional[str] = None
     ) -> IndexingResult:
         """
         Index a dataset into Elasticsearch
@@ -268,6 +271,7 @@ class ElasticsearchIndexer:
             index_mode: optional explicit index mode ('data_stream' or 'lookup')
                        If not provided, will auto-detect based on timestamp fields
             progress_callback: optional callback(progress, message)
+            inference_id: optional inference endpoint ID for semantic_text field mappings
             stop_callback: optional callback() that returns True to stop indexing
 
         Returns:
@@ -282,7 +286,7 @@ class ElasticsearchIndexer:
                 progress_callback(0.05, "Checking ELSER deployment...")
 
             # Analyze DataFrame with LLM-specified semantic and text fields
-            mapping_info = FieldMapper.analyze_dataframe(df, semantic_fields, text_fields)
+            mapping_info = FieldMapper.analyze_dataframe(df, semantic_fields, text_fields, inference_id)
 
             # Pre-flight check: Ensure ELSER is ready if semantic fields are used
             if mapping_info["semantic_fields"]:
@@ -350,7 +354,31 @@ class ElasticsearchIndexer:
                 stop_callback
             )
 
+            # Wait for semantic inference to complete before declaring success
+            if mapping_info["semantic_fields"] and indexed_count > 0:
+                if progress_callback:
+                    progress_callback(0.93, "Waiting for semantic inference...")
+                wait_secs = min(max((indexed_count // 16) * 2, 5), 30)
+                time.sleep(wait_secs)
+                try:
+                    self.client.indices.refresh(index=index_name)
+                except Exception:
+                    pass
+
             duration = time.time() - start_time
+
+            # Fail if all documents failed to index
+            if indexed_count == 0 and len(documents) > 0:
+                errors.append(f"All {len(documents)} documents failed to index")
+                return IndexingResult(
+                    success=False,
+                    index_name=index_name,
+                    index_type=index_type,
+                    documents_indexed=0,
+                    semantic_fields=mapping_info["semantic_fields"],
+                    duration_seconds=round(duration, 2),
+                    errors=errors
+                )
 
             # Check if we stopped early
             was_stopped = indexed_count < len(documents)
@@ -624,6 +652,12 @@ class ElasticsearchIndexer:
                     progress,
                     f"Indexing: {indexed_count}/{total_docs} documents"
                 )
+
+        # Refresh to make documents searchable immediately
+        try:
+            self.client.indices.refresh(index=index_name)
+        except Exception as e:
+            logger.warning(f"Index refresh failed: {e}")
 
         if progress_callback:
             progress_callback(0.95, "Indexing complete")

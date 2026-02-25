@@ -71,7 +71,7 @@ class DataSpecificationExpander:
 
         try:
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4-6",
                 max_tokens=max_tokens,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
@@ -128,7 +128,7 @@ class DataSpecificationExpander:
         dataset_summary = []
         for dataset in datasets:
             name = dataset.get('name', 'unknown')
-            fields = dataset.get('fields', {})
+            fields = dataset.get('required_fields', dataset.get('fields', {}))
             dataset_summary.append(f"\n### {name}")
             dataset_summary.append(f"Fields:")
             for field_name, field_type in fields.items():
@@ -166,6 +166,31 @@ class DataSpecificationExpander:
 **Your Task:**
 Generate domain-specific value specifications for each field in each dataset. These specifications will guide an LLM data generator to create realistic, query-aligned data.
 
+**CRITICAL - Search Demo Data Quality:**
+
+1. **Dataset Sizing**: 300-500 rows per dataset (quality over quantity for search demos)
+   - Fewer, richer rows produce better search results than many thin rows
+
+2. **Two-Field Design**: Every searchable dataset needs EXACTLY:
+   - ONE `text` field for BM25 keyword search (titles, names, headlines — SHORT text)
+   - ONE `semantic_text` field for semantic/vector search (descriptions, bios, content — LONGER text)
+   - Do NOT create both "description" (text) and "semantic_description" (semantic_text) — use "description" as the semantic_text field directly
+   - Queries use MATCH() on text fields and semantic search on semantic_text fields
+
+3. **Relevance Tiering**: For text and semantic_text fields, specify 3 tiers:
+   - 20% Tier 1: Exact keyword matches, dense domain terminology
+   - 40% Tier 2: Semantic matches using different vocabulary but same meaning
+   - 40% Tier 3: Noise - unrelated or tangentially related content
+
+4. **Content Coherence**: All fields in a row must be logically consistent
+   - If category="Security", the description MUST discuss security topics
+   - If specialty="Cardiology", the bio MUST reference heart/cardiac care
+   - Never generate rows with random field combinations
+
+5. **Uniqueness**: Every text and semantic_text value MUST be unique across all rows
+   - No duplicate descriptions, bios, or content paragraphs
+   - Vary vocabulary, sentence structure, and detail level
+
 **CRITICAL - Domain Specificity:**
 - Use terminology from the customer's ACTUAL industry/domain
 - DO NOT use generic placeholders or examples from other domains
@@ -198,7 +223,11 @@ Return a JSON object with this structure:
           "content_pattern": "3-5 sentences describing expertise/details about {{other_field}}",
           "diversity_guidance": "Vary sentence structure, length, and terminology",
           "query_alignment": "Include searchable terms: {search_terms_summary[:100]}...",
-          "tiering_guidance": "20% highly relevant (dense keywords), 40% moderately relevant, 40% low relevance"
+          "tiering_guidance": "20% highly relevant (dense keywords), 40% moderately relevant, 40% low relevance",
+          "coherence_rules": {{
+            "must_reference": ["field1", "field2"],
+            "uniqueness": "each row unique"
+          }}
         }}
       }}
     }}
@@ -224,6 +253,9 @@ Return a JSON object with this structure:
 - Diversity guidance (vary vocabulary, length, structure)
 - **Query alignment** - CRITICAL: List specific terms that queries will search for
 - **Tiering guidance** - Ensure 3-tier relevance distribution for score differentiation
+- **Coherence rules** - REQUIRED: Specify which other fields must be referenced in content
+  - `must_reference`: List of field names whose values should appear in this text
+  - `uniqueness`: "each row unique" - every value must be distinct across all rows
 
 **For `geo_point` fields** (locations, addresses with coordinates):
 - Geographic region specification (e.g., "Los Angeles area (33.7-34.3°N, -118.7 to -118.0°W)")
@@ -258,7 +290,11 @@ Return a JSON object with this structure:
           "content_pattern": "3-5 sentences describing medical expertise in {{specialty}}, years of experience, and approach to patient care",
           "diversity_guidance": "Vary vocabulary (specialist, physician, doctor), sentence structure, and content length (150-400 words)",
           "query_alignment": "Include searchable terms: 'heart specialist', 'primary care', 'pediatric care', 'orthopedic surgery', etc.",
-          "tiering_guidance": "Tier 1 (20%): Dense specialty-specific terminology. Tier 2 (40%): General medical terms. Tier 3 (40%): Generic provider descriptions."
+          "tiering_guidance": "Tier 1 (20%): Dense specialty-specific terminology. Tier 2 (40%): General medical terms. Tier 3 (40%): Generic provider descriptions.",
+          "coherence_rules": {{
+            "must_reference": ["specialty", "provider_name"],
+            "uniqueness": "each row unique"
+          }}
         }}
       }}
     }}

@@ -128,10 +128,16 @@ class ModuleGenerator:
         strategy_file.write_text(json.dumps(query_strategy, indent=2))
         logger.info("Saved query_strategy.json")
 
-        # Extract data requirements from strategy
-        from src.services.query_strategy_generator import QueryStrategyGenerator
-        strategy_gen = QueryStrategyGenerator(self.llm_client)
-        data_requirements = strategy_gen.extract_data_requirements(query_strategy)
+        # Extract data requirements from strategy (inline pure dict transformation)
+        data_requirements = {}
+        for dataset in query_strategy.get('datasets', []):
+            data_requirements[dataset['name']] = {
+                'fields': dataset.get('required_fields', dataset.get('fields', {})),
+                'relationships': dataset.get('relationships', []),
+                'semantic_fields': dataset.get('semantic_fields', []),
+                'type': dataset['type'],
+                'row_count': dataset.get('row_count', 'moderate')
+            }
 
         # Generate each component with strategy
         self._generate_data_module_with_requirements(config, module_path, data_requirements)
@@ -154,7 +160,8 @@ class ModuleGenerator:
         self,
         config: Dict[str, Any],
         query_strategy: Dict[str, Any],
-        data_specifications: Optional[Dict[str, Any]] = None
+        data_specifications: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[callable] = None
     ) -> str:
         """Generate module infrastructure and data generator only (NO QUERIES YET)
 
@@ -165,6 +172,7 @@ class ModuleGenerator:
             config: Demo configuration with customer context
             query_strategy: Pre-generated query strategy with data requirements
             data_specifications: Optional domain-specific value specifications (for search demos)
+            progress_callback: Optional progress callback for per-dataset reporting
 
         Returns:
             Path to the generated module directory (ready for data generation)
@@ -195,17 +203,24 @@ class ModuleGenerator:
             specs_file.write_text(json.dumps(data_specifications, indent=2))
             logger.info("Saved data_specifications.json")
 
-        # Extract data requirements from strategy
-        from src.services.query_strategy_generator import QueryStrategyGenerator
-        strategy_gen = QueryStrategyGenerator(self.llm_client)
-        data_requirements = strategy_gen.extract_data_requirements(query_strategy)
+        # Extract data requirements from strategy (inline pure dict transformation)
+        data_requirements = {}
+        for dataset in query_strategy.get('datasets', []):
+            data_requirements[dataset['name']] = {
+                'fields': dataset.get('required_fields', dataset.get('fields', {})),
+                'relationships': dataset.get('relationships', []),
+                'semantic_fields': dataset.get('semantic_fields', []),
+                'type': dataset['type'],
+                'row_count': dataset.get('row_count', 'moderate')
+            }
 
         # Generate ONLY data module and supporting files (NO QUERIES)
         self._generate_data_module_with_requirements(
             config,
             module_path,
             data_requirements,
-            data_specifications=data_specifications  # Pass specifications
+            data_specifications=data_specifications,
+            progress_callback=progress_callback
         )
         self._generate_guide_module(config, module_path)
         self._generate_config_file(config, module_path)
@@ -415,12 +430,12 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
 Generate the complete implementation:"""
 
         if self.llm_client:
-            code = self._call_llm(prompt)
+            code = self._call_llm(prompt, max_tokens=32000)
         else:
             code = self._generate_mock_data_module(config)
 
-        # Validate syntax before saving
-        self._validate_python_syntax(code, 'data_generator.py')
+        # Validate syntax before saving (with auto-fix on failure)
+        code = self._validate_python_syntax(code, 'data_generator.py')
 
         # Save the module
         module_file = module_path / 'data_generator.py'
@@ -455,8 +470,8 @@ Generate the complete implementation:"""
         logger.info("🔧 Combining query methods into single module...")
         full_code = self._combine_query_methods(config, scripted_code, parameterized_code, rag_code)
 
-        # Validate syntax before saving
-        self._validate_python_syntax(full_code, 'query_generator.py')
+        # Validate syntax before saving (with auto-fix on failure)
+        full_code = self._validate_python_syntax(full_code, 'query_generator.py')
 
         # Validate that all required methods are present
         methods_present = self._validate_query_module_methods(full_code)
@@ -501,8 +516,8 @@ Generate the complete implementation:"""
         logger.info("🔧 Combining query methods into single module...")
         full_code = self._combine_query_methods(config, scripted_code, parameterized_code, rag_code)
 
-        # Validate syntax
-        self._validate_python_syntax(full_code, 'query_generator.py')
+        # Validate syntax (with auto-fix on failure)
+        full_code = self._validate_python_syntax(full_code, 'query_generator.py')
 
         # Validate methods
         methods_present = self._validate_query_module_methods(full_code)
@@ -1419,15 +1434,17 @@ class {company_class}QueryGenerator(QueryGeneratorModule):
         """
         logger.info(f"📤 Calling LLM with prompt length: {len(prompt)} characters, max_tokens: {max_tokens}")
 
+        stop_reason = None
         if hasattr(self.llm_client, 'messages'):  # Anthropic
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4-6",
                 max_tokens=max_tokens,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
             )
             code = response.content[0].text
-            logger.info(f"📥 LLM response length: {len(code)} characters")
+            stop_reason = getattr(response, 'stop_reason', None)
+            logger.info(f"📥 LLM response length: {len(code)} characters, stop_reason: {stop_reason}")
         elif hasattr(self.llm_client, 'chat'):  # OpenAI
             response = self.llm_client.chat.completions.create(
                 model="gpt-4",
@@ -1435,9 +1452,14 @@ class {company_class}QueryGenerator(QueryGeneratorModule):
                 max_tokens=max_tokens
             )
             code = response.choices[0].message.content
-            logger.info(f"📥 LLM response length: {len(code)} characters")
+            stop_reason = getattr(response.choices[0], 'finish_reason', None)
+            logger.info(f"📥 LLM response length: {len(code)} characters, stop_reason: {stop_reason}")
         else:
             return ""
+
+        # Detect truncated output
+        if stop_reason in ('max_tokens', 'length'):
+            logger.warning(f"⚠️ Method output truncated (stop_reason={stop_reason}, max_tokens={max_tokens}). Code will likely have syntax errors.")
 
         # Extract Python code if wrapped in markdown
         if "```python" in code:
@@ -1491,12 +1513,115 @@ class {company_class}DemoGuide(DemoGuideModule):
         }}
 """
 
-        # Validate syntax before saving
-        self._validate_python_syntax(code, 'demo_guide.py')
+        # Validate syntax before saving (with auto-fix on failure)
+        code = self._validate_python_syntax(code, 'demo_guide.py')
 
         # Save the module
         module_file = module_path / 'demo_guide.py'
         module_file.write_text(code)
+
+    def _format_single_dataset_spec(self, dataset_name: str, dataset_spec: Dict[str, Any]) -> str:
+        """Format a single dataset's field specifications into prompt guidance
+
+        Args:
+            dataset_name: Name of the dataset
+            dataset_spec: Dataset specification with fields dict
+
+        Returns:
+            Formatted string with field guidance for this dataset
+        """
+        sections = []
+        sections.append(f"\n## Dataset: {dataset_name}")
+
+        fields_spec = dataset_spec.get('fields', {})
+
+        if not fields_spec:
+            sections.append("  (No field specifications provided)")
+            return "\n".join(sections)
+
+        sections.append("\n**Field Specifications:**\n")
+
+        for field_name, field_spec in fields_spec.items():
+            field_type = field_spec.get('type', 'unknown')
+
+            # Start with field name and type
+            sections.append(f"- **{field_name}** ({field_type}):")
+
+            # Add description if available
+            if 'description' in field_spec:
+                sections.append(f"  - Description: {field_spec['description']}")
+
+            # Type-specific formatting
+            if field_type == 'keyword':
+                # Cardinality
+                if 'cardinality' in field_spec:
+                    sections.append(f"  - Cardinality: {field_spec['cardinality']} distinct values")
+
+                # Examples
+                if 'examples' in field_spec:
+                    examples = field_spec['examples']
+                    examples_str = ", ".join([f'"{ex}"' for ex in examples[:8]])
+                    if len(examples) > 8:
+                        examples_str += f", ... ({len(examples)} total)"
+                    sections.append(f"  - Example Values: {examples_str}")
+
+                # Diversity guidance
+                if 'diversity_guidance' in field_spec:
+                    sections.append(f"  - Diversity: {field_spec['diversity_guidance']}")
+
+            elif field_type in ('text', 'semantic_text'):
+                # Content pattern
+                if 'content_pattern' in field_spec:
+                    sections.append(f"  - Content Pattern: {field_spec['content_pattern']}")
+
+                # Query alignment (CRITICAL for semantic search)
+                if 'query_alignment' in field_spec:
+                    sections.append(f"  - Query Alignment: {field_spec['query_alignment']}")
+
+                # Diversity guidance
+                if 'diversity_guidance' in field_spec:
+                    sections.append(f"  - Diversity: {field_spec['diversity_guidance']}")
+
+                # Tiering guidance (for semantic_text)
+                if field_type == 'semantic_text' and 'tiering_guidance' in field_spec:
+                    sections.append(f"  - Tiering: {field_spec['tiering_guidance']}")
+
+                # Coherence rules (for semantic_text)
+                if 'coherence_rules' in field_spec:
+                    rules = field_spec['coherence_rules']
+                    if 'must_reference' in rules:
+                        sections.append(f"  - Coherence: Content MUST reference values from fields: {rules['must_reference']}")
+                    if rules.get('uniqueness') == 'each row unique':
+                        sections.append(f"  - Uniqueness: Every value MUST be unique across all rows")
+
+            elif field_type == 'geo_point':
+                # Geographic region
+                if 'geographic_region' in field_spec:
+                    sections.append(f"  - Region: {field_spec['geographic_region']}")
+
+                # Clustering guidance
+                if 'clustering_guidance' in field_spec:
+                    sections.append(f"  - Clustering: {field_spec['clustering_guidance']}")
+
+                # Coordinate precision
+                if 'coordinate_precision' in field_spec:
+                    sections.append(f"  - Precision: {field_spec['coordinate_precision']}")
+
+                # Format requirement
+                sections.append(f"  - Format: Dict with 'lat' and 'lon' keys (REQUIRED for geo_point mapping)")
+
+            else:
+                # For other types (date, boolean, integer, float, etc.)
+                if 'examples' in field_spec:
+                    examples_str = ", ".join([str(ex) for ex in field_spec['examples'][:5]])
+                    sections.append(f"  - Examples: {examples_str}")
+
+                if 'value_range' in field_spec:
+                    sections.append(f"  - Range: {field_spec['value_range']}")
+
+            sections.append("")  # Blank line between fields
+
+        return "\n".join(sections)
 
     def _format_field_specifications_for_prompt(self, data_specifications: Dict[str, Any]) -> str:
         """Format data specifications into rich prompt guidance for LLM
@@ -1515,96 +1640,556 @@ class {company_class}DemoGuide(DemoGuideModule):
         datasets = data_specifications.get('datasets', {})
 
         for dataset_name, dataset_spec in datasets.items():
-            sections.append(f"\n## Dataset: {dataset_name}")
-
-            fields_spec = dataset_spec.get('fields', {})
-
-            if not fields_spec:
-                sections.append("  (No field specifications provided)")
-                continue
-
-            sections.append("\n**Field Specifications:**\n")
-
-            for field_name, field_spec in fields_spec.items():
-                field_type = field_spec.get('type', 'unknown')
-
-                # Start with field name and type
-                sections.append(f"- **{field_name}** ({field_type}):")
-
-                # Add description if available
-                if 'description' in field_spec:
-                    sections.append(f"  - Description: {field_spec['description']}")
-
-                # Type-specific formatting
-                if field_type == 'keyword':
-                    # Cardinality
-                    if 'cardinality' in field_spec:
-                        sections.append(f"  - Cardinality: {field_spec['cardinality']} distinct values")
-
-                    # Examples
-                    if 'examples' in field_spec:
-                        examples = field_spec['examples']
-                        examples_str = ", ".join([f'"{ex}"' for ex in examples[:8]])
-                        if len(examples) > 8:
-                            examples_str += f", ... ({len(examples)} total)"
-                        sections.append(f"  - Example Values: {examples_str}")
-
-                    # Diversity guidance
-                    if 'diversity_guidance' in field_spec:
-                        sections.append(f"  - Diversity: {field_spec['diversity_guidance']}")
-
-                elif field_type in ('text', 'semantic_text'):
-                    # Content pattern
-                    if 'content_pattern' in field_spec:
-                        sections.append(f"  - Content Pattern: {field_spec['content_pattern']}")
-
-                    # Query alignment (CRITICAL for semantic search)
-                    if 'query_alignment' in field_spec:
-                        sections.append(f"  - Query Alignment: {field_spec['query_alignment']}")
-
-                    # Diversity guidance
-                    if 'diversity_guidance' in field_spec:
-                        sections.append(f"  - Diversity: {field_spec['diversity_guidance']}")
-
-                    # Tiering guidance (for semantic_text)
-                    if field_type == 'semantic_text' and 'tiering_guidance' in field_spec:
-                        sections.append(f"  - Tiering: {field_spec['tiering_guidance']}")
-
-                elif field_type == 'geo_point':
-                    # Geographic region
-                    if 'geographic_region' in field_spec:
-                        sections.append(f"  - Region: {field_spec['geographic_region']}")
-
-                    # Clustering guidance
-                    if 'clustering_guidance' in field_spec:
-                        sections.append(f"  - Clustering: {field_spec['clustering_guidance']}")
-
-                    # Coordinate precision
-                    if 'coordinate_precision' in field_spec:
-                        sections.append(f"  - Precision: {field_spec['coordinate_precision']}")
-
-                    # Format requirement
-                    sections.append(f"  - Format: Dict with 'lat' and 'lon' keys (REQUIRED for geo_point mapping)")
-
-                else:
-                    # For other types (date, boolean, integer, float, etc.)
-                    if 'examples' in field_spec:
-                        examples_str = ", ".join([str(ex) for ex in field_spec['examples'][:5]])
-                        sections.append(f"  - Examples: {examples_str}")
-
-                    if 'value_range' in field_spec:
-                        sections.append(f"  - Range: {field_spec['value_range']}")
-
-                sections.append("")  # Blank line between fields
+            sections.append(self._format_single_dataset_spec(dataset_name, dataset_spec))
 
         result = "\n".join(sections)
         logger.debug(f"Formatted field specifications: {len(result)} characters")
         return result
 
+    def _generate_single_dataset_method(
+        self,
+        dataset_name: str,
+        dataset_spec: Dict[str, Any],
+        config: Dict[str, Any],
+        data_requirements: Dict,
+        size_preference: str,
+        ranges: Dict[str, Any],
+        use_enhanced: bool = False
+    ) -> str:
+        """Generate a single _generate_<dataset_name>() method via LLM
+
+        Args:
+            dataset_name: Name of the dataset (e.g. 'provider_directory')
+            dataset_spec: Field specifications for this dataset (from data_specifications)
+            config: Demo configuration
+            data_requirements: Full data requirements dict (for relationship context)
+            size_preference: 'small', 'medium', or 'large'
+            ranges: Size range limits for this preference
+            use_enhanced: Whether to include enhanced clustering guidance
+
+        Returns:
+            Method code string (def _generate_<name>(self): ...)
+        """
+        # Format field specs for just this dataset
+        field_guidance = self._format_single_dataset_spec(dataset_name, dataset_spec)
+
+        # Build relationship context for this dataset
+        relationship_lines = []
+        ds_req = data_requirements.get(dataset_name, {})
+        ds_relationships = ds_req.get('relationships', [])
+        if ds_relationships:
+            relationship_lines.append(f"\nRelationships for {dataset_name}:")
+            for rel in ds_relationships:
+                relationship_lines.append(f"  - {rel}")
+        relationship_context = "\n".join(relationship_lines)
+
+        # Determine row count guidance
+        ds_type = ds_req.get('type', 'lookup')
+        if ds_type == 'data_stream':
+            row_guidance = f"timeseries data: {ranges['timeseries_typical']} rows (MAX {ranges['timeseries_max']:,})"
+        elif ds_type == 'lookup':
+            row_guidance = f"reference/lookup data: {ranges['reference_typical']} rows (MAX {ranges['reference_max']:,})"
+        else:
+            row_guidance = f"{ranges['per_dataset_typical']} rows (MAX {ranges['per_dataset_max']:,})"
+
+        # Build the per-dataset prompt
+        prompt = f"""Generate a single Python method that creates the '{dataset_name}' dataset.
+
+Company: {config["company_name"]}
+Industry: {config["industry"]}
+Department: {config["department"]}
+
+{field_guidance}
+{relationship_context}
+
+Dataset size: {row_guidance} ({size_preference.upper()} preference)
+
+CRITICAL RULES:
+- ALL arrays in pd.DataFrame() MUST have EXACTLY the same length
+- @timestamp columns MUST use datetime.now() as END date, go BACKWARDS max 120 days
+- NEVER hardcode dates like '2023-01-01'
+- For geo_point fields: use dict with 'lat' and 'lon' keys
+- For semantic_text fields: generate ONLY that field (no separate text duplicate)
+- Generate rows as COMPLETE ENTITIES - all fields logically consistent
+- Every text/semantic_text value MUST be unique across all rows
+- When using .format(), ensure placeholder names EXACTLY match keyword arguments
+- Avoid empty list errors: always provide fallback for filtered lists
+- F-strings CANNOT contain backslash escapes inside {{}} expression parts
+- ALL string literals MUST fit on a SINGLE LINE - never let a string wrap across lines
+- Keep description strings concise (under 200 chars) to avoid line-length issues
+- Use self.safe_choice() instead of np.random.choice() - NEVER call np.random.choice directly
+- Use self.random_timedelta() for timestamps - NEVER construct timestamps manually
+
+These helper methods are ALREADY DEFINED on the class. Use them exactly as shown:
+
+```python
+# safe_choice(choices, size=None, weights=None, replace=True)
+# - size=None returns a SINGLE SCALAR value (string, int, etc.)
+# - size=N returns a numpy ARRAY of N values
+# - Handles complex elements (lists, tuples, dicts) automatically
+# - Automatically normalizes probability weights
+# Examples:
+tag = self.safe_choice(["A", "B", "C"])  # returns ONE string like "B"
+tags = self.safe_choice(["A", "B", "C"], size=100)  # returns array of 100
+tags = self.safe_choice(["A", "B", "C"], size=100, weights=[0.5, 0.3, 0.2])
+
+# random_timedelta(start_date, end_date=None, days=None, hours=None, minutes=None, max_days=None)
+# Examples:
+self.random_timedelta(start, end)  # random datetime between start and end
+self.random_timedelta(datetime.now(), max_days=120)  # random within last 120 days
+self.random_timedelta(base, days=5, hours=3)  # base + exact offset
+```
+
+Generate ONLY the method implementation. Do NOT include class definition, imports, or safe_choice/random_timedelta definitions.
+
+Method signature:
+```python
+def _generate_{dataset_name}(self):
+    \"\"\"Generate {dataset_name} dataset\"\"\"
+    # ... generate data ...
+    return pd.DataFrame({{...}})
+```
+
+Generate the complete method:"""
+
+        if use_enhanced:
+            prompt += """
+
+ENHANCED DATA: Use skewed distributions (beta, lognormal, poisson) for numeric fields.
+Use weighted choices for categorical fields. Create realistic clustering patterns."""
+
+        if self.llm_client:
+            code = self._call_llm_for_method(prompt, max_tokens=16000)
+
+            # Validate method syntax early (before combining with other methods)
+            # Much cheaper to retry one method than fix a 900+ line combined module
+            syntax_error = self._check_method_syntax(code, dataset_name)
+            if syntax_error:
+                logger.warning(f"⚠️ Method _generate_{dataset_name}() has syntax error: {syntax_error}")
+                logger.info(f"🔄 Retrying _generate_{dataset_name}() with stricter prompt...")
+
+                # Retry with extra guidance about the specific error
+                retry_prompt = prompt + f"""
+
+IMPORTANT: Your previous attempt had a syntax error: {syntax_error}
+Common causes:
+- Unterminated string literals (strings that span multiple lines without triple quotes)
+- Keep ALL string values on a SINGLE LINE, even if long
+- Use triple quotes (\"\"\"...\"\"\") for multi-line strings
+- Ensure all parentheses, brackets, and braces are properly closed
+
+Generate the corrected method:"""
+
+                code = self._call_llm_for_method(retry_prompt, max_tokens=16000)
+
+                # Check again - if still broken, try a quick fix
+                syntax_error_2 = self._check_method_syntax(code, dataset_name)
+                if syntax_error_2:
+                    logger.warning(f"⚠️ Retry also has syntax error: {syntax_error_2}. Attempting quick fix...")
+                    code = self._fix_unterminated_strings(code)
+        else:
+            # Mock fallback for testing
+            code = f"""def _generate_{dataset_name}(self):
+    \"\"\"Generate {dataset_name} dataset\"\"\"
+    n = 100
+    return pd.DataFrame({{
+        'id': [f'{dataset_name}_{{i}}' for i in range(n)]
+    }})"""
+
+        return code
+
+    def _check_method_syntax(self, code: str, dataset_name: str) -> Optional[str]:
+        """Check if a generated method has valid Python syntax.
+
+        Wraps the method in a minimal class shell and tries to compile it.
+
+        Args:
+            code: Method code string (def _generate_xxx(self): ...)
+            dataset_name: Name for error messages
+
+        Returns:
+            Error message string if syntax error, None if valid
+        """
+        # Wrap method in a minimal compilable shell
+        lines = code.split('\n')
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        while lines and not lines[-1].strip():
+            lines.pop()
+
+        # Find def line's indent to normalize
+        base_indent = 0
+        for line in lines:
+            stripped = line.lstrip()
+            if stripped.startswith('def '):
+                base_indent = len(line) - len(stripped)
+                break
+
+        # Build test module with method inside a class
+        test_lines = ["class _Test:"]
+        for line in lines:
+            if not line.strip():
+                test_lines.append("")
+            elif len(line) >= base_indent and line[:base_indent].strip() == '':
+                test_lines.append("    " + line[base_indent:])
+            else:
+                test_lines.append("    " + line.lstrip())
+        test_code = "\n".join(test_lines)
+
+        try:
+            compile(test_code, f'_generate_{dataset_name}', 'exec')
+            return None  # Valid
+        except SyntaxError as e:
+            return f"{e.msg} (line {e.lineno})"
+
+    @staticmethod
+    def _fix_unterminated_strings(code: str) -> str:
+        """Best-effort fix for unterminated string literals in generated code.
+
+        Scans each line for unmatched quotes and closes them.
+        """
+        fixed_lines = []
+        for line in code.split('\n'):
+            stripped = line.rstrip()
+            # Skip empty lines and comments
+            if not stripped or stripped.lstrip().startswith('#'):
+                fixed_lines.append(line)
+                continue
+
+            # Count unescaped quotes
+            in_string = None
+            i = 0
+            while i < len(stripped):
+                char = stripped[i]
+                if char == '\\' and in_string:
+                    i += 2  # Skip escaped character
+                    continue
+                if char in ('"', "'"):
+                    # Check for triple quotes
+                    triple = stripped[i:i+3]
+                    if triple in ('"""', "'''"):
+                        if in_string == triple:
+                            in_string = None
+                            i += 3
+                            continue
+                        elif in_string is None:
+                            in_string = triple
+                            i += 3
+                            continue
+                    # Single quotes
+                    if in_string == char:
+                        in_string = None
+                    elif in_string is None:
+                        in_string = char
+                i += 1
+
+            # If we're still in a string at end of line, close it
+            if in_string and in_string in ('"', "'"):
+                fixed_lines.append(stripped + in_string + ',')
+                logger.warning(f"Fixed unterminated string: {stripped[:80]}...")
+            else:
+                fixed_lines.append(line)
+
+        return '\n'.join(fixed_lines)
+
+    def _combine_data_methods(
+        self,
+        config: Dict[str, Any],
+        dataset_methods: Dict[str, str],
+        data_requirements: Dict,
+        data_specifications: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """Combine per-dataset method strings into a complete DataGeneratorModule
+
+        Follows the same pattern as _combine_query_methods(): assembles individual
+        method implementations into a complete Python module with boilerplate.
+
+        Args:
+            config: Demo configuration
+            dataset_methods: Dict mapping dataset_name -> method code string
+            data_requirements: Data requirements dict (for relationships, semantic fields, descriptions)
+            data_specifications: Optional data specifications (for richer metadata)
+
+        Returns:
+            Complete Python module string
+        """
+        company_class = config["company_name"].replace(" ", "")
+
+        # Indent each method to be part of the class (4 spaces)
+        def indent_method(code: str) -> str:
+            """Ensure method code has exactly 4-space class-level indentation.
+
+            Detects the def line's current indentation as the base level,
+            strips that base from all lines, then adds 4-space class prefix.
+            This handles LLM output regardless of its original indentation.
+            """
+            lines = code.split('\n')
+            # Remove leading/trailing empty lines only (NOT strip which
+            # destroys the first line's indentation context)
+            while lines and not lines[0].strip():
+                lines.pop(0)
+            while lines and not lines[-1].strip():
+                lines.pop()
+
+            # Find the base indentation from the def line
+            base_indent = 0
+            for line in lines:
+                stripped = line.lstrip()
+                if stripped.startswith('def '):
+                    base_indent = len(line) - len(stripped)
+                    break
+
+            indented_lines = []
+            for line in lines:
+                if not line.strip():
+                    indented_lines.append('')
+                else:
+                    # Strip base indentation, then add 4-space class level
+                    if len(line) >= base_indent and line[:base_indent].strip() == '':
+                        indented_lines.append('    ' + line[base_indent:])
+                    else:
+                        # Safety: line has less indent than base, just strip all and add 4
+                        indented_lines.append('    ' + line.lstrip())
+            return '\n'.join(indented_lines)
+
+        # Build generate_datasets() method that calls each sub-method
+        dataset_calls = []
+        for ds_name in dataset_methods:
+            dataset_calls.append(f"        datasets['{ds_name}'] = self._generate_{ds_name}()")
+        generate_datasets_body = "\n".join(dataset_calls)
+
+        # Auto-generate get_semantic_fields() from data requirements
+        semantic_fields_dict = {}
+        for ds_name, ds_req in data_requirements.items():
+            sem_fields = ds_req.get('semantic_fields', [])
+            if sem_fields:
+                semantic_fields_dict[ds_name] = sem_fields
+
+        semantic_fields_code = "{\n"
+        for ds_name, fields in semantic_fields_dict.items():
+            semantic_fields_code += f"            '{ds_name}': {fields},\n"
+        semantic_fields_code += "        }"
+
+        # Auto-generate get_data_descriptions() from dataset names/types
+        descriptions_code = "{\n"
+        for ds_name, ds_req in data_requirements.items():
+            ds_type = ds_req.get('type', 'lookup')
+            ds_label = ds_name.replace("_", " ").title()
+            descriptions_code += f"            '{ds_name}': '{ds_label} ({ds_type})',\n"
+        descriptions_code += "        }"
+
+        # Auto-generate get_relationships() from data requirements
+        relationships = []
+        for ds_name, ds_req in data_requirements.items():
+            for rel in ds_req.get('relationships', []):
+                # Relationships can be strings like "joins to X on field_name"
+                # or structured data - include as comments for clarity
+                relationships.append(f"            # {ds_name}: {rel}")
+
+        relationships_code = "[\n"
+        if relationships:
+            relationships_code += "\n".join(relationships) + "\n"
+        relationships_code += "        ]"
+
+        # Indent all dataset methods
+        indented_methods = []
+        for ds_name, method_code in dataset_methods.items():
+            indented_methods.append(indent_method(method_code))
+
+        methods_combined = "\n\n".join(indented_methods)
+
+        # Build the complete module
+        full_module = f'''from src.framework.base import DataGeneratorModule, DemoConfig
+import pandas as pd
+import numpy as np
+import random
+from datetime import datetime, timedelta
+from typing import Dict, List
+
+
+class {company_class}DataGenerator(DataGeneratorModule):
+    """Data generator for {config["company_name"]} - {config["department"]}"""
+
+    @staticmethod
+    def safe_choice(choices, size=None, weights=None, replace=True):
+        """Safer alternative to np.random.choice with automatic probability normalization.
+
+        Automatically handles complex elements (lists, tuples, dicts) by falling back
+        to Python's random.choices when numpy would fail with shape errors.
+        """
+        use_python_random = False
+        if len(choices) > 0:
+            first_type = type(choices[0])
+            if first_type in (list, tuple, dict):
+                use_python_random = True
+
+        if use_python_random:
+            if size is None:
+                if weights is not None:
+                    return random.choices(choices, weights=weights, k=1)[0]
+                else:
+                    return random.choice(choices)
+            if weights is not None:
+                return random.choices(choices, weights=weights, k=size)
+            else:
+                return random.choices(choices, k=size)
+
+        if weights is not None:
+            weights = np.array(weights, dtype=float)
+            if len(weights) > len(choices):
+                import logging
+                logging.warning(f"Truncating {{len(weights) - len(choices)}} excess weights")
+                weights = weights[:len(choices)]
+            elif len(weights) < len(choices):
+                raise ValueError(
+                    f"Not enough weights for choices!\\n"
+                    f"  Choices ({{len(choices)}}): {{choices}}\\n"
+                    f"  Weights ({{len(weights)}}): {{weights.tolist()}}"
+                )
+            probabilities = weights / weights.sum()
+            if size is None:
+                return np.random.choice(choices, p=probabilities, replace=replace)
+            return np.random.choice(choices, size=size, p=probabilities, replace=replace)
+        else:
+            if size is None:
+                return np.random.choice(choices)
+            return np.random.choice(choices, size=size, replace=replace)
+
+    @staticmethod
+    def random_timedelta(start_date, end_date=None, days=None, hours=None, minutes=None, max_days=None):
+        """Generate random timedelta-adjusted datetime, handling numpy int64 conversion.
+
+        Usage patterns:
+            random_timedelta(start, end)  # random datetime between start and end
+            random_timedelta(datetime.now(), max_days=120)  # random datetime within last 120 days
+            random_timedelta(base, days=5, hours=3)  # base + 5 days + 3 hours
+        """
+        if max_days is not None:
+            # Random timestamp within last max_days days from start_date
+            random_seconds = int(np.random.random() * int(max_days) * 86400)
+            return start_date - timedelta(seconds=random_seconds)
+
+        if end_date is not None:
+            delta = end_date - start_date
+            random_seconds = int(np.random.random() * delta.total_seconds())
+            return start_date + timedelta(seconds=random_seconds)
+
+        delta_kwargs = {{}}
+        if days is not None:
+            delta_kwargs['days'] = int(days)
+        if hours is not None:
+            delta_kwargs['hours'] = int(hours)
+        if minutes is not None:
+            delta_kwargs['minutes'] = int(minutes)
+
+        return start_date + timedelta(**delta_kwargs)
+
+    def generate_datasets(self) -> Dict[str, pd.DataFrame]:
+        """Generate datasets with EXACT fields from requirements"""
+        datasets = {{}}
+
+{generate_datasets_body}
+
+        return datasets
+
+{methods_combined}
+
+    def get_relationships(self) -> List[tuple]:
+        """Define foreign key relationships from requirements"""
+        return {relationships_code}
+
+    def get_data_descriptions(self) -> Dict[str, str]:
+        """Describe each dataset"""
+        return {descriptions_code}
+
+    def get_semantic_fields(self) -> Dict[str, List[str]]:
+        """Return fields that should use semantic_text mapping"""
+        return {semantic_fields_code}
+'''
+
+        return full_module
+
+    def _build_search_field_guidance(
+        self,
+        query_strategy: Dict[str, Any],
+        data_profile: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """Build explicit field mapping guidance for search query generation.
+
+        Produces a SEARCH FIELD MAPPING section that tells the LLM exactly which
+        fields to use for BM25 vs semantic search. Only called for search demos.
+
+        Args:
+            query_strategy: Strategy with datasets and required_fields
+            data_profile: Optional profiled data with sample values
+
+        Returns:
+            Formatted guidance string for the query generation prompt
+        """
+        lines = ["", "**SEARCH FIELD MAPPING (use these exact fields):**"]
+
+        for dataset in query_strategy.get('datasets', []):
+            ds_name = dataset.get('name', 'unknown')
+            fields = dataset.get('required_fields', dataset.get('fields', {}))
+            if not isinstance(fields, dict):
+                continue
+
+            bm25_fields = []
+            semantic_fields = []
+            keyword_fields = []
+
+            for field_name, field_type in fields.items():
+                if field_type == 'text':
+                    bm25_fields.append(field_name)
+                elif field_type == 'semantic_text':
+                    semantic_fields.append(field_name)
+                elif field_type == 'keyword':
+                    keyword_fields.append(field_name)
+
+            lines.append(f"\n  Dataset: {ds_name}")
+            if bm25_fields:
+                lines.append(f"    BM25 fields (text): {bm25_fields}")
+            if semantic_fields:
+                lines.append(f"    Semantic fields (semantic_text): {semantic_fields}")
+            if keyword_fields:
+                lines.append(f"    Filter fields (keyword): {keyword_fields}")
+
+            if bm25_fields and semantic_fields:
+                lines.append(
+                    f"    FORK/FUSE: Use BM25 MATCH on {bm25_fields} and semantic search on {semantic_fields}"
+                )
+
+            # Include sample content from data profile if available
+            if data_profile and 'datasets' in data_profile:
+                profile_ds = data_profile.get('datasets', {}).get(ds_name, {})
+                profile_fields = profile_ds.get('fields', {})
+
+                for field_name in bm25_fields + semantic_fields:
+                    if field_name in profile_fields:
+                        field_info = profile_fields[field_name]
+                        sample_values = field_info.get('sample_values', field_info.get('top_values', []))
+                        if sample_values:
+                            # Show first 3 samples, truncated
+                            samples = []
+                            for v in sample_values[:3]:
+                                v_str = str(v)
+                                if len(v_str) > 100:
+                                    v_str = v_str[:100] + "..."
+                                samples.append(v_str)
+                            lines.append(f"    Sample {field_name} values: {samples}")
+
+        lines.append("")
+        lines.append("  IMPORTANT: Use MATCH() only on 'text' fields, not on 'keyword' or 'semantic_text' fields.")
+        lines.append("  For semantic search, reference 'semantic_text' fields in RERANK and COMPLETION commands.")
+        lines.append("")
+
+        return "\n".join(lines)
+
     def _generate_data_module_with_requirements(self, config: Dict[str, Any],
                                                  module_path: Path,
                                                  data_requirements: Dict,
-                                                 data_specifications: Optional[Dict[str, Any]] = None):
+                                                 data_specifications: Optional[Dict[str, Any]] = None,
+                                                 progress_callback: Optional[callable] = None):
         """Generate data module based on query strategy requirements
 
         Args:
@@ -1612,6 +2197,7 @@ class {company_class}DemoGuide(DemoGuideModule):
             module_path: Path to module directory
             data_requirements: Data requirements extracted from query strategy
             data_specifications: Optional domain-specific value specifications (for search demos)
+            progress_callback: Optional progress callback for per-dataset reporting
         """
         from src.services.query_strategy_generator import QueryStrategyGenerator
         strategy_gen = QueryStrategyGenerator(self.llm_client)
@@ -1658,7 +2244,52 @@ class {company_class}DemoGuide(DemoGuideModule):
 
         ranges = size_ranges[size_preference]
 
-        prompt = f"""Generate a Python module that implements DataGeneratorModule for this customer:
+        # Determine if we should use per-dataset split approach
+        # Split when: 2+ datasets AND data_specifications available (rich field specs per dataset)
+        num_datasets = len(data_requirements)
+        use_split = num_datasets >= 2 and data_specifications is not None
+        use_enhanced = config.get('use_enhanced_generation', False)
+
+        if use_split:
+            # === PER-DATASET SPLIT APPROACH ===
+            # Generates each dataset method separately to avoid token limit truncation
+            logger.info(f"Using per-dataset split approach for {num_datasets} datasets")
+
+            datasets_spec = data_specifications.get('datasets', {})
+            dataset_methods = {}
+
+            for i, (ds_name, ds_spec) in enumerate(datasets_spec.items(), 1):
+                # Report per-dataset progress within data module phase (0.16-0.28)
+                if progress_callback:
+                    sub_progress = 0.16 + ((i - 1) / num_datasets) * 0.12
+                    progress_callback(sub_progress, f"🤖 Generating data module ({i}/{num_datasets}): {ds_name}...")
+
+                logger.info(f"📤 Data Call {i}/{num_datasets}: Generating _generate_{ds_name}()...")
+                method_code = self._generate_single_dataset_method(
+                    dataset_name=ds_name,
+                    dataset_spec=ds_spec,
+                    config=config,
+                    data_requirements=data_requirements,
+                    size_preference=size_preference,
+                    ranges=ranges,
+                    use_enhanced=use_enhanced
+                )
+                dataset_methods[ds_name] = method_code
+                logger.info(f"📥 Generated _generate_{ds_name}(): {len(method_code)} chars")
+
+            # Combine all methods into complete module
+            logger.info("🔧 Combining data methods into single module...")
+            code = self._combine_data_methods(
+                config=config,
+                dataset_methods=dataset_methods,
+                data_requirements=data_requirements,
+                data_specifications=data_specifications
+            )
+        else:
+            # === SINGLE-CALL APPROACH (1 dataset or no data_specifications) ===
+            logger.info(f"Using single-call approach for {num_datasets} dataset(s)")
+
+            prompt = f"""Generate a Python module that implements DataGeneratorModule for this customer:
 
 Company: {config["company_name"]}
 Department: {config["department"]}
@@ -1678,6 +2309,18 @@ The module should:
 4. Use the EXACT data types specified (keyword, date, float, text, etc.)
 5. Create proper foreign key relationships as specified
 6. Include semantic_text fields where specified
+7. For fields with type "semantic_text" in the requirements, generate ONLY that field (do NOT create a separate "description" text field alongside a "semantic_description" semantic_text field — the semantic_text field IS the description)
+
+CRITICAL - SEARCH DATA QUALITY (if generating search/document data):
+- Generate rows as COMPLETE ENTITIES - all fields in a row must be logically consistent
+  - If category="Security", the description MUST discuss security topics
+  - NEVER generate random field combinations like category="Security" + description about "cooking tips"
+- Avoid template-based generation patterns like "Dr. {{name}} specializes in {{specialty}}"
+  - Instead, write unique natural-language text for each row
+- Every text and semantic_text value MUST be unique across all rows
+  - If you have 400 rows, you need 400 distinct descriptions
+  - Use varied vocabulary, sentence structures, and detail levels
+- For coherence_rules in field specs: content MUST reference the specified related fields
 
 CRITICAL - TIMESTAMP REQUIREMENTS:
 - All @timestamp or timestamp columns MUST use datetime.now() as the END date
@@ -1775,12 +2418,19 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
 
         # Use Python's random.choices for complex elements
         if use_python_random:
+            if size is None:
+                if weights is not None:
+                    return random.choices(choices, weights=weights, k=1)[0]
+                else:
+                    return random.choice(choices)
             if weights is not None:
-                return random.choices(choices, weights=weights, k=size if size else 1)
+                return random.choices(choices, weights=weights, k=size)
             else:
-                return random.choices(choices, k=size if size else 1)
+                return random.choices(choices, k=size)
 
         # Use numpy for simple 1D arrays (faster)
+        # When size is None: return a scalar (matches np.random.choice default behavior)
+        # When size is given: return an array
         if weights is not None:
             weights = np.array(weights, dtype=float)
 
@@ -1798,13 +2448,27 @@ class {config["company_name"].replace(" ", "")}DataGenerator(DataGeneratorModule
                 )
 
             probabilities = weights / weights.sum()
+            if size is None:
+                return np.random.choice(choices, p=probabilities, replace=replace)
             return np.random.choice(choices, size=size, p=probabilities, replace=replace)
         else:
+            if size is None:
+                return np.random.choice(choices)
             return np.random.choice(choices, size=size, replace=replace)
 
     @staticmethod
-    def random_timedelta(start_date, end_date=None, days=None, hours=None, minutes=None):
-        \"\"\"Generate random timedelta-adjusted datetime, handling numpy int64 conversion.\"\"\"
+    def random_timedelta(start_date, end_date=None, days=None, hours=None, minutes=None, max_days=None):
+        \"\"\"Generate random timedelta-adjusted datetime, handling numpy int64 conversion.
+
+        Usage patterns:
+            random_timedelta(start, end)  # random datetime between start and end
+            random_timedelta(datetime.now(), max_days=120)  # random datetime within last 120 days
+            random_timedelta(base, days=5, hours=3)  # base + 5 days + 3 hours
+        \"\"\"
+        if max_days is not None:
+            random_seconds = int(np.random.random() * int(max_days) * 86400)
+            return start_date - timedelta(seconds=random_seconds)
+
         if end_date is not None:
             delta = end_date - start_date
             random_seconds = int(np.random.random() * delta.total_seconds())
@@ -1953,9 +2617,9 @@ df['protocol'] = safe_choice(protocols, size=n, weights=weights)
 - Focus on correctness and brevity
 """
 
-        # Add enhanced data generation guidance if enabled
-        if config.get('use_enhanced_generation', False):
-            prompt += """
+            # Add enhanced data generation guidance if enabled
+            if use_enhanced:
+                prompt += """
 🔥 ENHANCED DATA GENERATION MODE ENABLED 🔥
 
 CRITICAL: Generate data with REALISTIC CLUSTERING for meaningful analytics queries!
@@ -2059,12 +2723,12 @@ CRITICAL: Generate data with REALISTIC CLUSTERING for meaningful analytics queri
        # Create 2-4 hosts per (cluster, datacenter) combination
        num_hosts = random.randint(2, 4)
        for j in range(num_hosts):
-           mme_hosts.append({
-               'mme_host': f'mme-{cluster[-1]}{dc[-7:]}-{j:02d}',
+           mme_hosts.append({{
+               'mme_host': f'mme-{{cluster[-1]}}{{dc[-7:]}}-{{j:02d}}',
                'cluster_id': cluster,
                'datacenter': dc,
                'region': get_region_for_dc(dc)
-           })
+           }})
 
    # Step 4: During incidents, assign failures to SAME (cluster, datacenter)
    for incident in incidents:
@@ -2086,16 +2750,16 @@ CRITICAL: Generate data with REALISTIC CLUSTERING for meaningful analytics queri
 Goal: Percentile-based thresholds (p75, p90, p95) return meaningful result counts (not 0, not all).
 """
 
-        prompt += """
+            prompt += """
 Generate the complete implementation with ALL required fields:"""
 
-        if self.llm_client:
-            code = self._call_llm(prompt)
-        else:
-            code = self._generate_mock_data_module(config)
+            if self.llm_client:
+                code = self._call_llm(prompt, max_tokens=16000)
+            else:
+                code = self._generate_mock_data_module(config)
 
-        # Validate syntax before saving
-        self._validate_python_syntax(code, 'data_generator.py')
+        # Validate syntax before saving (with auto-fix on failure)
+        code = self._validate_python_syntax(code, 'data_generator.py')
 
         # Save the module
         module_file = module_path / 'data_generator.py'
@@ -2141,7 +2805,7 @@ Generate the complete implementation with ALL required fields:"""
         logger.info(f"  Categorized: {len(scripted_queries)} scripted, "
                    f"{len(parameterized_queries)} parameterized, {len(rag_queries)} rag")
 
-        # Save all queries to all_queries.json BEFORE generating Python module
+        # Save all queries to all_queries.json (reference copy before LLM enhancement)
         all_queries_data = {
             'scripted': scripted_queries,
             'parameterized': parameterized_queries,
@@ -2153,7 +2817,7 @@ Generate the complete implementation with ALL required fields:"""
         all_queries_file.write_text(json.dumps(all_queries_data, indent=2))
         logger.info(f"  Saved all_queries.json")
 
-        # Generate simple query_generator.py with JSON loader methods
+        # Generate JSON loader as fallback (will be overwritten by LLM-generated module on success)
         self._generate_json_loader_query_module(config, module_path)
 
         # Format data profile for prompt if available
@@ -2325,6 +2989,14 @@ This may result in field name mismatches or typos. Use extreme care with field n
 """
             join_guidance = ""
 
+        # Build search field mapping guidance (search demos only)
+        search_field_guidance = ""
+        demo_type = config.get('demo_type', 'analytics')
+        if demo_type == 'search':
+            search_field_guidance = self._build_search_field_guidance(
+                query_strategy, data_profile
+            )
+
         # Build prompt using string concatenation to avoid f-string issues with curly braces
         # in data_profile_section and join_guidance (which contain ES|QL/JSON syntax)
 
@@ -2353,6 +3025,7 @@ This may result in field name mismatches or typos. Use extreme care with field n
             json.dumps(query_strategy, indent=2),
             data_profile_section,  # Contains ES|QL/JSON with curly braces
             join_guidance,         # Contains ES|QL/JSON with curly braces
+            search_field_guidance, # Search field mapping (empty for analytics)
             "",
             "CRITICAL - IMPLEMENT THE QUERIES FROM THE STRATEGY ABOVE.",
             "",
@@ -2370,11 +3043,12 @@ This may result in field name mismatches or typos. Use extreme care with field n
             esql_rules,  # Might contain curly braces too
             "",
             "CRITICAL - ESCAPING ES|QL QUERIES IN PYTHON:",
+            "- ALWAYS use SINGLE-QUOTE triple strings (''') for query values, NEVER double-quote triple strings (\"\"\")",
+            "  ✅ CORRECT: 'query': '''FROM index | WHERE MATCH(field, \"term\")'''",
+            "  ❌ WRONG:  'query': \"\"\"FROM index | WHERE MATCH(field, \"term\")\"\"\"  ← breaks on inner quotes!",
             "- ES|QL queries with JSON parameters use SINGLE curly braces: MATCH(field, \"term\", {\"boost\": 0.75})",
-            "- When using triple-quoted strings (recommended): Use single braces directly",
-            "  Example: query = \"\"\"FROM index | WHERE MATCH(field, \"term\", {\"boost\": 1.5})\"\"\"",
-            "- When using f-strings: Must double the braces to escape them",
-            "  Example: query = f\"\"\"FROM index | WHERE MATCH(field, \"term\", {{\"boost\": 1.5}})\"\"\"",
+            "- Inside ''' strings, use double quotes freely: {\"inference_id\": \"completion-vulcan\"}",
+            "- Do NOT use f-strings for queries — no variable interpolation needed",
             "- IMPORTANT: The final ES|QL syntax must always have SINGLE braces {} in the query string",
             "",
             "CRITICAL - METHOD SEPARATION RULES:",
@@ -2485,7 +3159,7 @@ This may result in field name mismatches or typos. Use extreme care with field n
 
         try:
             if self.llm_client:
-                code = self._call_llm(prompt)
+                code = self._call_llm(prompt, max_tokens=32000)
                 logger.info(f"✓ LLM returned {len(code)} characters of code")
             else:
                 logger.warning("No LLM client, using mock generator")
@@ -2494,10 +3168,10 @@ This may result in field name mismatches or typos. Use extreme care with field n
             logger.error(f"✗ LLM call failed: {e}", exc_info=True)
             raise
 
-        # Validate syntax before saving
+        # Validate syntax before saving (with auto-fix on failure)
         logger.info("→ Validating Python syntax...")
         try:
-            self._validate_python_syntax(code, 'query_generator.py')
+            code = self._validate_python_syntax(code, 'query_generator.py')
             logger.info("✓ Syntax validation passed")
         except Exception as e:
             logger.error(f"✗ Syntax validation failed: {e}", exc_info=True)
@@ -2596,6 +3270,16 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
                 "data_generator": "data_generator.py",
                 "query_generator": "query_generator.py",
                 "demo_guide": "demo_guide.py"
+            },
+            "inference_endpoints": {
+                "embedding_type": self.inference_endpoints.get("embedding_type", "sparse"),
+                "embedding_endpoint": (
+                    self.inference_endpoints.get("dense_embedding", ".jina-embeddings-v5-text-small")
+                    if self.inference_endpoints.get("embedding_type") == "dense"
+                    else self.inference_endpoints.get("sparse_embedding", ".elser-2-elasticsearch")
+                ),
+                "rerank": self.inference_endpoints.get("rerank", ".rerank-v1-elasticsearch"),
+                "completion": self.inference_endpoints.get("completion", "completion-vulcan"),
             }
         }
 
@@ -3041,7 +3725,7 @@ Generate the complete guide now:"""
 
         try:
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4-6",
                 max_tokens=16000,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
@@ -3303,29 +3987,41 @@ FROM index METADATA _score
 **CRITICAL:** Use INLINE STATS not STATS before COMPLETION!
 """
 
-    def _call_llm(self, prompt: str) -> str:
-        """Call LLM to generate code"""
-        logger.info(f"📤 Calling LLM with prompt length: {len(prompt)} characters")
+    def _call_llm(self, prompt: str, max_tokens: int = 16000) -> str:
+        """Call LLM to generate code
 
+        Args:
+            prompt: The prompt to send to the LLM
+            max_tokens: Maximum output tokens (default 16000, use higher for large data generators)
+        """
+        logger.info(f"📤 Calling LLM with prompt length: {len(prompt)} characters, max_tokens: {max_tokens}")
+
+        stop_reason = None
         if hasattr(self.llm_client, 'messages'):  # Anthropic
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=16000,  # Increased from 8000 to fit all 3 query methods
+                model="claude-sonnet-4-6",
+                max_tokens=max_tokens,
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
             )
             code = response.content[0].text
-            logger.info(f"📥 LLM response length: {len(code)} characters")
+            stop_reason = getattr(response, 'stop_reason', None)
+            logger.info(f"📥 LLM response length: {len(code)} characters, stop_reason: {stop_reason}")
         elif hasattr(self.llm_client, 'chat'):  # OpenAI
             response = self.llm_client.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=16000  # Increased from 8000
+                max_tokens=max_tokens
             )
             code = response.choices[0].message.content
-            logger.info(f"📥 LLM response length: {len(code)} characters")
+            stop_reason = getattr(response.choices[0], 'finish_reason', None)
+            logger.info(f"📥 LLM response length: {len(code)} characters, stop_reason: {stop_reason}")
         else:
             return ""
+
+        # Detect truncated output
+        if stop_reason in ('max_tokens', 'length'):
+            logger.warning(f"⚠️ LLM output was truncated (stop_reason={stop_reason}, max_tokens={max_tokens})")
 
         # Extract Python code
         if "```python" in code:
@@ -3334,23 +4030,74 @@ FROM index METADATA _score
 
         return code
 
-    def _validate_python_syntax(self, code: str, module_name: str) -> None:
-        """Validate Python syntax and raise error if invalid
+    def _validate_python_syntax(self, code: str, module_name: str, auto_fix: bool = True) -> str:
+        """Validate Python syntax, optionally auto-fixing via LLM retry
 
         Args:
             code: Python code to validate
             module_name: Name of module being validated (for error messages)
+            auto_fix: If True and LLM client is available, attempt to fix syntax errors
+
+        Returns:
+            The validated (and possibly fixed) code
 
         Raises:
-            SyntaxError: If code has syntax errors
+            SyntaxError: If code has syntax errors and cannot be fixed
         """
         try:
             compile(code, module_name, 'exec')
             logger.info(f"✅ Syntax validation passed for {module_name}")
+            return code
         except SyntaxError as e:
             logger.error(f"❌ Syntax error in generated {module_name}: {e}")
             logger.error(f"Error at line {e.lineno}: {e.text}")
-            raise SyntaxError(f"Generated code has syntax error at line {e.lineno}: {e.msg}")
+
+            if not auto_fix or not self.llm_client:
+                raise SyntaxError(f"Generated code has syntax error at line {e.lineno}: {e.msg}")
+
+            # Attempt LLM-assisted fix
+            logger.info(f"🔧 Attempting auto-fix of syntax error in {module_name}...")
+            error_context = self._get_error_context(code, e.lineno)
+            fix_prompt = f"""The following Python code has a syntax error at line {e.lineno}: {e.msg}
+
+Error context (lines around the error):
+```
+{error_context}
+```
+
+The problematic line text: {e.text}
+
+Common causes of "unterminated string literal":
+- A string opened with a quote but not closed on the same line (use triple quotes for multi-line)
+- An apostrophe inside a single-quoted string (use double quotes or escape)
+- A backslash at the end of a string that escapes the closing quote
+
+Return the COMPLETE fixed Python code. Do not omit any functions or classes.
+The full original code is below — fix ONLY the syntax error, do not change logic:
+
+```python
+{code}
+```"""
+            try:
+                fixed_code = self._call_llm(fix_prompt)
+                compile(fixed_code, module_name, 'exec')
+                logger.info(f"✅ Auto-fix succeeded for {module_name}")
+                return fixed_code
+            except SyntaxError as e2:
+                logger.error(f"❌ Auto-fix failed for {module_name}: {e2}")
+                raise SyntaxError(f"Generated code has syntax error at line {e.lineno}: {e.msg} (auto-fix also failed)")
+
+    @staticmethod
+    def _get_error_context(code: str, error_line: int, context_lines: int = 5) -> str:
+        """Extract lines around an error for context"""
+        lines = code.split('\n')
+        start = max(0, error_line - context_lines - 1)
+        end = min(len(lines), error_line + context_lines)
+        context = []
+        for i in range(start, end):
+            marker = " >>> " if i == error_line - 1 else "     "
+            context.append(f"{marker}{i + 1}: {lines[i]}")
+        return '\n'.join(context)
 
     def _validate_query_module_methods(self, code: str) -> Dict[str, bool]:
         """Validate that query module has all required methods using AST parsing

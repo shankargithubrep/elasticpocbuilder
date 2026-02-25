@@ -147,7 +147,7 @@ Generate code that creates datasets specifically for {context.get('company_name'
             # Real LLM call
             if hasattr(self.llm_client, 'messages'):  # Anthropic
                 response = self.llm_client.messages.create(
-                    model="claude-sonnet-4-5-20250929",
+                    model="claude-sonnet-4-6",
                     max_tokens=2000,
                     temperature=0.7,
                     messages=[{"role": "user", "content": prompt}]
@@ -284,7 +284,7 @@ Generate queries that will make {context.get('company_name')} say "This solves o
             # Real LLM call
             if hasattr(self.llm_client, 'messages'):  # Anthropic
                 response = self.llm_client.messages.create(
-                    model="claude-sonnet-4-5-20250929",
+                    model="claude-sonnet-4-6",
                     max_tokens=2000,
                     temperature=0.7,
                     messages=[{"role": "user", "content": prompt}]

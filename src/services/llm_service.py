@@ -325,7 +325,7 @@ Type 'Generate demo' to proceed."""
 
         # Call API
         response = self.client.messages.create(
-            model="claude-3-sonnet-20240229",
+            model="claude-sonnet-4-6",
             system=system_prompt,
             messages=messages,
             max_tokens=1000

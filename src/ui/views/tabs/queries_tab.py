@@ -261,7 +261,7 @@ def render_queries_tab(loader):
                         if not is_editing and can_execute and query_type in ['scripted', 'parameterized', 'rag']:
                             query_key = f"{query_type}_query_{i}"
 
-                            # For parameterized and RAG queries, show parameter inputs
+                            # For parameterized and RAG queries with parameters, show parameter inputs
                             if query_type in ['parameterized', 'rag'] and query.get('parameters'):
                                 with st.expander("⚙️ Test with Parameters", expanded=False):
                                     # Load data profile for sample values
@@ -390,8 +390,18 @@ def render_queries_tab(loader):
 
                                     # Checkbox is now rendered at the top, so no need here
 
-                            # For scripted queries, simple test button
-                            elif query_type == 'scripted':
+                            # For scripted queries and completion queries (RAG without parameters)
+                            elif query_type in ('scripted', 'rag'):
+                                # Show prerequisite note for COMPLETION queries
+                                if query_type == 'rag':
+                                    query_text_check = display._get_query_text(query) or ''
+                                    if 'COMPLETION' in query_text_check.upper():
+                                        st.warning(
+                                            "**Prerequisite:** COMPLETION queries require a configured inference endpoint "
+                                            "with an active API key. "
+                                            "Configure at: [Inference Endpoints](https://my-cluster.elastic.cloud/app/elasticsearch/relevance/inference_endpoints)"
+                                        )
+
                                 # Just create a button, no need for columns since checkbox is at top
                                 if st.button("▶️ Test Query", key=f"test_{query_key}", use_container_width=True):
                                     from src.services.elasticsearch_indexer import ElasticsearchIndexer

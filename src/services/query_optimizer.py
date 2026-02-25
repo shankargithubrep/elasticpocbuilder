@@ -160,7 +160,7 @@ Provide ONLY the format above."""
 
     try:
         response = llm_client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-6",
             max_tokens=2000,
             temperature=0.3,
             messages=[{"role": "user", "content": prompt}]

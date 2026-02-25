@@ -33,7 +33,8 @@ class IndexingOrchestrator:
         semantic_fields: Dict[str, List[str]],
         index_modes: Optional[Dict[str, str]] = None,
         progress_callback: Optional[Callable] = None,
-        text_fields: Optional[Dict[str, List[str]]] = None
+        text_fields: Optional[Dict[str, List[str]]] = None,
+        inference_id: Optional[str] = None
     ) -> Dict[str, Dict]:
         """Index all datasets with retry logic
 
@@ -44,6 +45,7 @@ class IndexingOrchestrator:
             progress_callback: Optional progress callback function(progress, message)
             text_fields: Optional dictionary mapping dataset names to fields needing 'text' type
                          (for full-text search with MATCH). Extracted from query strategy.
+            inference_id: Optional inference endpoint ID for semantic_text field mappings
 
         Returns:
             Dictionary with indexing results for each dataset
@@ -56,10 +58,11 @@ class IndexingOrchestrator:
             logger.info(f"Text fields for full-text search: {text_fields}")
 
         for idx, (name, df) in enumerate(datasets.items()):
-            # Calculate progress (50-100% range, assuming data gen was 0-50%)
+            # Calculate progress within the indexing phase (0.45-0.58 range)
+            # Must stay below 0.60 to avoid triggering the Profiling phase in the UI
             if progress_callback:
-                progress = 0.5 + (idx / total) * 0.3  # 50-80% range
-                progress_callback(progress, f"🔍 Indexing {name}...")
+                progress = 0.45 + ((idx + 1) / total) * 0.13  # 0.45-0.58 range
+                progress_callback(progress, f"🔍 Indexing dataset {idx + 1}/{total}: {name}...")
 
             # Get semantic fields for this dataset
             dataset_semantic_fields = semantic_fields.get(name, [])
@@ -79,7 +82,8 @@ class IndexingOrchestrator:
                 dataset_semantic_fields,
                 dataset_index_mode,
                 progress_callback,
-                dataset_text_fields
+                dataset_text_fields,
+                inference_id
             )
 
             results[name] = result
@@ -98,7 +102,8 @@ class IndexingOrchestrator:
         semantic_fields: List[str],
         index_mode: Optional[str] = None,
         progress_callback: Optional[Callable] = None,
-        text_fields: Optional[List[str]] = None
+        text_fields: Optional[List[str]] = None,
+        inference_id: Optional[str] = None
     ) -> Dict:
         """Index a dataset with retry logic
 
@@ -109,6 +114,7 @@ class IndexingOrchestrator:
             index_mode: Optional explicit index mode ('data_stream' or 'lookup')
             progress_callback: Optional progress callback
             text_fields: Optional list of fields needing 'text' type for full-text search
+            inference_id: Optional inference endpoint ID for semantic_text field mappings
 
         Returns:
             Result dictionary with status, index_name, doc_count, attempts, error
@@ -126,7 +132,8 @@ class IndexingOrchestrator:
                     semantic_fields=semantic_fields,
                     text_fields=text_fields,
                     index_mode=index_mode,
-                    progress_callback=progress_callback
+                    progress_callback=progress_callback,
+                    inference_id=inference_id
                 )
 
                 if result.success:

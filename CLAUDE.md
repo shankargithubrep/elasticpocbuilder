@@ -158,7 +158,7 @@ See **docs/RAG_SEARCH_ARCHITECTURE.md** for technical deep-dive.
 - **llm_service.py**: LLM integration and context extraction
 - **enhanced_data_generator.py**: Data generation utilities
 - **esql_generator.py**: ES|QL query generation
-- **demo_orchestrator.py**: Legacy orchestrator (being phased out)
+
 
 ### Generated Modules (`demos/`)
 Each demo is a standalone Python package:
@@ -417,10 +417,7 @@ vulcan/
 │   ├── QUICK_START_GUIDE.md
 │   ├── MODULAR_ARCHITECTURE.md
 │   └── DEVELOPER_GUIDE.md
-└── archive/                        # Old app versions
-    ├── app_conversational.py
-    ├── app_enhanced.py
-    └── app_smart.py
+└── (archive/ removed - old app versions deleted)
 ```
 
 ## Success Metrics

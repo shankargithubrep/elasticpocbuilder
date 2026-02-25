@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional, List
 from pathlib import Path
 import logging
 import json
+import time
 from datetime import datetime
 
 from .module_generator import ModuleGenerator
@@ -17,6 +18,41 @@ from src.exceptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class PhaseTimer:
+    """Lightweight phase timing for generation pipeline instrumentation"""
+
+    def __init__(self):
+        self.phases: List[Dict[str, Any]] = []
+        self.gen_start = time.monotonic()
+        self._current_phase: Optional[str] = None
+        self._phase_start: float = 0
+
+    def start(self, name: str):
+        """Start timing a phase (auto-ends the previous one)"""
+        if self._current_phase:
+            self.end()
+        self._current_phase = name
+        self._phase_start = time.monotonic()
+
+    def end(self):
+        """End the current phase and record its duration"""
+        if self._current_phase:
+            elapsed = round(time.monotonic() - self._phase_start, 1)
+            self.phases.append({"phase": self._current_phase, "seconds": elapsed})
+            logger.info(f"[TIMER] {self._current_phase}: {elapsed}s")
+            self._current_phase = None
+
+    def summary(self) -> Dict[str, Any]:
+        """Return timing summary"""
+        self.end()  # close any open phase
+        total = round(time.monotonic() - self.gen_start, 1)
+        return {
+            "total_seconds": total,
+            "phases": self.phases,
+            "phase_summary": {p["phase"]: p["seconds"] for p in self.phases}
+        }
 
 
 class ModularDemoOrchestrator:
@@ -34,6 +70,7 @@ class ModularDemoOrchestrator:
             llm_client = self._create_default_client()
 
         self.llm_client = llm_client
+        self.inference_endpoints = inference_endpoints or {}
         self.module_generator = ModuleGenerator(llm_client, inference_endpoints)
         self.module_manager = DemoModuleManager()
 
@@ -49,6 +86,13 @@ class ModularDemoOrchestrator:
             return None
         
         return client
+
+    def _get_embedding_inference_id(self) -> str:
+        """Get the inference endpoint ID based on selected embedding type"""
+        embedding_type = self.inference_endpoints.get("embedding_type", "sparse")
+        if embedding_type == "dense":
+            return self.inference_endpoints.get("dense_embedding", ".jina-embeddings-v5-text-small")
+        return self.inference_endpoints.get("sparse_embedding", ".elser-2-elasticsearch")
 
     def generate_new_demo(
         self,
@@ -115,7 +159,7 @@ class ModularDemoOrchestrator:
 
         # Step 3: Index Data in Elasticsearch
         if progress_callback:
-            progress_callback(0.5, "🔍 Indexing data in Elasticsearch...")
+            progress_callback(0.45, "🔍 Indexing data in Elasticsearch...")
 
         indexing_results = None
         try:
@@ -131,11 +175,13 @@ class ModularDemoOrchestrator:
             if hasattr(data_gen, 'get_semantic_fields'):
                 semantic_fields = data_gen.get_semantic_fields()
 
+            embedding_inference_id = self._get_embedding_inference_id()
             indexing_results = indexing_orch.index_all_datasets(
                 results['datasets'],
                 semantic_fields,
                 {},  # No index_modes from strategy in Path 1
-                progress_callback
+                progress_callback,
+                inference_id=embedding_inference_id
             )
 
             logger.info(f"Indexed {len(indexing_results)} datasets")
@@ -145,7 +191,7 @@ class ModularDemoOrchestrator:
 
         # Step 4: Test and Fix Queries
         if indexing_results and progress_callback:
-            progress_callback(0.7, "🧪 Testing and fixing queries...")
+            progress_callback(0.75, "🧪 Testing and fixing queries...")
 
         query_test_results = None
         try:
@@ -226,8 +272,16 @@ class ModularDemoOrchestrator:
         """
         results = {'phases': {}}
         text_fields_by_dataset = {}  # Fields needing 'text' type for MATCH queries
+        timer = PhaseTimer()
+
+        # Apply model override if specified in config
+        llm_model = config.get('llm_model')
+        if llm_model and hasattr(self.llm_client, 'set_model'):
+            self.llm_client.set_model(llm_model)
+            logger.info(f"Using LLM model override: {llm_model}")
 
         # Phase 1: Generate Query Strategy (branch by demo_type)
+        timer.start("1_strategy_generation")
         if progress_callback:
             progress_callback(0.05, "🎯 Planning query strategy...")
 
@@ -254,17 +308,24 @@ class ModularDemoOrchestrator:
             strategy_generator = QueryStrategyGenerator(self.llm_client)
 
         try:
+            if progress_callback:
+                progress_callback(0.06, f"🎯 Generating {demo_type} query strategy via LLM...")
             query_strategy = strategy_generator.generate_strategy(config)
 
             # Validate strategy if the generator has a validate method
             if hasattr(strategy_generator, 'validate_strategy'):
                 strategy_generator.validate_strategy(query_strategy)
+            num_queries = len(query_strategy.get('queries', []))
+            num_datasets = len(query_strategy.get('datasets', []))
             results['phases']['strategy'] = {
                 'status': 'completed',
-                'queries_planned': len(query_strategy.get('queries', [])),
-                'datasets_planned': len(query_strategy.get('datasets', []))
+                'queries_planned': num_queries,
+                'datasets_planned': num_datasets
             }
-            logger.info(f"Query strategy generated: {len(query_strategy.get('queries', []))} queries")
+            logger.info(f"Query strategy generated: {num_queries} queries")
+
+            if progress_callback:
+                progress_callback(0.08, f"🎯 Strategy complete: {num_queries} queries planned across {num_datasets} datasets")
 
             # Extract text fields from queries for proper field mapping
             # Fields used in MATCH() need 'text' type, not 'keyword'
@@ -281,6 +342,7 @@ class ModularDemoOrchestrator:
         # Phase 1.5: Expand Data Specifications (NEW) - ONLY for search demos
         data_specifications = None
         if demo_type == 'search':
+            timer.start("1.5_data_spec_expansion")
             if progress_callback:
                 progress_callback(0.12, "🎯 Generating data specifications...")
 
@@ -306,24 +368,41 @@ class ModularDemoOrchestrator:
                     }
                 # Continue without detailed specifications (fallback to current behavior)
 
+            # Schema validation gate 1: Verify spec field names match strategy
+            if data_specifications and data_specifications.get('datasets'):
+                try:
+                    from src.services.schema_contract import SchemaContract
+                    canonical = SchemaContract.extract_canonical_fields(query_strategy)
+                    spec_warnings = SchemaContract.validate_data_specifications(canonical, data_specifications)
+                    if spec_warnings:
+                        for w in spec_warnings:
+                            logger.warning(f"[SchemaContract] spec: {w}")
+                except Exception as e:
+                    logger.debug(f"Schema contract spec validation skipped: {e}")
+
         # Phase 2: Generate Data Module ONLY (queries will be generated AFTER profiling)
+        timer.start("2_data_module_codegen")
         if progress_callback:
             progress_callback(0.15, "🤖 Generating data module...")
 
         module_path = self.module_generator.generate_data_and_infrastructure_only(
             config,
             query_strategy,
-            data_specifications=data_specifications  # NEW parameter
+            data_specifications=data_specifications,
+            progress_callback=progress_callback
         )
 
         # Phase 3: Load and Execute Data Generation ONLY (queries come later in Phase 5!)
+        timer.start("3_data_execution")
         if progress_callback:
-            progress_callback(0.3, "📦 Generating datasets...")
+            progress_callback(0.30, "📦 Loading generated data module...")
 
         loader = ModuleLoader(module_path)
 
         # Only generate datasets, NOT queries yet
         data_generator = loader.load_data_generator()
+        if progress_callback:
+            progress_callback(0.33, "📦 Executing data generation code...")
         datasets = data_generator.generate_datasets()
         relationships = data_generator.get_relationships()
         data_descriptions = data_generator.get_data_descriptions()
@@ -336,11 +415,16 @@ class ModularDemoOrchestrator:
         results['module_name'] = Path(module_path).name
         results['query_strategy'] = query_strategy
 
+        if progress_callback:
+            total_rows = sum(len(df) for df in datasets.values())
+            progress_callback(0.40, f"📦 Created {len(datasets)} datasets ({total_rows:,} total rows)")
+
         logger.info(f"Generated {len(datasets)} datasets (queries will be generated after profiling)")
 
-        # Phase 4: Index Data in Elasticsearch (NEW)
+        # Phase 4: Index Data in Elasticsearch
+        timer.start("4_elasticsearch_indexing")
         if progress_callback:
-            progress_callback(0.5, "🔍 Indexing data in Elasticsearch...")
+            progress_callback(0.45, "🔍 Indexing data in Elasticsearch...")
 
         indexing_results = None
         try:
@@ -404,12 +488,14 @@ class ModularDemoOrchestrator:
                 if dataset_name:
                     index_modes[dataset_name] = index_mode
 
+            embedding_inference_id = self._get_embedding_inference_id()
             indexing_results = indexing_orch.index_all_datasets(
                 datasets,  # ← Changed from exec_results['datasets']
                 semantic_fields,
                 index_modes,
                 progress_callback,
-                text_fields=text_fields_by_dataset  # Fields needing 'text' type for MATCH queries
+                text_fields=text_fields_by_dataset,  # Fields needing 'text' type for MATCH queries
+                inference_id=embedding_inference_id
             )
 
             results['phases']['indexing'] = indexing_results
@@ -420,6 +506,7 @@ class ModularDemoOrchestrator:
             results['phases']['indexing'] = {'status': 'failed', 'error': str(e)}
 
         # Phase 4.5: Profile Indexed Data (NEW)
+        timer.start("4.5_data_profiling")
         if indexing_results and progress_callback:
             progress_callback(0.6, "🔍 Profiling indexed data...")
 
@@ -462,9 +549,22 @@ class ModularDemoOrchestrator:
             results['phases']['profiling'] = {'status': 'failed', 'error': str(e)}
             # Don't fail the entire generation if profiling fails
 
+        # Schema validation gate 2: Verify indexed field names match strategy (search only)
+        if demo_type == 'search' and data_profile and data_profile.get('datasets'):
+            try:
+                from src.services.schema_contract import SchemaContract
+                canonical = SchemaContract.extract_canonical_fields(query_strategy)
+                profile_warnings = SchemaContract.validate_data_profile(canonical, data_profile)
+                if profile_warnings:
+                    for w in profile_warnings:
+                        logger.warning(f"[SchemaContract] profile: {w}")
+            except Exception as e:
+                logger.debug(f"Schema contract profile validation skipped: {e}")
+
         # Phase 5: Generate Query Module (NOW with data profile!)
+        timer.start("5_query_module_generation")
         if progress_callback:
-            progress_callback(0.65, "🔧 Generating queries with data profile...")
+            progress_callback(0.65, "🔧 Generating ES|QL queries (scripted, parameterized, RAG)...")
 
         try:
             self.module_generator.generate_query_module_with_profile(
@@ -477,6 +577,8 @@ class ModularDemoOrchestrator:
             logger.info(f"Query module generated with data profile")
 
             # Reload module to get the new queries
+            if progress_callback:
+                progress_callback(0.70, "🔧 Loading and validating generated queries...")
             loader = ModuleLoader(module_path)
             query_gen = loader.load_query_generator(datasets)  # ← Changed from exec_results['datasets']
 
@@ -495,10 +597,25 @@ class ModularDemoOrchestrator:
             results['parameterized_queries'] = parameterized_queries
             results['rag_queries'] = rag_queries
 
+            if progress_callback:
+                progress_callback(0.73, f"🔧 Generated {len(all_queries)} queries: {len(scripted_queries)} scripted, {len(parameterized_queries)} parameterized, {len(rag_queries)} RAG")
+
             logger.info(f"Loaded {len(all_queries)} total queries: "
                        f"{len(scripted_queries)} scripted, "
                        f"{len(parameterized_queries)} parameterized, "
                        f"{len(rag_queries)} RAG")
+
+            # Schema validation gate 3: Verify query field references exist in data (search only)
+            if demo_type == 'search' and all_queries:
+                try:
+                    from src.services.schema_contract import SchemaContract
+                    canonical = SchemaContract.extract_canonical_fields(query_strategy)
+                    query_warnings = SchemaContract.validate_query_fields(canonical, all_queries)
+                    if query_warnings:
+                        for w in query_warnings:
+                            logger.warning(f"[SchemaContract] query: {w}")
+                except Exception as e:
+                    logger.debug(f"Schema contract query validation skipped: {e}")
 
         except VulcanException:
             # Re-raise our custom exceptions as-is
@@ -514,6 +631,7 @@ class ModularDemoOrchestrator:
             results['rag_queries'] = []
 
         # Phase 6: Test and Fix Queries
+        timer.start("6_query_testing")
         if indexing_results and progress_callback:
             progress_callback(0.75, "🧪 Testing and fixing queries...")
 
@@ -530,6 +648,8 @@ class ModularDemoOrchestrator:
 
             # Only test scripted queries (parameterized/RAG queries have parameters)
             if successful_indices and scripted_queries:
+                if progress_callback:
+                    progress_callback(0.77, f"🧪 Running {len(scripted_queries)} scripted queries against {len(successful_indices)} indexed datasets...")
                 test_runner = QueryTestRunner(indexer, self.llm_client, data_profile=data_profile)
                 query_test_results = test_runner.test_all_queries(
                     scripted_queries,
@@ -538,7 +658,12 @@ class ModularDemoOrchestrator:
                 )
 
                 results['phases']['query_testing'] = query_test_results
-                logger.info(f"Query testing complete: {query_test_results['successfully_fixed']} fixed, {query_test_results['needs_manual_fix']} need manual fix")
+                fixed = query_test_results.get('successfully_fixed', 0)
+                manual = query_test_results.get('needs_manual_fix', 0)
+                total = query_test_results.get('total_queries', len(scripted_queries))
+                if progress_callback:
+                    progress_callback(0.82, f"🧪 Testing complete: {total} tested, {fixed} fixed, {manual} need manual fix")
+                logger.info(f"Query testing complete: {fixed} fixed, {manual} need manual fix")
 
                 # Save test results to module
                 self._save_query_test_results(module_path, query_test_results)
@@ -551,6 +676,7 @@ class ModularDemoOrchestrator:
             results['phases']['query_testing'] = {'status': 'failed', 'error': str(e)}
 
         # Phase 7: Cleanup Test Indices
+        timer.start("7_cleanup")
         if indexing_results and progress_callback:
             progress_callback(0.85, "🧹 Cleaning up test indices...")
 
@@ -568,6 +694,8 @@ class ModularDemoOrchestrator:
                             logger.warning(f"Failed to delete test index {index_name}: {e}")
 
                 logger.info(f"Cleaned up {cleanup_count}/{len(indexing_results)} test indices")
+                if progress_callback:
+                    progress_callback(0.90, f"🧹 Cleaned up {cleanup_count}/{len(indexing_results)} test indices")
                 results['phases']['cleanup'] = {'status': 'completed', 'indices_deleted': cleanup_count}
         except Exception as e:
             logger.error(f"Index cleanup failed: {e}", exc_info=True)
@@ -579,6 +707,21 @@ class ModularDemoOrchestrator:
             if progress_callback:
                 progress_callback(0.95, "💾 Saving conversation history...")
             self.save_conversation(module_path, conversation, config)
+
+        # Finalize timing
+        timing = timer.summary()
+        results['timing'] = timing
+        logger.info(f"[TIMER] TOTAL: {timing['total_seconds']}s | Breakdown: {timing['phase_summary']}")
+
+        # Save timing to config.json for post-mortem analysis
+        try:
+            config_file = Path(module_path) / 'config.json'
+            if config_file.exists():
+                config_data = json.loads(config_file.read_text())
+                config_data['generation_timing'] = timing
+                config_file.write_text(json.dumps(config_data, indent=2))
+        except Exception as e:
+            logger.debug(f"Failed to save timing to config: {e}")
 
         logger.info(f"Demo with strategy generated and executed: {module_path}")
 

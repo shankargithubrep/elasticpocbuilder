@@ -27,6 +27,15 @@ logger = logging.getLogger(__name__)
 def render_browse_demos_view():
     """Render the demo browsing interface - demo details only (list is in sidebar)"""
     # Show details if a module is selected
+    if not st.session_state.current_demo_module:
+        st.markdown("### Browse Demos")
+        st.info(
+            "**Select a demo** from the list on the left to view its details, "
+            "or switch to **Create** mode to generate a new one.\n\n"
+            "Generated demos are stored in the `demos/` directory and persist across sessions."
+        )
+        return
+
     if st.session_state.current_demo_module:
         st.markdown(f"#### 📊 {st.session_state.current_demo_module}")
 

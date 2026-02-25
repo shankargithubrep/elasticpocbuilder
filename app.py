@@ -116,6 +116,9 @@ if "ai_expansion_enabled" not in st.session_state:
 if "ai_expansion_used" not in st.session_state:
     st.session_state.ai_expansion_used = False
 
+if "llm_model" not in st.session_state:
+    st.session_state.llm_model = None
+
 
 def main():
     """Main application entry point"""

@@ -54,8 +54,7 @@ def show_domain_validation(extraction: Dict) -> Optional[Dict]:
         Updated extraction dict if validated, None if still editing
     """
     st.markdown("### 🤖 Domain Understanding Checkpoint")
-    st.markdown("I've analyzed your input. **Please review and refine before continuing:**")
-    st.markdown("---")
+    st.markdown("I've analyzed your input. **Review and refine the entities and scenarios below, then click Continue.**")
 
     # Initialize session state for tracking edits
     if 'validation_edits' not in st.session_state:
@@ -64,7 +63,22 @@ def show_domain_validation(extraction: Dict) -> Optional[Dict]:
             'scenarios': extraction["key_terms"]["scenarios"].copy()
         }
 
-    # Domain Section
+    # Action Buttons at the TOP (visible without scrolling)
+    col1, col2 = st.columns(2)
+    button_clicked = False
+    cancel_clicked = False
+
+    with col1:
+        if st.button("✅ Looks Good - Continue", type="primary", key="validation_continue_top", use_container_width=True):
+            button_clicked = True
+
+    with col2:
+        if st.button("❌ Cancel", key="validation_cancel_top", use_container_width=True):
+            cancel_clicked = True
+
+    st.markdown("---")
+
+    # Domain Section (compact)
     st.markdown("#### 🏢 Domain & Industry")
 
     col1, col2 = st.columns(2)
@@ -93,106 +107,104 @@ def show_domain_validation(extraction: Dict) -> Optional[Dict]:
         height=80
     )
 
-    st.markdown("---")
+    # Entities & Scenarios in a collapsible section
+    with st.expander(f"🔑 Key Entities ({len(st.session_state.validation_edits['entities'])}) & 📋 Scenarios ({len(st.session_state.validation_edits['scenarios'])})", expanded=True):
+        # Key Entities Section
+        st.markdown("**Key Entities & Terms**")
+        st.caption("These specific terms will be used throughout the expansion:")
 
-    # Key Entities Section
-    st.markdown("#### 🔑 Key Entities & Terms")
-    st.caption("These specific terms will be used throughout the expansion:")
+        # Use session state for entity list to handle adds/removes
+        entities = st.session_state.validation_edits['entities']
 
-    # Use session state for entity list to handle adds/removes
-    entities = st.session_state.validation_edits['entities']
+        edited_entities = []
+        entities_to_remove = []
 
-    edited_entities = []
-    entities_to_remove = []
+        for i, entity in enumerate(entities):
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                edited = st.text_input(
+                    f"Entity {i+1}",
+                    value=entity,
+                    key=f"validation_entity_{i}",
+                    label_visibility="collapsed"
+                )
+                edited_entities.append(edited)
+            with col2:
+                if st.button("❌", key=f"validation_remove_entity_{i}"):
+                    entities_to_remove.append(i)
 
-    for i, entity in enumerate(entities):
-        col1, col2 = st.columns([5, 1])
-        with col1:
-            edited = st.text_input(
-                f"Entity {i+1}",
-                value=entity,
-                key=f"validation_entity_{i}",
-                label_visibility="collapsed"
-            )
-            edited_entities.append(edited)
-        with col2:
-            if st.button("❌", key=f"validation_remove_entity_{i}"):
-                entities_to_remove.append(i)
-
-    # Remove entities marked for deletion
-    if entities_to_remove:
-        st.session_state.validation_edits['entities'] = [
-            e for i, e in enumerate(edited_entities) if i not in entities_to_remove
-        ]
-        st.rerun()
-    else:
-        st.session_state.validation_edits['entities'] = edited_entities
-
-    # Add new entity button
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        new_entity = st.text_input(
-            "Add new entity:",
-            key="validation_new_entity",
-            placeholder="Type a new entity and press Enter"
-        )
-    with col2:
-        if st.button("➕ Add", key="validation_add_entity_btn"):
-            if new_entity and new_entity.strip():
-                st.session_state.validation_edits['entities'].append(new_entity.strip())
-                st.rerun()
-
-    st.markdown("---")
-
-    # Scenarios Section
-    st.markdown("#### 📋 Search Scenarios")
-    st.caption("Realistic scenarios using your terminology:")
-
-    scenarios = st.session_state.validation_edits['scenarios']
-    edited_scenarios = []
-    scenarios_to_remove = []
-
-    for i, scenario in enumerate(scenarios):
-        col1, col2 = st.columns([5, 1])
-        with col1:
-            edited = st.text_area(
-                f"Scenario {i+1}",
-                value=scenario,
-                key=f"validation_scenario_{i}",
-                height=80,
-                label_visibility="collapsed"
-            )
-            edited_scenarios.append(edited)
-        with col2:
-            st.write("")  # Spacing
-            st.write("")  # Spacing
-            if st.button("❌", key=f"validation_remove_scenario_{i}"):
-                scenarios_to_remove.append(i)
-
-    # Remove scenarios marked for deletion
-    if scenarios_to_remove:
-        st.session_state.validation_edits['scenarios'] = [
-            s for i, s in enumerate(edited_scenarios) if i not in scenarios_to_remove
-        ]
-        st.rerun()
-    else:
-        st.session_state.validation_edits['scenarios'] = edited_scenarios
-
-    # Add new scenario
-    st.text_area(
-        "Add new scenario:",
-        key="validation_new_scenario",
-        placeholder="Describe a realistic scenario using your terminology",
-        height=80
-    )
-
-    if st.button("➕ Add Scenario", key="validation_add_scenario_btn"):
-        new_scenario = st.session_state.get("validation_new_scenario", "").strip()
-        if new_scenario:
-            st.session_state.validation_edits['scenarios'].append(new_scenario)
+        # Remove entities marked for deletion
+        if entities_to_remove:
+            st.session_state.validation_edits['entities'] = [
+                e for i, e in enumerate(edited_entities) if i not in entities_to_remove
+            ]
             st.rerun()
+        else:
+            st.session_state.validation_edits['entities'] = edited_entities
 
-    st.markdown("---")
+        # Add new entity button
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_entity = st.text_input(
+                "Add new entity:",
+                key="validation_new_entity",
+                placeholder="Type a new entity and press Enter"
+            )
+        with col2:
+            if st.button("➕ Add", key="validation_add_entity_btn"):
+                if new_entity and new_entity.strip():
+                    st.session_state.validation_edits['entities'].append(new_entity.strip())
+                    st.rerun()
+
+        st.markdown("---")
+
+        # Scenarios Section
+        st.markdown("**Search Scenarios**")
+        st.caption("Realistic scenarios using your terminology:")
+
+        scenarios = st.session_state.validation_edits['scenarios']
+        edited_scenarios = []
+        scenarios_to_remove = []
+
+        for i, scenario in enumerate(scenarios):
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                edited = st.text_area(
+                    f"Scenario {i+1}",
+                    value=scenario,
+                    key=f"validation_scenario_{i}",
+                    height=80,
+                    label_visibility="collapsed"
+                )
+                edited_scenarios.append(edited)
+            with col2:
+                st.write("")  # Spacing
+                st.write("")  # Spacing
+                if st.button("❌", key=f"validation_remove_scenario_{i}"):
+                    scenarios_to_remove.append(i)
+
+        # Remove scenarios marked for deletion
+        if scenarios_to_remove:
+            st.session_state.validation_edits['scenarios'] = [
+                s for i, s in enumerate(edited_scenarios) if i not in scenarios_to_remove
+            ]
+            st.rerun()
+        else:
+            st.session_state.validation_edits['scenarios'] = edited_scenarios
+
+        # Add new scenario
+        st.text_area(
+            "Add new scenario:",
+            key="validation_new_scenario",
+            placeholder="Describe a realistic scenario using your terminology",
+            height=80
+        )
+
+        if st.button("➕ Add Scenario", key="validation_add_scenario_btn"):
+            new_scenario = st.session_state.get("validation_new_scenario", "").strip()
+            if new_scenario:
+                st.session_state.validation_edits['scenarios'].append(new_scenario)
+                st.rerun()
 
     # Summary
     st.markdown("#### 📊 Summary")
@@ -204,43 +216,37 @@ def show_domain_validation(extraction: Dict) -> Optional[Dict]:
         st.metric("Scenarios", len(st.session_state.validation_edits['scenarios']))
         st.caption(extraction["use_cases_summary"])
 
-    st.markdown("---")
+    # Handle button clicks from the top buttons (deferred so form edits are captured)
+    if button_clicked:
+        # Build updated extraction with user edits
+        updated_extraction = {
+            "domain": {
+                "name": domain_name,
+                "industry": industry,
+                "primary_focus": primary_focus
+            },
+            "key_terms": {
+                "entities": st.session_state.validation_edits['entities'],
+                "scenarios": st.session_state.validation_edits['scenarios'],
+                "document_types": extraction["key_terms"].get("document_types", []),
+                "search_patterns": extraction["key_terms"].get("search_patterns", [])
+            },
+            "pain_points_summary": extraction["pain_points_summary"],
+            "use_cases_summary": extraction["use_cases_summary"],
+            "validated": True
+        }
 
-    # Action Buttons
-    col1, col2 = st.columns(2)
+        # Clear validation session state
+        if 'validation_edits' in st.session_state:
+            del st.session_state.validation_edits
 
-    with col1:
-        if st.button("✅ Looks Good - Continue", type="primary", key="validation_continue", use_container_width=True):
-            # Build updated extraction with user edits
-            updated_extraction = {
-                "domain": {
-                    "name": domain_name,
-                    "industry": industry,
-                    "primary_focus": primary_focus
-                },
-                "key_terms": {
-                    "entities": st.session_state.validation_edits['entities'],
-                    "scenarios": st.session_state.validation_edits['scenarios'],
-                    "document_types": extraction["key_terms"].get("document_types", []),
-                    "search_patterns": extraction["key_terms"].get("search_patterns", [])
-                },
-                "pain_points_summary": extraction["pain_points_summary"],
-                "use_cases_summary": extraction["use_cases_summary"],
-                "validated": True
-            }
+        return updated_extraction
 
-            # Clear validation session state
-            if 'validation_edits' in st.session_state:
-                del st.session_state.validation_edits
-
-            return updated_extraction
-
-    with col2:
-        if st.button("❌ Cancel", key="validation_cancel", use_container_width=True):
-            st.session_state.expansion_cancelled = True
-            if 'validation_edits' in st.session_state:
-                del st.session_state.validation_edits
-            return {"action": "cancel"}
+    if cancel_clicked:
+        st.session_state.expansion_cancelled = True
+        if 'validation_edits' in st.session_state:
+            del st.session_state.validation_edits
+        return {"action": "cancel"}
 
     return None  # Still editing
 

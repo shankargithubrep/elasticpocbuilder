@@ -112,7 +112,7 @@ class SearchQueryStrategyGenerator:
         # Call LLM to generate strategy
         try:
             response = self.llm_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
+                model="claude-sonnet-4-6",
                 max_tokens=16000,  # Increased from 8000 to accommodate search narrative + full strategy
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
@@ -316,11 +316,15 @@ Example dataset fields:
 ```
 
 **semantic_text Field Pattern:**
-For fields that need semantic search (vector embeddings):
-- **CORRECT**: Define ONLY ONE field as "semantic_text" type
-  Example: "content": "semantic_text"
-- **WRONG**: Do NOT create both a text field AND a semantic_text field
-  Example: "content": "text" + "content_semantic": "semantic_text" ← ANTIPATTERN!
+- **CORRECT**: Use the main descriptive field as semantic_text directly
+  Example: "description": "semantic_text", "title": "text"
+- **WRONG**: Do NOT create BOTH a text description AND a separate semantic_text description
+  Example: "description": "text" + "semantic_description": "semantic_text" ← ANTIPATTERN!
+  Example: "content": "text" + "content_summary": "semantic_text" ← ANTIPATTERN!
+- Each dataset should have EXACTLY TWO searchable text fields:
+  1. A short text field for BM25 (title, name, headline) — type: "text"
+  2. A long descriptive field for semantic search — type: "semantic_text"
+- Do NOT prefix or suffix field names with "semantic_" — just use the natural field name
 - Elasticsearch automatically handles BOTH text storage AND embedding generation for semantic_text fields
 - The data generator will create ONE column with text data
 - Elasticsearch will auto-generate embeddings using ELSER v2 (.elser-2-elasticsearch)

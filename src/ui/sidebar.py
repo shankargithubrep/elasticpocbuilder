@@ -77,7 +77,10 @@ def _render_status_section():
         if "inference_endpoints" not in st.session_state:
             st.session_state.inference_endpoints = {
                 "rerank": ".rerank-v1-elasticsearch",
-                "completion": "completion-vulcan"
+                "completion": "completion-vulcan",
+                "sparse_embedding": ".elser-2-elasticsearch",
+                "dense_embedding": ".jina-embeddings-v5-text-small",
+                "embedding_type": "sparse"
             }
 
         # RERANK endpoint input
@@ -102,6 +105,8 @@ def _render_status_section():
         )
         st.session_state.inference_endpoints["completion"] = completion_endpoint
 
+        st.divider()
+
         # Refresh status button
         if st.button("🔄 Refresh", use_container_width=True, key="refresh_status_btn"):
             if "app_status" in st.session_state:
@@ -111,6 +116,16 @@ def _render_status_section():
 
 def render_sidebar():
     """Render the sidebar with mode toggle and context display"""
+
+    # Initialize inference endpoints early (needed by both status section and create mode)
+    if "inference_endpoints" not in st.session_state:
+        st.session_state.inference_endpoints = {
+            "rerank": ".rerank-v1-elasticsearch",
+            "completion": "completion-vulcan",
+            "sparse_embedding": ".elser-2-elasticsearch",
+            "dense_embedding": ".jina-embeddings-v5-text-small",
+            "embedding_type": "sparse"
+        }
 
     # Status section at top (collapsible) - includes Vulcan branding
     _render_status_section()
@@ -171,6 +186,60 @@ def render_sidebar():
         st.session_state.dataset_size_preference = "medium"
         # Always use enhanced generation (no toggle needed)
         st.session_state.use_enhanced_generation = True
+
+        # Embedding type selector (always visible in create mode)
+        st.markdown("**Embedding Type**")
+        embedding_type = st.radio(
+            "Embedding Type",
+            options=["sparse", "dense"],
+            index=0 if st.session_state.inference_endpoints.get("embedding_type", "sparse") == "sparse" else 1,
+            help="Sparse (ELSER) for English keyword-aware search; Dense (Jina) for multilingual semantic search",
+            key="embedding_type_radio",
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        st.session_state.inference_endpoints["embedding_type"] = embedding_type
+
+        if embedding_type == "sparse":
+            sparse_endpoint = st.text_input(
+                "SPARSE EMBEDDING",
+                value=st.session_state.inference_endpoints.get("sparse_embedding", ".elser-2-elasticsearch"),
+                help="Inference endpoint ID for sparse embeddings (ELSER)",
+                key="sparse_embedding_endpoint_input",
+                label_visibility="collapsed",
+                placeholder="SPARSE EMBEDDING endpoint"
+            )
+            st.session_state.inference_endpoints["sparse_embedding"] = sparse_endpoint
+        else:
+            dense_endpoint = st.text_input(
+                "DENSE EMBEDDING",
+                value=st.session_state.inference_endpoints.get("dense_embedding", ".jina-embeddings-v5-text-small"),
+                help="Inference endpoint ID for dense embeddings (e.g. Jina v5)",
+                key="dense_embedding_endpoint_input",
+                label_visibility="collapsed",
+                placeholder="DENSE EMBEDDING endpoint"
+            )
+            st.session_state.inference_endpoints["dense_embedding"] = dense_endpoint
+
+        # LLM Model override (always visible in create mode)
+        st.markdown("**LLM Model**")
+        llm_model_input = st.text_input(
+            "LLM Model",
+            value=st.session_state.get("llm_model", "") or "",
+            help="Override the default LLM model for demo generation. Leave empty to use the built-in default.",
+            key="llm_model_input",
+            label_visibility="collapsed",
+            placeholder="e.g. claude-sonnet-4-6"
+        )
+        st.session_state.llm_model = llm_model_input if llm_model_input else None
+
+        try:
+            from src.services.llm_proxy_service import LLMProxyClient
+            _client = LLMProxyClient()
+            resolved = llm_model_input if llm_model_input else _client.get_model_name("default")
+            st.caption(f"Active: `{resolved}`")
+        except Exception:
+            pass
 
         st.markdown("---")
 

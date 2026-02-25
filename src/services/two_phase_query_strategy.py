@@ -134,7 +134,7 @@ This is just the outline phase. Row counts will be determined automatically in P
 Generate ONLY the JSON with 7 query outlines. Keep descriptions brief."""
 
         response = self.llm_client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-6",
             max_tokens=2000,  # Much smaller - won't truncate
             temperature=0.7,
             messages=[{"role": "user", "content": prompt}]
@@ -249,7 +249,7 @@ Generate ONLY the JSON with 7 query outlines. Keep descriptions brief."""
 Generate ONLY the JSON for this single query:"""
 
         response = self.llm_client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-6",
             max_tokens=3000,  # Safe size for single query
             temperature=0.6,
             messages=[{"role": "user", "content": prompt}]

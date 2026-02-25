@@ -80,7 +80,7 @@ JSON:"""
             return "❌ Cannot generate suggestions: No LLM configured. Please provide the missing information manually."
 
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-6",
             max_tokens=1000,
             temperature=0.7,  # Higher temperature for creative suggestions
             messages=[{"role": "user", "content": suggestion_prompt}]
@@ -191,7 +191,7 @@ The system will extract context from your detailed document without expansion.""
         logger.info(f"Expanding brief prompt: {brief_prompt[:100]}...")
 
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-6",
             max_tokens=16000,  # Increased to handle large technical documents
             temperature=0.7,  # Balanced creativity and consistency
             messages=[{"role": "user", "content": full_prompt}]
@@ -355,7 +355,7 @@ RETURN ONLY JSON. NO MARKDOWN CODE BLOCKS. NO EXPLANATIONS."""
             return _fallback_processing(message)
 
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model="claude-sonnet-4-6",
             max_tokens=16000,  # Increased for compound requests - need room for two full high-fidelity prompts
             temperature=0.3,
             messages=[{"role": "user", "content": prompt}]

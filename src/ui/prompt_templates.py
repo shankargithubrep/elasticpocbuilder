@@ -252,13 +252,23 @@ Structure each collection as:
 ```
 
 **Field Type Guidelines:**
-- `text`: For full-text search with analyzers (names, descriptions, content)
+- `text`: For full-text BM25 search (short fields: names, titles, headlines)
 - `keyword`: For exact matching and filtering (IDs, codes, categories, status)
-- `semantic_text`: For vector embeddings enabling meaning-based search
+- `semantic_text`: For vector embeddings AND text storage — enables BOTH meaning-based search AND full-text search on the same field
 - `geo_point`: For location-based searches (provider locations, store locations)
 - `date`: For temporal filtering (effective dates, last updated)
 - `boolean`: For binary filters (active/inactive, available/unavailable)
 - `float`/`integer`: For numeric filtering and sorting (ratings, scores, prices)
+
+**🚨 CRITICAL: semantic_text Field Rules**
+- `semantic_text` fields store the original text AND auto-generate vector embeddings — you get BOTH BM25 and semantic search from ONE field
+- Each dataset should have exactly TWO searchable text fields:
+  1. A SHORT `text` field for BM25 keyword search (title, name, headline)
+  2. A LONGER `semantic_text` field for semantic search (description, bio, content)
+- **WRONG**: Creating BOTH `description` (text) AND `description_semantic` (semantic_text) ← ANTIPATTERN!
+- **WRONG**: Creating BOTH `visual_caption` (text) AND `visual_caption_semantic` (semantic_text) ← ANTIPATTERN!
+- **CORRECT**: Use the natural field name directly as semantic_text: `description` (semantic_text), `bio` (semantic_text)
+- Do NOT prefix or suffix field names with "semantic_" — just use the natural field name with type `semantic_text`
 
 **🚨 CRITICAL: Field Value Diversity Guidance**
 
@@ -373,6 +383,8 @@ Before finalizing, ensure:
 - ✓ Pain points describe search/retrieval failures
 - ✓ No ES|QL, KQL, or query syntax appears anywhere
 - ✓ Field names use appropriate types (text, keyword, semantic_text, geo_point)
+- ✓ 🆕 No redundant field pairs — NEVER both `field` (text) and `field_semantic` (semantic_text) for the same concept
+- ✓ 🆕 Each dataset has exactly ONE `text` field (short) and ONE `semantic_text` field (long) — not two versions of the same field
 - ✓ 🆕 Variety across use case examples (don't repeat same entity in every use case)
 - ✓ 🆕 No hardcoded domain values that could leak into every demo
 
