@@ -119,6 +119,18 @@ def fix_query(
    | LOOKUP JOIN products ON product_refs == product_id
    ```
 
+5. **CONCAT String Literals with Newlines (RAG/COMPLETION queries)**
+   ES|QL does NOT support \\n, \\\\n, or literal newlines in string literals.
+   ❌ WRONG: `CONCAT("Line one\\nLine two")`
+   ❌ WRONG: `CONCAT("Title:\\n", title, "\\nContent:\\n", content)`
+   ✅ CORRECT: `CONCAT("Line one. ", "Line two. ")`
+   ✅ CORRECT: `CONCAT("Title: ", title, " ", "Content: ", content)`
+   Break long prompts into separate single-line CONCAT arguments with spaces.
+
+6. **COMPLETION Syntax**
+   ❌ WRONG: `| COMPLETION prompt MODEL "gpt-4"`
+   ✅ CORRECT: `| COMPLETION answer = prompt WITH {{"inference_id": "endpoint"}}`
+
 **Constraint Relaxation Strategies (if zero results):**
 
 1. **Time-based constraints**: Reduce time windows

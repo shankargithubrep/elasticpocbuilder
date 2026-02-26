@@ -238,10 +238,13 @@ While addressing the customer's pain points, ALWAYS include sophisticated querie
 
 3. **COMPLETION** - LLM text generation for RAG answers/summaries
    ```esql
-   | EVAL prompt = CONCAT("Summarize: ", content)
+   | EVAL prompt = CONCAT("Summarize this document. ", "Title: ", title, " Content: ", content)
    | COMPLETION summary = prompt WITH {{ "inference_id": "completion-vulcan" }}
    ```
    Use after retrieval to generate answers, summaries, or insights.
+   **CRITICAL:** ES|QL does NOT support newlines or escape sequences in string literals.
+   ❌ WRONG: `CONCAT("Line one\\nLine two")` — causes parsing_exception
+   ✅ CORRECT: `CONCAT("Line one. ", "Line two. ", "Field: ", field)` — separate args, no newlines
 
 **Search Type Definitions (for query classification):**
 | Search Type | Description | Pattern |
@@ -600,7 +603,7 @@ You MUST use these EXACT row_count ranges in your output:
       }},
       "description": "Retrieve relevant documents and generate a synthesized answer using LLM",
       "complexity": "expert",
-      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'password reset procedure') | SORT _score DESC | LIMIT 5 | EVAL prompt = CONCAT(\\"Based on this article, summarize the password reset steps:\\\\n\\\\nTitle: \\", title, \\"\\\\nContent: \\", content) | COMPLETION summary = prompt WITH {{ \\"inference_id\\": \\"completion-vulcan\\" }} | KEEP title, summary, _score"
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'password reset procedure') | SORT _score DESC | LIMIT 5 | EVAL prompt = CONCAT(\\"Based on this article, summarize the password reset steps. \\", \\"Title: \\", title, \\\" \\\", \\"Content: \\", content) | COMPLETION summary = prompt WITH {{ \\"inference_id\\": \\"completion-vulcan\\" }} | KEEP title, summary, _score"
     }},
     {{
       "name": "Fuzzy Search for Typo Tolerance",

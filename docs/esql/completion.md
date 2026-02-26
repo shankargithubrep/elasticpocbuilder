@@ -146,15 +146,21 @@ ROW question = "What is Elasticsearch?"
 | What is Elasticsearch? | A distributed search and analytics engine |
 
 Summarize the top 10 highest-rated movies using a prompt:
+
+> **Note (Vulcan):** The official docs example below uses `\n` in CONCAT strings.
+> In practice, ES|QL string literals do NOT support escape sequences — `\n` causes
+> `parsing_exception: token recognition error`. Use spaces between separate CONCAT
+> arguments instead: `CONCAT("Title: ", title, " Synopsis: ", synopsis)`
+
 ```esql
 FROM movies
 | SORT rating DESC
 | LIMIT 10
 | EVAL prompt = CONCAT(
-   "Summarize this movie using the following information: \n",
-   "Title: ", title, "\n",
-   "Synopsis: ", synopsis, "\n",
-   "Actors: ", MV_CONCAT(actors, ", "), "\n",
+   "Summarize this movie using the following information: ",
+   "Title: ", title, " ",
+   "Synopsis: ", synopsis, " ",
+   "Actors: ", MV_CONCAT(actors, ", "),
   )
 | COMPLETION summary = prompt WITH { "inference_id" : "my_inference_endpoint" }
 | KEEP title, summary, rating

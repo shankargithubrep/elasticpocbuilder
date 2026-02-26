@@ -62,9 +62,9 @@ FROM knowledge_base
 | LIMIT 5
 | EVAL prompt = CONCAT(
     "You are a helpful insurance expert. Based on this article, explain in simple terms: ",
-    ?user_question, "\n\n",
-    "Article: ", title, "\n",
-    "Content: ", content, "\n\n",
+    ?user_question, " ",
+    "Article: ", title, " ",
+    "Content: ", content, " ",
     "Provide a clear explanation a call center agent can use:"
   )
 | COMPLETION answer = prompt WITH { "inference_id" : "openai_gpt4" }
@@ -123,11 +123,11 @@ FROM call_center_interactions METADATA _score
 | LOOKUP JOIN agents ON agent_id
 | EVAL prompt = CONCAT(
     "You are an experienced call center supervisor. Based on these similar resolved cases, provide guidance for handling: ",
-    ?issue_description, "\n\n",
-    "Similar Case: ", notes, "\n",
-    "Agent: ", agent_name, " (", specialization, ")\n",
-    "Call Duration: ", TO_STRING(call_duration_seconds), " seconds\n",
-    "Resolution Status: ", resolution_status, "\n\n",
+    ?issue_description, " ",
+    "Similar Case: ", notes, " ",
+    "Agent: ", agent_name, " (", specialization, ") ",
+    "Call Duration: ", TO_STRING(call_duration_seconds), " seconds ",
+    "Resolution Status: ", resolution_status, " ",
     "Provide specific actionable guidance:"
   )
 | COMPLETION guidance = prompt WITH { "inference_id" : "openai_gpt4" }
@@ -152,17 +152,17 @@ FROM prior_authorizations METADATA _score
 | LOOKUP JOIN members ON member_id
 | LOOKUP JOIN providers ON provider_id
 | EVAL prompt = CONCAT(
-    "You are a prior authorization specialist. Explain this denial to a customer:\n\n",
-    "Medication: ", medication_name, "\n",
-    "Denial Reason: ", denial_reason, "\n",
-    "Plan Type: ", plan_type, "\n",
-    "Provider: ", provider_name, " (", specialty, ")\n",
-    "Urgency: ", urgency_flag, "\n\n",
-    "Customer asks: ", ?denial_query, "\n\n",
-    "Provide a clear explanation including:\n",
-    "1. Why it was denied\n",
-    "2. Next steps for the customer\n",
-    "3. Alternative options if available\n",
+    "You are a prior authorization specialist. Explain this denial to a customer. ",
+    "Medication: ", medication_name, " ",
+    "Denial Reason: ", denial_reason, " ",
+    "Plan Type: ", plan_type, " ",
+    "Provider: ", provider_name, " (", specialty, ") ",
+    "Urgency: ", urgency_flag, " ",
+    "Customer asks: ", ?denial_query, " ",
+    "Provide a clear explanation including: ",
+    "1. Why it was denied ",
+    "2. Next steps for the customer ",
+    "3. Alternative options if available ",
     "4. Expected timeline"
   )
 | COMPLETION explanation = prompt WITH { "inference_id" : "openai_gpt4" }
@@ -224,8 +224,20 @@ FROM provider_directory METADATA _score
 ### Building Prompts
 ```esql
 ✅ | EVAL prompt = CONCAT("Question: ", title, " Answer: ", content)
-✅ | EVAL prompt = CONCAT("Explain: ", field1, "\nContext: ", field2)
+✅ | EVAL prompt = CONCAT("Explain: ", field1, " Context: ", field2)
+❌ | EVAL prompt = CONCAT("Line one\nLine two") — newlines cause parsing_exception
 ❌ | COMPLETION "{{#results}} {{title}} {{/results}}"
+```
+
+### String Literals (CRITICAL)
+ES|QL does NOT support newlines or escape sequences in string literals.
+```esql
+✅ "simple single-line string"
+✅ CONCAT("Part one. ", "Part two. ", "Field: ", field)
+❌ "Line one\nLine two"  — causes parsing_exception
+❌ "Line one\\nLine two" — causes parsing_exception
+❌ Strings spanning multiple lines
+❌ 'single quotes'        — only double quotes
 ```
 
 ## Cost Optimization Tips

@@ -77,8 +77,12 @@ class QueryTestRunner:
             'total_queries': len(queries),
             'successfully_fixed': 0,
             'needs_manual_fix': 0,
+            'early_exit': False,
             'queries': []
         }
+
+        consecutive_failures = 0
+        EARLY_EXIT_THRESHOLD = 3
 
         for query in queries:
             test_result = self._test_single_query(
@@ -91,8 +95,35 @@ class QueryTestRunner:
 
             if test_result.was_fixed:
                 results['successfully_fixed'] += 1
+                consecutive_failures = 0
             elif test_result.needs_manual_fix:
                 results['needs_manual_fix'] += 1
+                consecutive_failures += 1
+
+            # Early exit: if first N queries all fail, something is systemically wrong
+            # (e.g., no data indexed, refresh not working). Don't burn LLM calls fixing the rest.
+            if consecutive_failures >= EARLY_EXIT_THRESHOLD and results['successfully_fixed'] == 0:
+                remaining = len(queries) - len(results['queries'])
+                logger.warning(
+                    f"Early exit: first {EARLY_EXIT_THRESHOLD} queries all failed with 0 successes. "
+                    f"Skipping {remaining} remaining queries — likely a systemic issue."
+                )
+                results['early_exit'] = True
+                results['early_exit_reason'] = (
+                    f"First {EARLY_EXIT_THRESHOLD} queries failed consecutively. "
+                    f"This usually indicates a data indexing or refresh issue."
+                )
+                # Mark remaining queries as needing manual fix without testing
+                for remaining_query in queries[len(results['queries']):]:
+                    results['queries'].append(asdict(QueryTestResult(
+                        name=remaining_query['name'],
+                        was_fixed=False,
+                        needs_manual_fix=True,
+                        fix_attempts=0,
+                        original_error="Skipped due to early exit (systemic failure detected)",
+                    )))
+                    results['needs_manual_fix'] += 1
+                break
 
         logger.info(f"Test complete: {results['successfully_fixed']} fixed, {results['needs_manual_fix']} need manual fix")
 

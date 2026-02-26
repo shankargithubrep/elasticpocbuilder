@@ -61,7 +61,27 @@ class QueryValidationService:
         if self.tool_metadata_file.exists():
             try:
                 with open(self.tool_metadata_file, 'r') as f:
-                    return json.load(f)
+                    metadata = json.load(f)
+                # Migrate hashes: recompute with normalization if stored query text is available,
+                # otherwise drop stale hashes that can't be migrated
+                migrated = False
+                for qid, entry in metadata.items():
+                    if entry.get('query_hash') and entry.get('query'):
+                        new_hash = hashlib.sha256(
+                            self._normalize_query_text(entry['query']).encode('utf-8')
+                        ).hexdigest()
+                        if new_hash != entry['query_hash']:
+                            entry['query_hash'] = new_hash
+                            migrated = True
+                    elif entry.get('query_hash') and not entry.get('query'):
+                        # Can't remigrate without query text — drop stale hash
+                        # so it doesn't cause false "modified" alerts
+                        del entry['query_hash']
+                        migrated = True
+                if migrated:
+                    with open(self.tool_metadata_file, 'w') as f:
+                        json.dump(metadata, f, indent=2)
+                return metadata
             except Exception:
                 return {}
         return {}
@@ -259,6 +279,33 @@ class QueryValidationService:
                 })
         return deployed
 
+    @staticmethod
+    def _normalize_query_text(query_text: str) -> str:
+        """Normalize query text before hashing to avoid false change detection.
+
+        Strips newlines inside quoted strings (the sanitizer in query_results_display
+        does this at display time, so we must do the same before hashing).
+        Also normalizes whitespace so trivial formatting changes don't trigger revalidation.
+        """
+        # Replace \n and literal newlines inside double-quoted strings
+        result = []
+        in_string = False
+        i = 0
+        while i < len(query_text):
+            ch = query_text[i]
+            if ch == '"' and (i == 0 or query_text[i-1] != '\\'):
+                in_string = not in_string
+                result.append(ch)
+            elif in_string and ch == '\n':
+                result.append(' ')
+            elif in_string and ch == '\\' and i + 1 < len(query_text) and query_text[i+1] == 'n':
+                result.append(' ')
+                i += 1
+            else:
+                result.append(ch)
+            i += 1
+        return ''.join(result)
+
     def compute_query_hash(self, query_text: str) -> str:
         """
         Compute SHA256 hash of a query text for change detection.
@@ -267,9 +314,10 @@ class QueryValidationService:
             query_text: The ES|QL query text
 
         Returns:
-            SHA256 hash of the query
+            SHA256 hash of the normalized query
         """
-        return hashlib.sha256(query_text.encode('utf-8')).hexdigest()
+        normalized = self._normalize_query_text(query_text)
+        return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
 
     def store_query_hash(self, query_id: str, query_text: str):
         """
@@ -302,8 +350,9 @@ class QueryValidationService:
         stored_hash = metadata.get('query_hash')
 
         if not stored_hash:
-            # No hash stored, consider it changed (needs initial validation)
-            return True
+            # No hash stored — don't flag as changed (avoids false alerts after hash migration).
+            # The query may simply have been validated before hash tracking was added.
+            return False
 
         current_hash = self.compute_query_hash(current_query_text)
         return current_hash != stored_hash

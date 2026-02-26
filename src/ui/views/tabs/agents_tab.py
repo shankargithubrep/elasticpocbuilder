@@ -326,6 +326,5 @@ def render_agents_tab(agent_builder):
                                 else:
                                     st.error(f"❌ Deployment failed: {result.get('error')}")
 
-                            # Refresh to show new status
-                            if result.get('success'):
-                                st.rerun()
+                            # Note: no st.rerun() here — it resets the active tab.
+                            # The success/error message above is sufficient.

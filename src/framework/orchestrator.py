@@ -675,6 +675,19 @@ class ModularDemoOrchestrator:
             logger.error(f"Query testing failed: {e}", exc_info=True)
             results['phases']['query_testing'] = {'status': 'failed', 'error': str(e)}
 
+        # Phase 6.5: Generate Demo Guide (AFTER query testing so it uses actual tested queries)
+        timer.start("6.5_guide_generation")
+        if progress_callback:
+            progress_callback(0.83, "📝 Generating demo guide with tested queries...")
+
+        try:
+            self.module_generator._generate_guide_module(config, Path(module_path))
+            results['phases']['guide_generation'] = {'status': 'completed'}
+            logger.info("Guide generation completed with access to tested queries and data profile")
+        except Exception as e:
+            logger.error(f"Guide generation failed: {e}", exc_info=True)
+            results['phases']['guide_generation'] = {'status': 'failed', 'error': str(e)}
+
         # Phase 7: Cleanup Test Indices
         timer.start("7_cleanup")
         if indexing_results and progress_callback:

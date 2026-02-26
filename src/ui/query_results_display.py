@@ -118,13 +118,50 @@ class QueryResultsDisplay:
     def _get_query_text(self, query: Dict) -> str:
         """Extract query text from various possible field names"""
         # Support multiple field name conventions
-        return (
+        text = (
             query.get('esql') or
             query.get('esql_query') or
             query.get('query') or
             query.get('es|ql') or
             ''
         )
+        return self._sanitize_esql_strings(text)
+
+    @staticmethod
+    def _sanitize_esql_strings(esql: str) -> str:
+        """Sanitize ES|QL query strings to fix newlines inside CONCAT literals.
+
+        ES|QL does NOT support \\n or literal newlines in string literals.
+        This replaces newlines within quoted strings with spaces, acting as a
+        safety net for LLM-generated queries that use \\n in CONCAT arguments.
+        """
+        if not esql or '\\n' not in esql and '\n' not in esql:
+            return esql
+
+        import re
+        # Replace literal newlines and \\n sequences inside double-quoted strings
+        # Walk through the query character by character to handle quoted regions
+        result = []
+        in_string = False
+        i = 0
+        while i < len(esql):
+            ch = esql[i]
+            if ch == '"' and (i == 0 or esql[i-1] != '\\'):
+                in_string = not in_string
+                result.append(ch)
+            elif in_string and ch == '\n':
+                result.append(' ')
+            elif in_string and ch == '\\' and i + 1 < len(esql) and esql[i+1] == 'n':
+                result.append(' ')
+                i += 1  # skip the 'n'
+            else:
+                result.append(ch)
+            i += 1
+        return ''.join(result)
+
+    def extract_query_text(self, query: Dict) -> str:
+        """Public alias for _get_query_text (used by tools_tab)"""
+        return self._get_query_text(query)
 
     def _render_parameters(self, parameters, allow_input=False, unique_key=""):
         """Render query parameters in an expandable section

@@ -453,7 +453,6 @@ def render_tools_tab(loader):
 
                             validation_service.save_tool_metadata(query_id, new_metadata)
                             st.success("Metadata saved!")
-                            st.rerun()
 
                     with col_deploy:
                         # Check if ready for deployment and query hasn't changed
@@ -504,7 +503,6 @@ def render_tools_tab(loader):
                                             validation_service.mark_tool_deployed(query_id, deploy_metadata['tool_id'])
                                             st.success(f"✅ Tool deployed successfully: {deploy_metadata['tool_id']}")
                                             st.balloons()
-                                            st.rerun()
                                         else:
                                             st.error(f"❌ Deployment failed: {result.get('error')}")
 

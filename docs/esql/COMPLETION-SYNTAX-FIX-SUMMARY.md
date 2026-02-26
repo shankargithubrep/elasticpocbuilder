@@ -49,6 +49,21 @@ FROM index
 | COMPLETION answer = prompt WITH { "inference_id" : "endpoint" }
 ```
 
+### ❌ Error #5: Newlines in String Literals
+
+**Generated (WRONG)**:
+```esql
+| EVAL prompt = CONCAT("Summarize this:\n\nTitle: ", title, "\nContent: ", content)
+```
+
+**Correct (separate CONCAT args, no newlines)**:
+```esql
+| EVAL prompt = CONCAT("Summarize this. ", "Title: ", title, " ", "Content: ", content)
+```
+
+ES|QL does NOT support `\n`, `\\n`, or literal newlines inside string literals.
+Each text chunk must be a separate CONCAT argument. Use spaces or periods to separate sections.
+
 ### ❌ Error #4: Wrong RERANK Syntax
 
 **Generated (WRONG)**:

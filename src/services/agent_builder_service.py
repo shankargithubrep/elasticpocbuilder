@@ -118,10 +118,22 @@ class AgentBuilderService:
                 params_dict = tool_config.get('params', {})
                 params_fixed = {}
 
+                # Agent Builder API valid types: string, integer, float, boolean, date, array
+                api_type_map = {
+                    'text': 'string',
+                    'keyword': 'string',
+                    'double': 'float',
+                    'long': 'integer',
+                    'number': 'integer',
+                }
+
                 for param_name, param_config in params_dict.items():
+                    raw_type = param_config.get('type', 'string')
+                    api_type = api_type_map.get(raw_type, raw_type)
+
                     # Only include type and description - API doesn't support required/optional
                     param_obj = {
-                        'type': param_config.get('type', 'text'),
+                        'type': api_type,
                         'description': param_config.get('description', f'Parameter: {param_name}')
                     }
 
@@ -565,6 +577,7 @@ class AgentBuilderService:
             is_business_date = self._is_business_date_parameter(query, param, data_profile)
 
             # Infer type based on parameter name
+            # NOTE: Agent Builder API accepts: string, integer, float, boolean, date, array
             if is_business_date or 'date' in param_lower or 'time' in param_lower:
                 param_type = 'date'
                 if is_business_date:
@@ -576,13 +589,13 @@ class AgentBuilderService:
                 param_type = 'integer'
                 description = f"Number parameter for {param}"
             elif 'id' in param_lower:
-                param_type = 'keyword'
+                param_type = 'string'
                 description = f"ID parameter for {param}"
             elif 'price' in param_lower or 'amount' in param_lower or 'value' in param_lower:
-                param_type = 'double'
+                param_type = 'float'
                 description = f"Numeric value for {param}"
             else:
-                param_type = 'text'
+                param_type = 'string'
                 description = f"Text parameter for {param}"
 
             param_definitions[param] = {

@@ -97,6 +97,28 @@ Use different names: `order_status` vs `status_name` (not both `status`)
 2. Always use LIMIT (start small, like 5-10 rows)
 3. Build prompts with EVAL before COMPLETION
 4. Use MATCH → RERANK → LIMIT → COMPLETION pipeline for relevance
+
+### 12. String Literals (No Newlines or Escape Sequences)
+ES|QL string literals use double quotes and do NOT support escape sequences.
+Any newline character (literal or escaped) inside a string causes a parsing_exception.
+
+✅ CORRECT: `"Hello World"` — simple single-line string
+✅ CORRECT: `CONCAT("Part one. ", "Part two. ", "Field: ", field_name)` — separate args
+❌ WRONG: `"Line one\nLine two"` — \\n escape not supported
+❌ WRONG: `"Line one\\nLine two"` — \\\\n escape not supported
+❌ WRONG: String literals that span multiple lines in the query text
+❌ WRONG: `'single quotes'` — only double quotes are valid
+
+**For CONCAT prompts (used with COMPLETION):**
+Break long text into separate CONCAT arguments, each on one line:
+```esql
+| EVAL prompt = CONCAT(
+    "You are an expert assistant. ",
+    "Based on this document, provide a summary. ",
+    "Title: ", title, " ",
+    "Content: ", content)
+```
+Use spaces or periods to separate sections — NEVER use \\n or newline characters.
 """
 
 ESQL_QUERY_EXAMPLES = """
@@ -136,8 +158,8 @@ FROM knowledge_base
 | LIMIT 5
 | EVAL prompt = CONCAT(
     "Answer this question based on the article: ",
-    ?user_question, "\n\n",
-    "Article Title: ", title, "\n",
+    ?user_question, " ",
+    "Article Title: ", title, " ",
     "Content: ", content
   )
 | COMPLETION answer = prompt WITH { "inference_id" : "completion_endpoint" }
@@ -189,6 +211,7 @@ def get_common_error_fixes():
 | "cannot use [==] on unsupported" | Type mismatch | Check field types match values |
 | "Unknown command [MODEL]" | Using MODEL keyword | Use WITH { "inference_id" : "..." } |
 | "token recognition error at: '{{'" | Template syntax in query | Use EVAL + CONCAT() to build prompts |
+| "token recognition error at: '\"...\\n'" | Newline in string literal | Break into separate CONCAT args, no \\n |
 | "RERANK requires inference_id" | Missing WITH clause | Add WITH { "inference_id" : "..." } |
 | "COMPLETION requires inference_id" | Missing WITH clause | Add WITH { "inference_id" : "..." } |
 """

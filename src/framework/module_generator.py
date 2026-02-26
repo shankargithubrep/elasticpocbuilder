@@ -214,7 +214,9 @@ class ModuleGenerator:
                 'row_count': dataset.get('row_count', 'moderate')
             }
 
-        # Generate ONLY data module and supporting files (NO QUERIES)
+        # Generate ONLY data module and config (NO QUERIES)
+        # NOTE: Guide generation is handled separately by the orchestrator
+        # so it can run in parallel with data execution + indexing
         self._generate_data_module_with_requirements(
             config,
             module_path,
@@ -222,7 +224,6 @@ class ModuleGenerator:
             data_specifications=data_specifications,
             progress_callback=progress_callback
         )
-        self._generate_guide_module(config, module_path)
         self._generate_config_file(config, module_path)
 
         # NOTE: Do NOT generate static files yet - query_generator.py doesn't exist
@@ -827,6 +828,13 @@ queries.append({{
    ❌ WRONG: Using template syntax like `{{{{#results}}}}` (not supported)
    ⚠️ WARNING: Every row generates 1 LLM API call - use LIMIT before COMPLETION!
 
+   **CRITICAL CONCAT STRING RULE - ES|QL does NOT support newlines or escape sequences in string literals!**
+   ❌ WRONG: `CONCAT("Line one\\nLine two")` — causes parsing_exception
+   ❌ WRONG: `CONCAT("Multi-line\nstring")` — causes parsing_exception
+   ❌ WRONG: String literals that span multiple lines
+   ✅ CORRECT: `CONCAT("Line one. ", "Line two. ", "Title: ", title, " Content: ", content)`
+   Each piece of text must be a separate CONCAT argument on a single line. Use spaces or periods to separate sections, NOT newline characters.
+
 4. **METADATA _score**: Add after FROM to access relevance scores
    Example: `FROM index METADATA _score`
 
@@ -1280,8 +1288,9 @@ WHERE MATCH(title, ?query, {"boost": 2.0, "fuzziness": "AUTO"})
 {esql_docs}
 
 **CRITICAL - INLINE STATS vs STATS:**
-- WRONG: `| STATS context = MV_CONCAT(field, "\\n")`  ← Loses all fields except context!
-- CORRECT: `| INLINE STATS all_context = MV_CONCAT(context, "\\n\\n")`  ← Preserves fields!
+- WRONG: `| STATS context = MV_CONCAT(field, " --- ")`  ← Loses all fields except context!
+- CORRECT: `| INLINE STATS all_context = MV_CONCAT(context, " --- ")`  ← Preserves fields!
+- NEVER use "\\n" as MV_CONCAT separator — ES|QL does NOT support newlines in string literals
 
 **Method Template:**
 ```python
@@ -1319,12 +1328,12 @@ def generate_rag_queries(self) -> List[Dict[str, Any]]:
                 "Field1: ", text_field1, " | ",
                 "Field2: ", text_field2
               )
-            | INLINE STATS all_context = MV_CONCAT(context, "\\\\n\\\\n")
+            | INLINE STATS all_context = MV_CONCAT(context, " --- ")
             | EVAL prompt = CONCAT(
-                "Based on these records:\\\\n\\\\n",
+                "Based on these records: ",
                 all_context,
-                "\\\\n\\\\nQuestion: ", ?user_question,
-                "\\\\n\\\\nProvide a detailed answer:"
+                " Question: ", ?user_question,
+                " Provide a detailed answer:"
               )
             | COMPLETION answer = prompt
                 WITH {{"inference_id": """ + f'"{completion_endpoint}"' + """}}
@@ -3411,14 +3420,16 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
         Returns:
             Formatted markdown demo guide content
         """
-        # Load query strategy and data profile for context
+        # Load query strategy, data profile, and tested queries for context
         try:
             import json
             query_strategy_file = module_path / 'query_strategy.json'
             data_profile_file = module_path / 'data_profile.json'
+            all_queries_file = module_path / 'all_queries.json'
 
             query_strategy = {}
             data_profile = {}
+            all_queries = {}
 
             if query_strategy_file.exists():
                 with open(query_strategy_file, 'r') as f:
@@ -3427,10 +3438,15 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
             if data_profile_file.exists():
                 with open(data_profile_file, 'r') as f:
                     data_profile = json.load(f)
+
+            if all_queries_file.exists():
+                with open(all_queries_file, 'r') as f:
+                    all_queries = json.load(f)
         except Exception as e:
-            logger.warning(f"Could not load strategy/profile for guide generation: {e}")
+            logger.warning(f"Could not load strategy/profile/queries for guide generation: {e}")
             query_strategy = {}
             data_profile = {}
+            all_queries = {}
 
         # Fallback if no LLM available
         if not self.llm_client:
@@ -3442,10 +3458,36 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
             dataset_desc = f"**{dataset['name']}** ({dataset.get('type', 'unknown')} - {dataset.get('row_count', 'unknown')} records)"
             datasets_info.append(dataset_desc)
 
-        queries_info = []
-        for query in query_strategy.get('queries', [])[:8]:  # Top 8 queries
-            query_desc = f"**{query['name']}**: {query.get('description', '')}"
-            queries_info.append(query_desc)
+        # Build data profile summary with actual field names
+        profile_info = []
+        for ds_name, ds_profile in data_profile.get('datasets', {}).items():
+            fields = list(ds_profile.get('fields', {}).keys())
+            profile_info.append(f"**{ds_name}** fields: {', '.join(fields)}")
+
+        # Use ACTUAL tested queries from all_queries.json (not strategy plans)
+        tested_queries_info = []
+        tested_rag_queries_info = []
+        if isinstance(all_queries, dict):
+            scripted = all_queries.get('scripted', [])
+            parameterized = all_queries.get('parameterized', [])
+            rag = all_queries.get('rag', [])
+        else:
+            scripted = all_queries
+            parameterized = []
+            rag = []
+
+        for query in scripted + parameterized:
+            esql = query.get('esql') or query.get('query') or query.get('example_esql', '')
+            name = query.get('name', 'unnamed')
+            desc = query.get('description', '')
+            tested_queries_info.append(f"**{name}**: {desc}\n```esql\n{esql}\n```")
+
+        for query in rag:
+            esql = query.get('esql') or query.get('query') or query.get('example_esql', '')
+            name = query.get('name', 'unnamed')
+            desc = query.get('description', '')
+            search_type = query.get('search_type', 'rag')
+            tested_rag_queries_info.append(f"**{name}** (type: {search_type}): {desc}\n```esql\n{esql}\n```")
 
         # Create template guide structure to show LLM the desired format
         template_guide = """# **Elastic Agent Builder Demo for {COMPANY}**
@@ -3579,6 +3621,32 @@ The syntax is intuitive - it reads like English."
 
 ---
 
+### **Query 5: RAG — AI-Generated Answers from Search Results (3 minutes)**
+
+**Presenter:** "Now here is where it gets exciting. What if instead of just returning raw search results, the system could read the results and generate a natural language answer? That's RAG — Retrieval Augmented Generation — and ES|QL supports it natively."
+
+**Copy/paste:**
+
+```
+{RAG_QUERY}
+```
+
+**Run and explain:** "Let me break down this pipeline:
+- **MATCH**: Semantic search finds the most relevant documents
+- **RERANK** (optional): An AI model re-scores results for better precision
+- **EVAL + CONCAT**: Builds a prompt from the actual document data
+- **COMPLETION**: Sends that prompt to an LLM and returns the generated answer
+
+This is the full RAG pipeline running entirely inside Elasticsearch — no external orchestration, no LangChain, no custom code. The data never leaves the cluster."
+
+**Key Value Points:**
+- "RAG queries run as Agent Builder tools — the agent decides WHEN to use retrieval vs analytics"
+- "The LLM answer is grounded in actual indexed data, reducing hallucination"
+- "Every COMPLETION row is one LLM call — we use LIMIT to control cost"
+- "This transforms Elasticsearch from a search engine into an AI-powered knowledge system"
+
+---
+
 ## **Part 3: Agent & Tool Creation (5 minutes)**
 
 ### **Creating the Agent**
@@ -3628,11 +3696,19 @@ The syntax is intuitive - it reads like English."
 - "Works with existing Elasticsearch indices"
 - "Agent automatically selects right tools"
 
+### **On RAG & COMPLETION:**
+- "Full RAG pipeline runs natively inside Elasticsearch — no external orchestration needed"
+- "LLM answers are grounded in actual indexed data, not hallucinated"
+- "MATCH finds relevant documents, RERANK improves precision, COMPLETION generates answers"
+- "Every query is also an Agent Builder tool — the agent decides when to search vs analyze"
+- "Cost-controlled: LIMIT before COMPLETION means you control exactly how many LLM calls"
+
 ### **On Business Value:**
 - "Democratizes data access - anyone can ask questions"
 - "Real-time insights, always up-to-date"
 - "Reduces dependency on data teams"
 - "Faster decision-making"
+- "AI answers grounded in your actual data - not generic responses"
 
 ---
 
@@ -3660,6 +3736,7 @@ The syntax is intuitive - it reads like English."
 ✅ Natural language interface for non-technical users
 ✅ Real-time insights without custom development
 ✅ Queries that would take hours, answered in seconds
+✅ RAG pipeline — AI-generated answers grounded in your actual data, running natively in Elasticsearch
 
 Agent Builder can be deployed in days, not months.
 
@@ -3680,30 +3757,39 @@ Questions?"
 **Use Cases:**
 {chr(10).join('- ' + uc for uc in config.get('use_cases', [])[:5])}
 
-**Available Datasets:**
+**Available Datasets (with actual field names from indexed data):**
 {chr(10).join(datasets_info)}
 
-**Key Queries:**
-{chr(10).join(queries_info)}
+{chr(10).join(profile_info) if profile_info else '(No data profile available)'}
+
+**ACTUAL TESTED ES|QL QUERIES — Scripted & Parameterized (use these EXACTLY — do NOT invent new queries):**
+{chr(10).join(tested_queries_info) if tested_queries_info else chr(10).join(f'**{q.get("name", "?")}**: {q.get("description", "")}' for q in query_strategy.get("queries", [])[:8])}
+
+**ACTUAL TESTED RAG/COMPLETION QUERIES (use at least one in the RAG section of the guide):**
+{chr(10).join(tested_rag_queries_info) if tested_rag_queries_info else '(No RAG queries available — skip the RAG section)'}
 
 **Your Task:**
 Using the template structure provided below, generate a COMPLETE, DETAILED demo guide with:
 
 1. **Real content** - Not placeholders. Use the actual company name, datasets, and query information provided above.
 
-2. **Dataset Architecture section** - Describe each dataset with record counts, primary keys, fields, relationships. Be specific using the dataset info above.
+2. **Dataset Architecture section** - Describe each dataset with record counts, primary keys, and the ACTUAL fields listed above (from indexed data profile). Do NOT invent field names.
 
 3. **Demo Setup Instructions** - Specific steps for uploading CSVs and creating lookup mode indices for each dataset.
 
-4. **Part 1: AI Agent Teaser** - 5-7 example questions that showcase different capabilities (ROI analysis, trend detection, cross-dataset joins, etc.)
+4. **Part 1: AI Agent Teaser** - 5-7 example questions that showcase different capabilities.
 
-5. **Part 2: ES|QL Query Building** - Create 3-4 progressive queries:
-   - Query 1: Simple aggregation (2-3 lines)
-   - Query 2: Add EVAL calculations (5-8 lines)
-   - Query 3: LOOKUP JOIN enrichment (8-12 lines)
-   - Query 4: Complex multi-dataset analytics (15-25 lines)
+5. **Part 2: ES|QL Query Building** - Select queries from the ACTUAL TESTED QUERIES above that show a progression:
+   - Query 1: Simple query (BM25 keyword search or basic aggregation)
+   - Query 2: Add EVAL calculations or semantic search
+   - Query 3: Hybrid search or LOOKUP JOIN enrichment
+   - Query 4: Complex analytics (multi-dataset, INLINESTATS, etc.)
+   - **Query 5: RAG/COMPLETION query** — Pick the best RAG query from the tested RAG queries above.
+     This is the demo climax: show the full MATCH → RERANK → COMPLETION pipeline.
+     If no RAG queries are available, skip this section.
 
-   Use ACTUAL query concepts from the key queries listed above. Make them realistic and runnable.
+   **CRITICAL: Copy the actual ES|QL from the tested queries above. Do NOT write new queries or modify field names.
+   These queries have been validated against the actual indexed data.**
 
 6. **Part 3: Agent & Tool Creation** - Summarize agent configuration with 3-4 key tool examples
 
@@ -3717,6 +3803,7 @@ Using the template structure provided below, generate a COMPLETE, DETAILED demo 
 - Keep the emoji section headers (📋, 🗂️, 🌋, 🎯, etc.)
 - Queries should be in ```esql``` code blocks
 - Make it feel like a real internal demo script with specific, actionable content
+- NEVER invent field names — only use fields from the data profile and tested queries above
 
 **Template Structure to Follow:**
 {template_guide}
@@ -3966,13 +4053,18 @@ WHERE MATCH(field, "query", {{"boost": 0.75}})
 
 **INLINE STATS (Preserve Fields):**
 ```
-| INLINE STATS context = MV_CONCAT(field, "\\n")
+| INLINE STATS context = MV_CONCAT(field, " --- ")
 ```
 
 **COMPLETION (LLM Generation):**
 ```
+| EVAL prompt = CONCAT("Summarize these results. ", "Title: ", title, " Content: ", content)
 | COMPLETION answer = prompt WITH {{"inference_id": """ + f'"{completion_endpoint}"' + """}}
 ```
+
+**CRITICAL CONCAT STRING RULE:** ES|QL does NOT support newlines or escape sequences in string literals!
+❌ WRONG: `CONCAT("Line one\\nLine two")` — causes parsing_exception
+✅ CORRECT: `CONCAT("Line one. ", "Line two. ", "Title: ", title)` — separate args, no newlines
 
 **METADATA (Score):**
 ```

@@ -270,9 +270,39 @@ FROM pages
 - You must either: use a different join key that exists in both, or abandon the join
 
 ### 15. COMPLETION Syntax (RAG Queries) ⚠️
-✅ CORRECT: `| COMPLETION "prompt" WITH ?user_question`
-❌ WRONG: `| COMPLETION "prompt" ON field` - Wrong syntax
-Note: COMPLETION may not be available in all Elasticsearch versions
+✅ CORRECT: `| COMPLETION answer = prompt WITH { "inference_id" : "completion_endpoint" }`
+✅ CORRECT: `| COMPLETION prompt WITH { "inference_id" : "my_endpoint" }`
+❌ WRONG: `| COMPLETION "prompt" MODEL "gpt-4"` - Use WITH, not MODEL
+❌ WRONG: `| COMPLETION prompt` - Must specify inference endpoint with WITH
+❌ WRONG: Template syntax like `{{#results}}` - Not supported in ES|QL
+⚠️ WARNING: Every row generates 1 LLM API call - always use LIMIT before COMPLETION!
+
+**Building Prompts**: Use EVAL + CONCAT() to build prompts from field values:
+`| EVAL prompt = CONCAT("Summarize: ", title, " Content: ", content)`
+
+### 16. String Literals — No Newlines or Escape Sequences ⚠️⚠️ CRITICAL
+ES|QL string literals use double quotes and do NOT support escape sequences.
+Any newline character (literal or escaped) inside a string causes parsing_exception.
+
+✅ CORRECT: `"Hello World"` — simple single-line string
+✅ CORRECT: `CONCAT("Part one. ", "Part two. ", "Field: ", field_name)` — separate args
+❌ WRONG: `"Line one\\nLine two"` — \\n escape not supported, causes parsing_exception
+❌ WRONG: `"Line one\\\\nLine two"` — \\\\n also not supported
+❌ WRONG: String literals that span multiple lines in the query text
+❌ WRONG: `'single quotes'` — only double quotes are valid
+
+**For CONCAT prompts (used with COMPLETION):**
+Break long text into separate CONCAT arguments, each on one line:
+```esql
+| EVAL prompt = CONCAT(
+    "You are an expert assistant. ",
+    "Based on this document, provide a summary. ",
+    "Title: ", title, " ",
+    "Content: ", content)
+```
+Use spaces or periods to separate sections — NEVER use \\n or newline characters.
+
+### 17. Time Filtering - Different Patterns for Scripted vs Parameterized ⚠️⚠️ CRITICAL
 
 ### 16. Time Filtering - Different Patterns for Scripted vs Parameterized ⚠️⚠️ CRITICAL
 **The Problem**: Demo data is static with fixed timestamps. Using `NOW()` in scripted queries will return NO RESULTS.
@@ -680,6 +710,8 @@ COMMON_ERROR_FIXES = """
 | "Unknown column [agents_lookup]" | Auto-fix adding suffix | Remove the _lookup suffix |
 | "RERANK" errors | Wrong syntax | Use RERANK query ON field |
 | "MATCH WITH" syntax error | Invalid MATCH syntax | Use WHERE MATCH(field, query) |
+| "token recognition error" with CONCAT string | Newline (\\n) in string literal | Break into separate CONCAT args: `CONCAT("Part one. ", "Part two. ")` — no \\n |
+| "COMPLETION requires inference_id" | Missing WITH clause | Add `WITH { "inference_id" : "endpoint" }` |
 
 **Note**: The first two errors are the MOST COMMON failures from production testing.
 """
@@ -721,6 +753,8 @@ LLM_PROMPTING_GUIDELINES = """
 13. NEVER use multiple BY clauses in INLINESTATS - use ONE BY clause for all aggregations
 14. NEVER use `NOW() - X days` in SCRIPTED queries - omit time filters entirely
 15. NEVER use `NOW()` in any query - use parameters or omit time filters
+16. NEVER use \\n, \\\\n, or literal newlines inside ES|QL string literals — causes parsing_exception
+17. NEVER use single quotes in ES|QL strings — only double quotes are valid
 
 ### Query Generation Process:
 1. Start with scripted query (concrete values)
@@ -792,6 +826,17 @@ When fixing queries, apply these transformations IN ORDER:
 11. **Fix RERANK syntax**:
    - `RERANK field WITH query` → `RERANK query ON field`
    - `RERANK semantic_text WITH ?q` → `RERANK ?q ON semantic_text`
+
+12. **Fix CONCAT string literals with newlines (RAG/COMPLETION queries)**:
+   - ES|QL does NOT support \\n, \\\\n, or literal newlines in string literals
+   - `CONCAT("Line one\\nLine two")` → `CONCAT("Line one. ", "Line two. ")`
+   - `CONCAT("Title:\\n", title)` → `CONCAT("Title: ", title)`
+   - Break multi-section prompts into separate CONCAT arguments with spaces
+   - Each CONCAT argument must be a single-line double-quoted string
+
+13. **Fix COMPLETION syntax**:
+   - `COMPLETION prompt MODEL "gpt-4"` → `COMPLETION prompt WITH { "inference_id" : "endpoint" }`
+   - `COMPLETION prompt` → `COMPLETION prompt WITH { "inference_id" : "endpoint" }`
 
 CRITICAL: NEVER suggest adding _lookup suffix as a fix!
 If index not found, it's a data indexing issue, not a query issue.
