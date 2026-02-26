@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def render_data_tab():
     """Render the Data tab content."""
     # Section guidance
-    st.info("📊 **Index your datasets** to Elasticsearch so queries can run against real data. Click 'Index All Datasets' to complete this step. *Need help? Use the Help feature in the sidebar.*")
+    st.info("📊 **Index your datasets** to Elasticsearch so queries can run against real data. Click 'Index All Datasets' to complete this step.")
 
     # Only load if assets have been generated
     if st.session_state.get("assets_generated", False):
@@ -142,6 +142,12 @@ def render_data_tab():
                             st.warning(f"⚠️ Batch indexing finished with {failed_count} failure(s)")
                     except Exception as e:
                         logger.warning(f"Could not update progress tracking: {e}")
+
+                # Deployed Resources Management (collapsible, under Index All button)
+                module_name = st.session_state.get("current_demo_module")
+                if module_name:
+                    from .config_tab import _render_deployed_resources_section
+                    _render_deployed_resources_section(module_name, loader)
 
                 st.divider()
 
@@ -381,3 +387,4 @@ def render_data_tab():
             st.info("Try clicking 'Generate Assets' in the Config tab.")
     else:
         st.info("📋 Click 'Generate Assets' in the Config tab to view datasets")
+

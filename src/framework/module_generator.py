@@ -35,6 +35,22 @@ class ModuleGenerator:
             }
         self.inference_endpoints = inference_endpoints
 
+    def _resolve_vector_type(self) -> str:
+        """Resolve the vector type (sparse/dense) accounting for custom endpoints"""
+        embedding_type = self.inference_endpoints.get("embedding_type", "sparse")
+        if embedding_type == "custom":
+            return self.inference_endpoints.get("custom_vector_type", "sparse")
+        return embedding_type
+
+    def _resolve_embedding_endpoint(self) -> str:
+        """Resolve the embedding endpoint ID accounting for custom endpoints"""
+        embedding_type = self.inference_endpoints.get("embedding_type", "sparse")
+        if embedding_type == "custom":
+            return self.inference_endpoints.get("custom_embedding", ".elser-2-elasticsearch")
+        if embedding_type == "dense":
+            return ".jina-embeddings-v5-text-small"
+        return ".elser-2-elasticsearch"
+
     def generate_demo_module(self, config: Dict[str, Any], query_plan: Optional[Dict[str, Any]] = None) -> str:
         """Generate a complete demo module for a customer
 
@@ -3281,12 +3297,8 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
                 "demo_guide": "demo_guide.py"
             },
             "inference_endpoints": {
-                "embedding_type": self.inference_endpoints.get("embedding_type", "sparse"),
-                "embedding_endpoint": (
-                    self.inference_endpoints.get("dense_embedding", ".jina-embeddings-v5-text-small")
-                    if self.inference_endpoints.get("embedding_type") == "dense"
-                    else self.inference_endpoints.get("sparse_embedding", ".elser-2-elasticsearch")
-                ),
+                "embedding_type": self._resolve_vector_type(),
+                "embedding_endpoint": self._resolve_embedding_endpoint(),
                 "rerank": self.inference_endpoints.get("rerank", ".rerank-v1-elasticsearch"),
                 "completion": self.inference_endpoints.get("completion", "completion-vulcan"),
             }

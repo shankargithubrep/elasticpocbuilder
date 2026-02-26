@@ -53,7 +53,13 @@ def show_domain_validation(extraction: Dict) -> Optional[Dict]:
     Returns:
         Updated extraction dict if validated, None if still editing
     """
-    st.markdown("### 🤖 Domain Understanding Checkpoint")
+    # Show original prompt for context
+    original_prompt = st.session_state.get("guided_expansion", {}).get("original_prompt")
+    if original_prompt:
+        with st.chat_message("user"):
+            st.markdown(original_prompt)
+
+    st.markdown("### 🤖 Scenario Understanding Checkpoint")
     st.markdown("I've analyzed your input. **Review and refine the entities and scenarios below, then click Continue.**")
 
     # Initialize session state for tracking edits

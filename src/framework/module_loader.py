@@ -233,7 +233,8 @@ class DemoModuleManager:
                         'path': str(module_dir),
                         'created_at': config.get('generated_at'),
                         'customer': config.get('customer_context', {}).get('company_name'),
-                        'department': config.get('customer_context', {}).get('department')
+                        'department': config.get('customer_context', {}).get('department'),
+                        'demo_type': config.get('demo_type', 'analytics')
                     })
 
         return sorted(modules, key=lambda x: x.get('created_at', ''), reverse=True)

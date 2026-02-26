@@ -186,22 +186,8 @@ def render_progress_header(module_name: str):
     if "show_reset_confirmation" not in st.session_state:
         st.session_state.show_reset_confirmation = False
 
-    # Render header with columns
-    col_progress, col_data, col_queries, col_tools, col_agent, col_reset = st.columns([2, 1, 1.2, 1.2, 1, 0.8])
-
-    with col_progress:
-        # Progress bar
-        pct = progress["percentage"]
-        bar_html = f"""
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-weight: 500; color: #666; font-size: 13px;">Progress</span>
-            <div style="flex: 1; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; min-width: 80px;">
-                <div style="height: 100%; width: {pct}%; background: linear-gradient(90deg, #0077CC, #00a3cc); border-radius: 4px;"></div>
-            </div>
-            <span style="font-weight: 600; color: #333; font-size: 13px;">{pct}%</span>
-        </div>
-        """
-        st.markdown(bar_html, unsafe_allow_html=True)
+    # Render header with columns (no progress bar — checkboxes are sufficient)
+    col_data, col_queries, col_tools, col_agent, col_reset = st.columns([1, 1.2, 1.2, 1, 0.8])
 
     with col_data:
         # Data status - tooltip explains data indexing

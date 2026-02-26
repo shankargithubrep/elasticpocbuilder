@@ -42,6 +42,13 @@ def render_browse_demos_view():
         # Progress tracking header
         render_progress_header(st.session_state.current_demo_module)
 
+        st.caption("Step through each tab to bring your demo to life: "
+                   "**Data** — index generated datasets into Elasticsearch. "
+                   "**Queries** — test and validate ES|QL queries against your data. "
+                   "**Tools** — deploy validated queries as Agent Builder tools. "
+                   "**Agents** — configure and deploy your agent. "
+                   "**Guide** — review the presenter script and talk track.")
+
         manager = DemoModuleManager()
         loader = manager.get_module(st.session_state.current_demo_module)
 

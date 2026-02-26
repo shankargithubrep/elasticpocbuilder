@@ -247,9 +247,11 @@ class DocIndexerService:
             batch = chunks[i:i + self.BATCH_SIZE]
 
             try:
-                # Index batch
+                # Bulk index the batch
+                operations = []
                 for chunk in batch:
-                    doc = {
+                    operations.append({"index": {"_index": self.INDEX_NAME}})
+                    operations.append({
                         "doc_path": chunk.doc_path,
                         "doc_title": chunk.doc_title,
                         "section_title": chunk.section_title,
@@ -258,17 +260,16 @@ class DocIndexerService:
                         "content_preview": chunk.content_preview,
                         "doc_category": chunk.doc_category,
                         "indexed_at": datetime.utcnow().isoformat()
-                    }
+                    })
 
-                    self._client.index(
-                        index=self.INDEX_NAME,
-                        document=doc,
-                        refresh=False  # Don't refresh on every doc
-                    )
-                    indexed_count += 1
-
-                # Small delay for ELSER inference
-                time.sleep(0.5)
+                resp = self._client.bulk(operations=operations, refresh=False)
+                if not resp.get("errors"):
+                    indexed_count += len(batch)
+                else:
+                    # Count successes individually
+                    for item in resp.get("items", []):
+                        if item.get("index", {}).get("status") in (200, 201):
+                            indexed_count += 1
 
             except Exception as e:
                 error_msg = f"Batch indexing error at {i}: {e}"

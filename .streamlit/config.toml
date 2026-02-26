@@ -13,5 +13,5 @@ gatherUsageStats = false
 
 # Client-side timeout settings
 [client]
-# Show running app indicator
 showErrorDetails = true
+toolbarMode = "minimal"

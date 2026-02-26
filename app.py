@@ -63,6 +63,10 @@ st.markdown("""
         padding: 10px;
         margin-bottom: 10px;
     }
+    /* Blue assistant avatar instead of default red */
+    [data-testid="stChatMessageAvatarAssistant"] {
+        background-color: #2563EB !important;
+    }
     .context-badge {
         background-color: rgba(0, 123, 255, 0.2);
         border: 1px solid #007BFF;

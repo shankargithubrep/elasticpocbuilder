@@ -20,7 +20,7 @@ def render_agents_tab(agent_builder):
         agent_builder: The AgentBuilderService instance
     """
     # Section guidance
-    st.info("🤖 **Deploy your agent** to Agent Builder with the tools you've deployed. Once deployed, you can test your agent in the Agent Builder interface. *Need help? Use the Help feature in the sidebar.*")
+    st.info("🤖 **Deploy your agent** to Agent Builder with the tools you've deployed. Once deployed, you can test your agent in the Agent Builder interface.")
 
     st.markdown("### Agent Management")
 

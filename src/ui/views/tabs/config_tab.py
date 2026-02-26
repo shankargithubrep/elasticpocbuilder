@@ -304,12 +304,6 @@ def render_config_tab(loader, assets_key: str):
         loader: The demo module loader instance
         assets_key: Session state key for tracking assets
     """
-    # Deployed Resources Management Section (collapsible at top)
-    module_name = st.session_state.get("current_demo_module")
-    if module_name:
-        _render_deployed_resources_section(module_name, loader)
-        st.divider()
-
     # Use the new ModuleVisualizer for enhanced Config display
     try:
         from src.ui.module_visualizer import ModuleVisualizer

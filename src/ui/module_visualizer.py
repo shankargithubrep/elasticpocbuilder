@@ -80,11 +80,22 @@ class ModuleVisualizer:
                     logger.warning(f"Data generator has no get_relationships method")
         except Exception as e:
             logger.warning(f"Could not load relationships from data generator: {e}", exc_info=True)
-            # Fallback to query_strategy.json (old behavior)
+
+        # Fallback: if no relationships found, try data_profile.json (detected by data profiler)
+        if not self.relationships and self.data_profile.get('relationships'):
+            for rel in self.data_profile['relationships']:
+                source = rel.get('source_dataset')
+                target = rel.get('lookup_dataset')
+                if source and target:
+                    self.relationships.append((source, target))
+            if self.relationships:
+                logger.info(f"Loaded {len(self.relationships)} relationships from data profile")
+
+        # Fallback: try query_strategy.json dataset relationships
+        if not self.relationships:
             for dataset in self.datasets:
                 source_name = dataset['name']
                 for target_name in dataset.get('relationships', []):
-                    # Store as tuple (source, target)
                     self.relationships.append((source_name, target_name))
 
         # Load actual queries from the module using the same method as the UI

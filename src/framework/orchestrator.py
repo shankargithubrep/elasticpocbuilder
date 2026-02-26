@@ -90,9 +90,18 @@ class ModularDemoOrchestrator:
     def _get_embedding_inference_id(self) -> str:
         """Get the inference endpoint ID based on selected embedding type"""
         embedding_type = self.inference_endpoints.get("embedding_type", "sparse")
+        if embedding_type == "custom":
+            return self.inference_endpoints.get("custom_embedding", ".elser-2-elasticsearch")
         if embedding_type == "dense":
-            return self.inference_endpoints.get("dense_embedding", ".jina-embeddings-v5-text-small")
-        return self.inference_endpoints.get("sparse_embedding", ".elser-2-elasticsearch")
+            return ".jina-embeddings-v5-text-small"
+        return ".elser-2-elasticsearch"
+
+    def _get_embedding_vector_type(self) -> str:
+        """Get the vector type (sparse/dense) for the selected embedding"""
+        embedding_type = self.inference_endpoints.get("embedding_type", "sparse")
+        if embedding_type == "custom":
+            return self.inference_endpoints.get("custom_vector_type", "sparse")
+        return embedding_type
 
     def generate_new_demo(
         self,

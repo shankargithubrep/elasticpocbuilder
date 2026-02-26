@@ -19,7 +19,10 @@ def display_context_summary():
     progress, missing = tracker.calculate_progress(context)
     status = tracker.get_completion_status(context)
 
-    st.markdown("**Extracted Context**")
+    st.caption(
+        "**Extracted Context**",
+        help="Context extracted from your prompt. Vulcan uses this to generate realistic data, queries, and demo guides tailored to your customer scenario. All fields should be filled before generation — Vulcan will prompt you for any missing details."
+    )
 
     # Show demo type if detected
     demo_type = context.get('demo_type')

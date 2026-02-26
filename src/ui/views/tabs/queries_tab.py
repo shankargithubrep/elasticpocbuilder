@@ -24,7 +24,7 @@ def render_queries_tab(loader):
         loader: The demo module loader instance
     """
     # Section guidance
-    st.info("📝 **Test and validate queries** by running them against your indexed data. Only validated queries become tool candidates for Agent Builder. Not all generated queries are guaranteed to return results—use the edit checkbox below each query to fix issues. You don't need to validate all queries. *Need help? Use the Help feature in the sidebar.*")
+    st.info("📝 **Test and validate queries** by running them against your indexed data. Only validated queries become tool candidates for Agent Builder. Not all generated queries are guaranteed to return results—use the edit checkbox below each query to fix issues. You don't need to validate all queries.")
 
     # Only load if assets have been generated
     if st.session_state.get("assets_generated", False):

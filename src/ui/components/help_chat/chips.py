@@ -21,7 +21,7 @@ CONTEXT_CHIPS: Dict[str, List[str]] = {
     "create": [
         "How do I use this app?",
         "How should I format my prompt?",
-        "What is expanded mode?",
+        "What is the expansion prompt?",
         "Search vs Analytics demos?",
     ],
 
