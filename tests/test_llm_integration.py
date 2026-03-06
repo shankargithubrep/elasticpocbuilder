@@ -226,50 +226,6 @@ class TestLLMService(unittest.TestCase):
         self.assertTrue(self.llm_service.is_ready_to_generate(complete_context))
 
 
-class TestLLMIntegrationWithUI(unittest.TestCase):
-    """Test LLM integration with Streamlit UI"""
-
-    @patch('streamlit.session_state')
-    def test_ui_context_update(self, mock_session_state):
-        """Test that UI properly updates context from LLM responses"""
-        from src.ui.conversation_handler import ConversationHandler
-
-        handler = ConversationHandler()
-        mock_session_state.demo_context = {
-            "company_name": None,
-            "department": None
-        }
-
-        # Simulate user message
-        user_message = "This is for Microsoft's Azure team"
-        response = handler.process_user_input(user_message)
-
-        # Context should be updated
-        self.assertIsNotNone(response)
-        # Would need to check that session_state.demo_context was updated
-
-    def test_demo_generation_trigger(self):
-        """Test that 'Generate demo' properly triggers generation"""
-        from src.ui.conversation_handler import ConversationHandler
-
-        handler = ConversationHandler()
-
-        # Set up complete context with use cases (required for generation)
-        handler.context = ConversationContext(
-            company_name="Test Corp",
-            department="Sales",
-            pain_points=["Testing"],
-            use_cases=["Sales Analytics"],  # Added required use cases
-            conversation_phase="confirmation"
-        )
-
-        # Trigger generation
-        result = handler.process_user_input("Generate demo")
-
-        self.assertTrue(result.get("should_generate", False))
-        self.assertIn("demo_plan", result)
-
-
 def run_tests():
     """Run all tests and report results"""
     loader = unittest.TestLoader()
@@ -277,7 +233,6 @@ def run_tests():
 
     # Add all test classes
     suite.addTests(loader.loadTestsFromTestCase(TestLLMService))
-    suite.addTests(loader.loadTestsFromTestCase(TestLLMIntegrationWithUI))
 
     # Run tests with detailed output
     runner = unittest.TextTestRunner(verbosity=2)

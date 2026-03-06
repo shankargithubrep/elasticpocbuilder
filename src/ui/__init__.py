@@ -2,7 +2,6 @@
 UI components for the Demo Builder application
 """
 
-from .conversation_handler import ConversationHandler
 from .query_results_display import QueryResultsDisplay, render_queries_with_execution
 from .data_loaders import (
     load_demo_datasets,
@@ -20,7 +19,6 @@ from .sidebar import render_sidebar
 from .module_visualizer import ModuleVisualizer
 
 __all__ = [
-    'ConversationHandler',
     'QueryResultsDisplay',
     'render_queries_with_execution',
     'load_demo_datasets',
