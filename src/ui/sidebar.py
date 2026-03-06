@@ -398,8 +398,8 @@ def render_sidebar():
                 st.session_state.needs_processing = True
             st.rerun()
 
-        # Under the Hood button
-        if st.button("🔧 Under the Hood", use_container_width=True, key="under_the_hood_btn"):
+        # About Vulcan button
+        if st.button("💡 About Vulcan", use_container_width=True, key="under_the_hood_btn"):
             st.session_state.show_under_the_hood = True
             st.rerun()
 

@@ -189,18 +189,18 @@ def _execute_resource_deletion(module_name: str, resources: Dict[str, Any], sele
     if selections.get("tools", False) and resources["tools"]:
         with st.spinner("Deleting tools from Agent Builder..."):
             try:
-                from src.services.elastic_agent_builder_client import ElasticAgentBuilderClient
-                client = ElasticAgentBuilderClient()
+                from src.services.agent_builder_service import AgentBuilderService
+                client = AgentBuilderService()
 
                 for tool in resources["tools"]:
                     tool_id = tool.get("deployed_tool_id") or tool.get("id")
                     try:
-                        if client.delete_tool(tool_id):
+                        result = client.delete_tool(tool_id)
+                        if result.get('success'):
                             results["success"].append(f"Tool: {tool.get('name', tool_id)}")
                         else:
-                            results["failed"].append(f"Tool {tool_id}: Delete returned false")
+                            results["failed"].append(f"Tool {tool_id}: {result.get('error', 'Delete returned false')}")
                     except Exception as e:
-                        # Tool might not exist if it was never actually deployed
                         if "404" in str(e) or "not found" in str(e).lower():
                             results["success"].append(f"Tool: {tool_id} (already removed)")
                         else:
@@ -216,16 +216,17 @@ def _execute_resource_deletion(module_name: str, resources: Dict[str, Any], sele
     if selections.get("agents", False) and resources["agents"]:
         with st.spinner("Deleting agents from Agent Builder..."):
             try:
-                from src.services.elastic_agent_builder_client import ElasticAgentBuilderClient
-                client = ElasticAgentBuilderClient()
+                from src.services.agent_builder_service import AgentBuilderService
+                client = AgentBuilderService()
 
                 for agent in resources["agents"]:
                     agent_id = agent.get("id")
                     try:
-                        if client.delete_agent(agent_id):
+                        result = client.delete_agent(agent_id)
+                        if result.get('success'):
                             results["success"].append(f"Agent: {agent.get('name', agent_id)}")
                         else:
-                            results["failed"].append(f"Agent {agent_id}: Delete returned false")
+                            results["failed"].append(f"Agent {agent_id}: {result.get('error', 'Delete returned false')}")
                     except Exception as e:
                         if "404" in str(e) or "not found" in str(e).lower():
                             results["success"].append(f"Agent: {agent_id} (already removed)")

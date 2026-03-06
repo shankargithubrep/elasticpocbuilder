@@ -149,16 +149,24 @@ Return ONLY valid JSON with these 4 fields, no other text or markdown formatting
         # Sanitize tool_id to meet constraints
         import re
         tool_id = metadata['tool_id'].lower()
-        # Replace any character that's not alphanumeric, dot, or underscore
-        tool_id = re.sub(r'[^a-z0-9._]', '_', tool_id)
-        # Remove consecutive underscores
-        tool_id = re.sub(r'_+', '_', tool_id)
+        # Replace any character that's not alphanumeric, dot, hyphen, or underscore
+        tool_id = re.sub(r'[^a-z0-9._-]', '_', tool_id)
+        # Strip datetime/timestamp segments (e.g. _20251114_124533 or _20251114)
+        tool_id = re.sub(r'_\d{8}(_\d{6})?', '', tool_id)
+        # Strip generic query name suffixes the LLM sometimes includes
+        tool_id = re.sub(r'_(parameterized|scripted|rag)_query_\d+', '', tool_id)
+        tool_id = re.sub(r'_query_\d+', '', tool_id)
+        # Remove consecutive underscores/hyphens
+        tool_id = re.sub(r'[_-]{2,}', '_', tool_id)
         # Ensure it starts and ends with alphanumeric
         tool_id = re.sub(r'^[^a-z0-9]+', '', tool_id)
         tool_id = re.sub(r'[^a-z0-9]+$', '', tool_id)
-        # Truncate if too long
+        # Add _param suffix for parameterized tools
+        if query.get('parameters') and not tool_id.endswith('_param'):
+            tool_id = tool_id + '_param'
+        # Truncate if too long (preserving _param suffix if present)
         if len(tool_id) > 50:
-            tool_id = tool_id[:50].rstrip('_.')
+            tool_id = tool_id[:50].rstrip('_-.')
         metadata['tool_id'] = tool_id
 
         if 'description' not in metadata:
@@ -191,9 +199,11 @@ Return ONLY valid JSON with these 4 fields, no other text or markdown formatting
         import re
         # Create a simple tool ID from query name
         query_name = query.get('name', query_id)
-        simple_purpose = re.sub(r'[^a-z0-9]+', '_', query_name.lower())[:20]
+        simple_purpose = re.sub(r'[^a-z0-9]+', '_', query_name.lower()).strip('_')[:25]
         tool_id = f"{company}_{department}_{simple_purpose}".rstrip('_')
         tool_id = re.sub(r'_+', '_', tool_id)
+        if query.get('parameters') and not tool_id.endswith('_param'):
+            tool_id = tool_id + '_param'
 
         return {
             'tool_id': tool_id,

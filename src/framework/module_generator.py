@@ -2587,6 +2587,29 @@ df = pd.DataFrame({{
    ```
    **NEVER slice a reference pool expecting more items than it contains!**
 
+6. ❌ **CONCATENATED SUB-LIST POOL THAT DOESN'T SUM TO N** (SILENT TRUNCATION):
+   ```python
+   # WRONG: Build pool from sub-lists that sum to less than n, then slice [:n]
+   n = 1000
+   sequential_ids = [f'ID-{{i}}' for i in range(200)]   # 200 items
+   prefixed_ids   = [f'PRE-{{i}}' for i in range(200)]  # 200 items
+   uuid_ids       = [str(uuid.uuid4()) for _ in range(200)]  # 200 items
+   all_ids = sequential_ids + prefixed_ids + uuid_ids    # 600 items total — NOT 1000!
+   asset_ids = all_ids[:n]   # ❌ silently returns 600, no error here
+   # ... other arrays all have 1000 items
+   df = pd.DataFrame({{'id': asset_ids, 'val': np.random.choice([...], n)}})  # ❌ CRASH!
+
+   # CORRECT: Generate UUIDs to pad the pool to exactly n
+   n = 1000
+   sequential_ids = [f'ID-{{i}}' for i in range(200)]
+   prefixed_ids   = [f'PRE-{{i}}' for i in range(200)]
+   uuid_ids       = [str(uuid.uuid4())[:12].upper() for _ in range(n - len(sequential_ids) - len(prefixed_ids))]
+   all_ids = sequential_ids + prefixed_ids + uuid_ids  # exactly n items ✓
+   np.random.shuffle(all_ids)
+   asset_ids = all_ids  # no slice needed ✓
+   ```
+   **Always verify that concatenated sub-list pools sum to AT LEAST n before slicing!**
+
 **Validation Pattern:**
 ```python
 # Before creating DataFrame, ensure all arrays have same length
@@ -2790,6 +2813,88 @@ Generate the complete implementation with ALL required fields:"""
         module_file = module_path / 'data_generator.py'
         module_file.write_text(code)
         logger.info("Generated data_generator.py with strategy requirements")
+
+        # Runtime validation: test-execute generate_datasets() to catch runtime errors
+        # (e.g. "All arrays must be of the same length") before they surface during demo run
+        if self.llm_client:
+            exec_error = self._test_execute_data_generator(module_path, config)
+            if exec_error:
+                logger.warning(f"Data generator execution failed, retrying with error context:\n{exec_error[:400]}")
+                retry_prompt = prompt + f"""
+
+**⚠️ EXECUTION ERROR — YOUR PREVIOUS CODE CRASHED. FIX IT AND REGENERATE.**
+
+The code you generated raised an exception when executed:
+```
+{exec_error}
+```
+
+Common causes of this error:
+- Arrays passed to pd.DataFrame() have different lengths — ALL must be exactly `n`
+- Building an ID/value pool by concatenating sub-lists whose TOTAL is less than `n`, then slicing `pool[:n]` — this silently returns fewer items than `n` with no error at the slice
+- Weights list length doesn't match choices list length
+
+Fix the error and regenerate the COMPLETE data_generator.py from scratch:"""
+                retry_code = self._call_llm(retry_prompt, max_tokens=16000)
+                retry_code = self._validate_python_syntax(retry_code, 'data_generator.py')
+                module_file.write_text(retry_code)
+                logger.info("Saved retried data_generator.py")
+
+                exec_error2 = self._test_execute_data_generator(module_path, config)
+                if exec_error2:
+                    raise RuntimeError(
+                        f"Data generator failed after one retry.\nError:\n{exec_error2}"
+                    )
+                logger.info("Retried data_generator.py executed successfully")
+
+    def _test_execute_data_generator(self, module_path: Path, config: Dict[str, Any]) -> Optional[str]:
+        """Test-execute generate_datasets() on a freshly generated data_generator.py.
+
+        Returns None on success, or a traceback string on failure.
+        Used to catch runtime errors (e.g. mismatched array lengths) before they
+        surface during the actual demo run.
+        """
+        import importlib.util
+        import traceback as tb
+
+        module_file = module_path / 'data_generator.py'
+        try:
+            # Unique spec name avoids import cache collisions between retries
+            spec_name = f"_validation_{module_path.name}_{id(module_file)}"
+            spec = importlib.util.spec_from_file_location(spec_name, module_file)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+
+            # Find the DataGeneratorModule subclass
+            from src.framework.base import DataGeneratorModule, DemoConfig
+            generator_class = None
+            for name in dir(module):
+                obj = getattr(module, name)
+                if (isinstance(obj, type) and obj is not DataGeneratorModule
+                        and issubclass(obj, DataGeneratorModule)):
+                    generator_class = obj
+                    break
+
+            if generator_class is None:
+                return "No DataGeneratorModule subclass found in generated code."
+
+            demo_config = DemoConfig(
+                company_name=config.get('company_name', 'Test'),
+                department=config.get('department', 'General'),
+                industry=config.get('industry', 'Technology'),
+                pain_points=config.get('pain_points', []),
+                use_cases=config.get('use_cases', []),
+                scale=config.get('scale', '1000'),
+                metrics=config.get('metrics', []),
+            )
+
+            generator = generator_class(demo_config)
+            datasets = generator.generate_datasets()
+            logger.info(f"Validation: generate_datasets() succeeded — {len(datasets)} datasets")
+            return None  # Success
+
+        except Exception:
+            return tb.format_exc()
 
     def _generate_query_module_with_strategy(self, config: Dict[str, Any],
                                              module_path: Path,

@@ -156,27 +156,43 @@ def render_queries_tab(loader):
                             if edited_query != current_query:
                                 st.session_state[temp_editor_key] = edited_query
 
+                            # If the edited query has ?param placeholders, render inputs for them
+                            import re as _re
+                            edit_param_names = _re.findall(r'\?([a-zA-Z_][a-zA-Z0-9_]*)', edited_query)
+                            edit_param_names = list(dict.fromkeys(edit_param_names))  # dedupe, preserve order
+                            edit_param_values = {}
+                            if edit_param_names:
+                                st.markdown("**Parameters:**")
+                                for pname in edit_param_names:
+                                    edit_param_values[pname] = st.text_input(
+                                        pname,
+                                        key=f"edit_param_{query_key}_{pname}",
+                                        placeholder=f"Value for ?{pname}",
+                                    )
+
                             # Button for edit mode
                             col1, col2 = st.columns([3, 1])
                             with col1:
                                 if st.button("▶️ Test This Query", key=f"test_edit_{query_key}", use_container_width=True):
-                                    # Use the edited_query directly from text_area
                                     if edited_query and edited_query.strip():
                                         from src.services.elasticsearch_indexer import ElasticsearchIndexer
                                         try:
-                                            # Store the query being tested
                                             st.session_state[temp_editor_key] = edited_query
-
-                                            # Keep edit mode active in persistent state
                                             st.session_state.query_editor_states[query_key] = True
 
+                                            # Substitute any ?params before executing
+                                            query_to_run = edited_query
+                                            if edit_param_values:
+                                                query_to_run = display.substitute_parameters(
+                                                    edited_query, edit_param_values
+                                                )
+
                                             indexer = ElasticsearchIndexer()
-                                            success, result, error = indexer.execute_esql(edited_query)
+                                            success, result, error = indexer.execute_esql(query_to_run)
 
                                             if success:
                                                 st.session_state[f"{query_key}_results"] = result
                                                 st.session_state[f"{query_key}_test_success"] = True
-                                                # Don't call st.rerun() to avoid checkbox reset
                                             else:
                                                 st.session_state[f"{query_key}_test_error"] = error
                                         except Exception as e:

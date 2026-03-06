@@ -11,8 +11,8 @@ import streamlit as st
 def render_under_the_hood():
     """Render the Under the Hood technical documentation page."""
 
-    st.title("🔧 Under the Hood")
-    st.caption("Technical deep dive into Demo Builder's architecture and sophisticated query generation")
+    st.title("💡 About Vulcan")
+    st.caption("What Vulcan is, how it works, and what it generates")
 
     # Create tabs for each major component
     tabs = st.tabs([
@@ -60,181 +60,455 @@ def render_under_the_hood():
 
 
 def render_overview_tab():
-    """Render the Overview tab."""
-    st.markdown("## Module Generation Strategy")
+    """Render the Overview tab — story-driven narrative aid for demos."""
 
+    # ── Hero ──────────────────────────────────────────────────────────────────
+    st.markdown("## What is Vulcan?")
     st.markdown("""
-    Demo Builder uses a sophisticated **LLM-powered modular architecture** to generate
-    custom Elasticsearch demonstrations. Each demo is a self-contained Python module
-    with data generation, query strategies, and deployment configurations.
+The best demos feel like they live in the customer's world — their industry, their KPIs,
+their terminology. But building that from scratch for every prospect takes hours you don't
+have, and generic demos just don't land the same way.
+
+**Vulcan solves that.** Describe the customer in plain language — their company, department,
+and pain points — and Vulcan generates a complete, custom Elastic Agent Builder demo
+end-to-end: synthetic datasets shaped to the domain, sophisticated ES|QL queries grounded
+in real indexed data, Agent Builder tool definitions, and a full talk track with a demo guide.
+
+The whole pipeline takes 10–20 minutes. What comes out is a demo that uses the customer's
+vocabulary, reflects realistic patterns in their domain, and is ready to run live in Agent Builder.
     """)
-
-    # Architecture diagram
-    st.markdown("### High-Level Architecture")
-    st.code("""
-    User Input (Natural Language)
-            ↓
-    ┌─────────────────────────────┐
-    │ SmartContextExtractor       │  → Extract company, department, pain points, metrics
-    └─────────────────────────────┘
-            ↓
-    ┌─────────────────────────────┐
-    │ ModularDemoOrchestrator     │  → Coordinate module generation
-    └─────────────────────────────┘
-            ↓
-    ┌─────────────────────────────┐
-    │ Query Strategy Selection    │  → Analytics vs Search/RAG
-    └─────────────────────────────┘
-            ↓
-    ┌─────────────────────────────┐
-    │ LLM Code Generation         │  → Generate Python modules
-    │  - data_generator.py        │
-    │  - queries.json             │
-    │  - static/                  │
-    │  - agent_metadata.json      │
-    └─────────────────────────────┘
-            ↓
-    ┌─────────────────────────────┐
-    │ Dynamic Module Loading      │  → Import and execute generated code
-    └─────────────────────────────┘
-            ↓
-    ┌─────────────────────────────┐
-    │ Data Indexing & Profiling   │  → Index to Elasticsearch, profile for parameters
-    └─────────────────────────────┘
-            ↓
-    ┌─────────────────────────────┐
-    │ Query Validation & Testing  │  → Iterative refinement, constraint relaxation
-    └─────────────────────────────┘
-            ↓
-    ┌─────────────────────────────┐
-    │ Tool & Agent Deployment     │  → Deploy to Elastic Agent Builder
-    └─────────────────────────────┘
-    """, language="text")
-
-    # Key steps
-    st.markdown("### Key Generation Steps")
-
-    with st.expander("**1. Context Extraction**", expanded=True):
-        st.markdown("""
-        - **Natural Language Processing**: Parses user descriptions to extract structured context
-        - **Pattern Matching**: Identifies company name, department, industry, pain points, use cases
-        - **Completeness Tracking**: Monitors context completeness (need ≥50% to generate)
-        - **Interactive Refinement**: Asks clarifying questions to fill gaps
-        """)
-        st.code("""
-# Example: SmartContextExtractor
-context = {
-    "company_name": "T-Mobile",
-    "department": "Network Operations",
-    "industry": "Telecommunications",
-    "pain_points": ["HSS database failures", "Signaling storms"],
-    "use_cases": ["Proactive anomaly detection", "Cell tower analysis"],
-    "metrics": ["IMSI spike detection", "Cell ID cardinality"]
-}
-        """, language="python")
-
-    with st.expander("**2. Demo Type Detection**"):
-        st.markdown("""
-        - **Analytics Demos**: Aggregations, trends, time-series, metrics
-        - **Search/RAG Demos**: Document retrieval, semantic search, knowledge bases
-        - **Auto-Detection**: Based on use case keywords and pain points
-        - **Strategy Routing**: Different code generation strategies per type
-        """)
-        st.code("""
-# Observability keywords: analyze, trend, metric, aggregate, dashboard, monitor, APM
-# Search keywords: find, retrieve, lookup, documents, semantic search
-
-if demo_type == "observability":
-    strategy_generator = QueryStrategyGenerator()  # STATS, INLINESTATS, LOOKUP JOIN
-elif demo_type == "search":
-    strategy_generator = SearchQueryStrategyGenerator()  # MATCH, RERANK, COMPLETION
-        """, language="python")
-
-    with st.expander("**3. Query Strategy Generation**"):
-        st.markdown("""
-        - **LLM-Powered Planning**: Generates query plan before data generation
-        - **Use Case Mapping**: Maps each pain point to specific ES|QL patterns
-        - **Parameter Identification**: Determines which queries need user parameters
-        - **Semantic Text Detection**: Identifies fields needing vector search
-        - **Output**: Structured query plan with data requirements
-        """)
-
-    with st.expander("**4. Data Generation (Query-Informed)**"):
-        st.markdown("""
-        - **Query-First Approach**: Data is generated to satisfy query requirements
-        - **Semantic Text Fields**: Automatically identified and indexed with proper mappings
-        - **Index Type Selection**: data_stream vs lookup based on use case
-        - **Realistic Data**: Uses Faker + LLM for domain-specific realism
-        - **Scale Aware**: Generates appropriate volume based on context
-        """)
-
-    with st.expander("**5. Query Generation & Validation**"):
-        st.markdown("""
-        - **Sophisticated ES|QL**: Leverages advanced commands (LOOKUP JOIN, INLINESTATS, RERANK)
-        - **Anti-Pattern Avoidance**: Follows query guides to avoid common errors
-        - **Iterative Refinement**: Tests queries, refines on errors
-        - **Constraint Relaxation**: Can adjust thresholds if no results found
-        - **Parameter Extraction**: Profiles data to detect valid parameter values
-        """)
-
-    with st.expander("**6. Data Indexing & Profiling**"):
-        st.markdown("""
-        - **Bulk Indexing**: Efficient batch indexing to Elasticsearch
-        - **Mapping Generation**: Automatic mapping creation for semantic_text fields
-        - **Data Profiling**: Analyzes indexed data to extract parameter values
-        - **Cardinality Analysis**: Identifies fields suitable for parameters
-        - **Business Date Detection**: Recognizes date fields for time-based filtering
-        """)
-
-    with st.expander("**7. Tool & Agent Deployment**"):
-        st.markdown("""
-        - **Elastic Agent Builder Integration**: Deploys validated queries as tools
-        - **Parameter Configuration**: Maps query parameters to tool inputs
-        - **Agent Configuration**: Creates AI assistants with tool access
-        - **Tool Assignment**: Associates tools with appropriate agents
-        """)
-
-    with st.expander("**8. Demo Guide Generation**"):
-        st.markdown("""
-        - **Narrative Structure**: Creates compelling demo flow
-        - **Talk Track**: Provides presenter guidance
-        - **A-ha Moments**: Identifies key insights to highlight
-        - **Technical Details**: Explains query sophistication
-        """)
 
     st.divider()
 
-    st.markdown("### Key Architectural Principles")
+    # ── Section 1: The problem — generic vs bespoke ───────────────────────────
+    st.markdown("## The Problem with Generic Demos")
+    st.markdown(
+        "An LLM can write ES|QL queries — but that doesn't mean they'll produce results "
+        "compelling enough to showcase Elastic's capabilities. The difference is context."
+    )
 
-    col1, col2 = st.columns(2)
+    col_bad, col_good = st.columns(2, gap="large")
 
-    with col1:
-        st.markdown("""
-        **Modular Plugin Architecture**
-        - Framework defines interfaces
-        - LLM generates implementations
-        - Modules are version-controlled
-        - Manual editing supported
+    with col_bad:
+        st.error("#### ❌ Generic (no customer context)")
+        st.markdown("**Data fields**")
+        st.code(
+            "user_id, event_type, value,\ntimestamp, status, category",
+            language="text"
+        )
+        st.markdown("**Sample query**")
+        st.code(
+            "FROM logs\n| STATS count(*) BY status\n| LIMIT 10",
+            language="text"
+        )
+        st.markdown("**Talk track**")
+        st.markdown(
+            "_\"Here you can see how many events occurred by status type...\"_"
+        )
+        st.caption("No industry vocabulary. No realistic patterns. Hard to relate to.")
 
-        **Query-First Design**
-        - Queries drive data generation
-        - Not data → query (backwards)
-        - Ensures realistic demo scenarios
-        """)
+    with col_good:
+        st.success("#### ✅ Vulcan-generated (Telco Network Ops)")
+        st.markdown("**Data fields**")
+        st.code(
+            "imsi, mme_host, hss_node_id, cell_id,\nattach_failure_reason,\nsignaling_storm_severity, error_rate_pct",
+            language="text"
+        )
+        st.markdown("**Sample query**")
+        st.code(
+            "FROM telco_network_events\n| INLINESTATS avg_failures = AVG(failure_count)\n    BY mme_host\n| WHERE failure_count > avg_failures * 1.5\n| SORT failure_count DESC",
+            language="esql"
+        )
+        st.markdown("**Talk track**")
+        st.markdown(
+            "_\"Watch what happens when we isolate MME hosts where failure rates "
+            "exceed the fleet average by 50% — these are your signaling storm candidates...\"_"
+        )
+        st.caption("Domain vocabulary. Realistic distributions. Ready to present.")
 
-    with col2:
-        st.markdown("""
-        **Sophisticated Query Generation**
-        - Multi-stage LLM reasoning
-        - Data profiling integration
-        - Anti-pattern awareness
-        - Iterative refinement
+    st.divider()
 
-        **Production-Ready**
-        - Real Elasticsearch indexing
-        - Actual ES|QL validation
-        - Elastic Agent Builder deployment
-        """)
+    # ── Section 2: The pipeline ───────────────────────────────────────────────
+    st.markdown("## How It Works — The Pipeline")
+    st.markdown(
+        "Vulcan doesn't fill in a template. It runs a multi-stage pipeline where each "
+        "phase informs the next — and critically, **queries are planned before data is generated**, "
+        "so the data is shaped to make the queries compelling."
+    )
+
+    st.markdown("")
+
+    p1, p2, p3, p4, p5 = st.columns(5, gap="small")
+    for col, num, label in [
+        (p1, "1", "Understand\nthe Customer"),
+        (p2, "2", "Plan the\nQuery Strategy"),
+        (p3, "3", "Generate &\nIndex Data"),
+        (p4, "4", "Profile &\nWrite Queries"),
+        (p5, "5", "Deploy to\nAgent Builder"),
+    ]:
+        with col:
+            st.markdown(
+                f"<div style='text-align:center; padding:10px; background:#1e3a5f; "
+                f"border-radius:8px; height:90px; display:flex; flex-direction:column; "
+                f"justify-content:center;'>"
+                f"<div style='font-size:1.4em; font-weight:bold; color:#4fa8e8;'>{num}</div>"
+                f"<div style='font-size:0.8em; color:#ccc; white-space:pre-line;'>{label}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+    st.markdown("")
+
+    with st.expander("**Stage 1 — Understand the Customer** (context extraction + alignment)", expanded=True):
+        col_a, col_b = st.columns(2, gap="large")
+        with col_a:
+            st.markdown("**You provide (plain language):**")
+            st.info(
+                "_\"Telco Network Operations team. They're dealing with HSS database sync "
+                "failures causing authentication outages. They want proactive anomaly detection "
+                "on MME nodes and cell tower failure pattern analysis across datacenters.\"_"
+            )
+        with col_b:
+            st.markdown("**Vulcan extracts:**")
+            st.code(
+                'company:      "Telco"\n'
+                'department:   "Network Operations"\n'
+                'industry:     "Telecommunications"\n'
+                'pain_points:  ["HSS sync failures",\n'
+                '               "auth outages"]\n'
+                'use_cases:    ["MME anomaly detection",\n'
+                '               "cell tower analysis"]\n'
+                'demo_type:    "analytics"  ← auto-detected',
+                language="yaml"
+            )
+        st.caption(
+            "The extracted context is surfaced back to you for review and editing before anything is built."
+        )
+
+    with st.expander("**Stage 2 — Plan the Query Strategy** (queries first, data second)"):
+        st.markdown(
+            "Before a single row of data is generated, Vulcan plans the query strategy — "
+            "deciding what business questions the demo will answer and what fields and "
+            "distributions the data must have to make those queries return interesting results."
+        )
+        col_a, col_b = st.columns(2, gap="large")
+        with col_a:
+            st.markdown("**Planned queries (examples):**")
+            st.markdown(
+                "- MME nodes with failure rates > fleet average *(INLINESTATS)*\n"
+                "- HSS sync failures correlated by datacenter *(LOOKUP JOIN)*\n"
+                "- Signaling storm detection via IMSI spike analysis *(STATS + CHANGE_POINT)*\n"
+                "- Cell tower failure rate trends over 24h *(DATE_TRUNC + STATS)*"
+            )
+        with col_b:
+            st.markdown("**Data requirements derived from queries:**")
+            st.markdown(
+                "- `failure_count` must be lognormal (so percentile queries are interesting)\n"
+                "- `mme_host` cardinality: 12–20 distinct nodes\n"
+                "- `hss_node_id` must be a join-able reference dataset\n"
+                "- `@timestamp` must span 30 days for trend analysis"
+            )
+
+    with st.expander("**Stage 3 — Generate & Index Data** (shaped to the strategy)"):
+        col_a, col_b = st.columns(2, gap="large")
+        with col_a:
+            st.markdown("**Custom Python generated per demo:**")
+            st.code(
+                "# Generates realistic Telco network events\n"
+                "# with distributions tuned to make queries land\n"
+                "failure_count = np.random.lognormal(\n"
+                "    mean=2.1, sigma=1.4, size=n\n"
+                ")  # skewed: most nodes healthy, few anomalous\n\n"
+                "mme_host = np.random.choice(\n"
+                "    ['mme-sea-01', 'mme-sea-02', ..., 'mme-atl-04'],\n"
+                "    size=n, p=weights  # weighted: some hosts hotter\n"
+                ")",
+                language="python"
+            )
+        with col_b:
+            st.markdown("**Indexed to Elasticsearch:**")
+            st.metric("Datasets", "3")
+            st.metric("Total records", "~47,500")
+            st.metric("Semantic text fields", "2")
+            st.caption(
+                "Data streams for time-series events; lookup indices for "
+                "reference data used in LOOKUP JOIN."
+            )
+
+    with st.expander("**Stage 4 — Profile & Write Queries** (grounded in real data)"):
+        st.markdown(
+            "After indexing, Vulcan profiles the actual data — inspecting field cardinality, "
+            "value distributions, and date ranges. **Queries are then written against what's "
+            "actually in Elasticsearch**, not against assumptions. This is what makes them work."
+        )
+        st.markdown("**Example — Cell Tower Handoff Cascade Failure Analysis:**")
+        st.code(
+            "FROM network_events\n"
+            "| WHERE event_type == \"handoff_failure\"\n"
+            "| EVAL time_bucket = DATE_TRUNC(10 minutes, @timestamp)\n"
+            "| STATS\n"
+            "    failure_count    = COUNT(*),\n"
+            "    affected_subscribers = SUM(TO_LONG(affected_subscribers)),\n"
+            "    unique_towers    = COUNT_DISTINCT(tower_id),\n"
+            "    error_types      = VALUES(error_code)\n"
+            "    BY time_bucket, network_segment\n"
+            "| INLINESTATS\n"
+            "    avg_failures    = AVG(failure_count),\n"
+            "    stddev_failures = STD_DEV(failure_count)\n"
+            "    BY network_segment\n"
+            "| EVAL z_score = (failure_count - avg_failures) / COALESCE(stddev_failures, 1)\n"
+            "| EVAL cascade_severity = CASE(\n"
+            "    unique_towers >= 5 AND z_score > 3, \"Critical Cascade\",\n"
+            "    unique_towers >= 3 AND z_score > 2, \"Moderate Cascade\",\n"
+            "    unique_towers >= 2,                 \"Localized Issue\"\n"
+            "  )\n"
+            "| WHERE unique_towers >= 2\n"
+            "| EVAL towers_per_minute = ROUND(TO_DOUBLE(unique_towers) / 10.0, 1)\n"
+            "| SORT z_score DESC, unique_towers DESC, failure_count DESC\n"
+            "| LIMIT 100",
+            language="esql"
+        )
+        st.caption(
+            "Uses INLINESTATS to compute per-segment baselines inline, then z-scores each "
+            "time bucket to classify cascade severity. No pre-aggregated table needed. "
+            "Queries are validated against the live index and refined iteratively — "
+            "parameterized variants become Agent Builder tools."
+        )
+
+    with st.expander("**Stage 5 — Deploy to Agent Builder** (ready to run)"):
+        col_a, col_b = st.columns(2, gap="large")
+        with col_a:
+            st.markdown("**Agent Builder tool (auto-generated):**")
+            st.code(
+                '{\n'
+                '  "tool_id": "telco_network_ops_tower_handoff_cascade_failures",\n'
+                '  "description": "Identifies cell tower handoff cascade failures\n'
+                '    where multiple adjacent towers fail simultaneously —\n'
+                '    indicating potential radio equipment failure or network\n'
+                '    configuration problems.",\n'
+                '  "tags": ["network", "cell-tower", "cascade", "anomaly"]\n'
+                '}',
+                language="json"
+            )
+            st.markdown("**Parameterized tool (subscriber lookup):**")
+            st.code(
+                '{\n'
+                '  "tool_id": "telco_network_ops_auth_failures_param",\n'
+                '  "description": "Authentication failure activity for a specific\n'
+                '    subscriber, IMSI, or location area code. Use when\n'
+                '    investigating subscriber-level auth outages.",\n'
+                '  "parameters": [\n'
+                '    {"name": "subscriber_id", "type": "string",\n'
+                '     "description": "IMSI, subscriber ID, or LAC (e.g. LAC-1001)"}\n'
+                '  ]\n'
+                '}',
+                language="json"
+            )
+        with col_b:
+            st.markdown("**Demo guide excerpt (auto-generated):**")
+            st.info(
+                "_\"Start with the cascade failure scan — no parameters needed, it runs "
+                "fleet-wide. Point out the z-score column: this isn't just a count, it's "
+                "statistically anomalous relative to that segment's own baseline. When the "
+                "RAN Segment incident from Mar 6 surfaces with z-score 7.19, ask: 'How long "
+                "would it take your team to find this today?' Then pivot to the parameterized "
+                "auth failure tool — type LAC-1001 and show how the agent drills into a "
+                "specific location area across all HSS nodes instantly.\"_"
+            )
+
+    st.divider()
+
+    # ── Section 3: Search vs Analytics ───────────────────────────────────────
+    st.markdown("## Two Demo Paths, One Pipeline")
+    st.markdown(
+        "Vulcan auto-detects whether a use case calls for a **search & retrieval** demo "
+        "or an **observability & analytics** demo. The pipeline is the same — the query "
+        "strategies, data shapes, and output artifacts are different."
+    )
+
+    col_search, col_analytics = st.columns(2, gap="large")
+
+    with col_search:
+        st.markdown("### 🔍 Search & Retrieval")
+        st.markdown("*Triggered by: find, retrieve, lookup, knowledge base, semantic search*")
+        st.markdown("**Elastic capabilities showcased:**")
+        st.markdown(
+            "- `FORK` + `FUSE LINEAR` for weighted hybrid BM25 + semantic search\n"
+            "- `semantic_text` fields with ELSER for vector-based retrieval\n"
+            "- Weighted score fusion with minmax normalization\n"
+            "- RAG pipeline: `MATCH` → failed-session retrieval → `COMPLETION`\n"
+            "- Content gap analysis from abandoned search sessions"
+        )
+        st.markdown("**Example use cases:**")
+        st.markdown(
+            "- Brand asset discovery (Brand Asset Platform)\n"
+            "- Healthcare provider lookup (in-network search)\n"
+            "- Policy & knowledge base retrieval\n"
+            "- Support ticket semantic search"
+        )
+
+        st.markdown("**Query 1 — Campaign Theme Search** *(scripted hybrid)*:")
+        st.code(
+            "FROM marketing_asset_catalog\n"
+            "    METADATA _id, _index, _score\n"
+            "| FORK\n"
+            "    (\n"
+            "        WHERE MATCH(asset_title, \"E-commerce\")\n"
+            "        | EVAL search_type = \"bm25\"\n"
+            "        | SORT _score DESC | LIMIT 50\n"
+            "    )\n"
+            "    (\n"
+            "        WHERE MATCH(\n"
+            "            asset_description,\n"
+            "            \"summer promotion warm weather outdoor seasonal\")\n"
+            "        | EVAL search_type = \"semantic\"\n"
+            "        | SORT _score DESC | LIMIT 50\n"
+            "    )\n"
+            "| FUSE LINEAR\n"
+            "    WITH {\"weights\": {\"fork1\": 0.3, \"fork2\": 0.7},\n"
+            "          \"normalizer\": \"minmax\"}\n"
+            "| SORT _score DESC\n"
+            "| LIMIT 20\n"
+            "| KEEP asset_id, _score, asset_title, asset_description,\n"
+            "       asset_type, campaign_theme, industry_tag,\n"
+            "       popularity_score, search_type",
+            language="esql"
+        )
+
+        with st.expander("▶ See it in Agent Builder — summer campaign results"):
+            st.image(
+                "src/ui/assets/screenshots/tmobile/agent_builder_chat_beacon_summer_assets_query.png",
+                caption="Agent Builder reasoning + FORK/FUSE hybrid query execution"
+            )
+            st.image(
+                "src/ui/assets/screenshots/tmobile/agent_builder_chat_beacon_summer_assets_response.png",
+                caption="AI-synthesized asset recommendations with scoring rationale"
+            )
+
+        st.markdown("**Query 2 — Search Gap RAG Summary** *(parameterized RAG)*:")
+        st.code(
+            "FROM content_search_logs\n"
+            "    METADATA _score\n"
+            "| WHERE\n"
+            "    MATCH(query_intent, ?industry) AND\n"
+            "    (session_outcome == \"Abandoned\" OR\n"
+            "     session_outcome == \"No Results Found\")\n"
+            "| SORT _score DESC\n"
+            "| LIMIT 10\n"
+            "| EVAL prompt = CONCAT(\n"
+            "    \"You are a content strategy analyst. Analyse these \",\n"
+            "    \"failed search sessions and identify content gaps...\",\n"
+            "    \"Query Text: \", query_text,\n"
+            "    \"User Intent: \", query_intent,\n"
+            "    \"Industry: \", industry_vertical,\n"
+            "    \"Result Count: \", TO_STRING(result_count),\n"
+            "    \"Identify: 1) Missing asset type, \",\n"
+            "    \"2) Underserved vertical, \",\n"
+            "    \"3) One concrete asset to create.\"\n"
+            "  )\n"
+            "| COMPLETION gap_analysis = prompt\n"
+            "    WITH {\"inference_id\": \"completion-vulcan\"}\n"
+            "| KEEP session_outcome, industry_vertical,\n"
+            "       filters_applied, result_count,\n"
+            "       gap_analysis, _score",
+            language="esql"
+        )
+
+        with st.expander("▶ See it in Agent Builder — fitness gap analysis (industry=fitness businesses)"):
+            st.image(
+                "src/ui/assets/screenshots/tmobile/agent_builder_chat_beacon_gap_analysis_query.png",
+                caption="Agent Builder reasoning + RAG pipeline execution (MATCH → COMPLETION)"
+            )
+            st.image(
+                "src/ui/assets/screenshots/tmobile/agent_builder_chat_beacon_gap_analysis_response.png",
+                caption="AI-synthesized content gap analysis grounded in real abandoned search sessions"
+            )
+
+    with col_analytics:
+        st.markdown("### 📊 Observability & Analytics")
+        st.markdown("*Triggered by: analyze, trend, metric, aggregate, monitor, dashboard*")
+        st.markdown("**Elastic capabilities showcased:**")
+        st.markdown(
+            "- `INLINESTATS` for inline per-segment baselines + z-score anomaly detection\n"
+            "- `LOOKUP JOIN` for cross-dataset enrichment (e.g. HSS node metadata)\n"
+            "- `DATE_TRUNC` time-series bucketing\n"
+            "- `VALUES()` to collect error codes per time window\n"
+            "- `STD_DEV` + `COALESCE` for robust statistical scoring\n"
+            "- `CASE` for severity classification"
+        )
+        st.markdown("**Example use cases:**")
+        st.markdown(
+            "- Network operations cascade failure detection (Telco)\n"
+            "- Infrastructure cost & migration analysis (JPMC)\n"
+            "- Campaign ROI & performance trends (Brand Asset Platform)\n"
+            "- Multi-tenant SLA monitoring"
+        )
+
+        st.markdown("**Query 1 — Cell Tower Handoff Cascade Failure Analysis:**")
+        st.code(
+            "FROM network_events\n"
+            "| WHERE event_type == \"handoff_failure\"\n"
+            "| EVAL time_bucket = DATE_TRUNC(10 minutes, @timestamp)\n"
+            "| STATS\n"
+            "    failure_count        = COUNT(*),\n"
+            "    affected_subscribers = SUM(TO_LONG(affected_subscribers)),\n"
+            "    unique_towers        = COUNT_DISTINCT(tower_id),\n"
+            "    error_types          = VALUES(error_code)\n"
+            "    BY time_bucket, network_segment\n"
+            "| INLINESTATS\n"
+            "    avg_failures    = AVG(failure_count),\n"
+            "    stddev_failures = STD_DEV(failure_count)\n"
+            "    BY network_segment\n"
+            "| EVAL z_score = (failure_count - avg_failures)\n"
+            "               / COALESCE(stddev_failures, 1)\n"
+            "| EVAL cascade_severity = CASE(\n"
+            "    unique_towers >= 5 AND z_score > 3, \"Critical Cascade\",\n"
+            "    unique_towers >= 3 AND z_score > 2, \"Moderate Cascade\",\n"
+            "    unique_towers >= 2,                 \"Localized Issue\"\n"
+            "  )\n"
+            "| WHERE unique_towers >= 2\n"
+            "| SORT z_score DESC, unique_towers DESC\n"
+            "| LIMIT 100",
+            language="esql"
+        )
+
+        with st.expander("▶ See it in Agent Builder — cascade results"):
+            st.image("src/ui/assets/screenshots/tmobile/agent_builder_chat_handoff_query.png",
+                     caption="Agent Builder reasoning + ES|QL query execution")
+            st.image("src/ui/assets/screenshots/tmobile/agent_builder_chat_handoff_response.png",
+                     caption="AI-synthesized response with cascade severity classification")
+
+        st.markdown("**Query 2 — Auth Failure Search by Subscriber** *(parameterized)*:")
+        st.code(
+            "FROM authentication_logs\n"
+            "| WHERE\n"
+            "    imsi            == ?subscriber_id OR\n"
+            "    location_area   == ?subscriber_id OR\n"
+            "    subscriber_id   == ?subscriber_id\n"
+            "| LOOKUP JOIN hss_nodes ON hss_node_id\n"
+            "| EVAL is_failure  = CASE(failure_reason != \"success\", 1, 0)\n"
+            "| EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)\n"
+            "| STATS\n"
+            "    total_attempts = COUNT(*),\n"
+            "    failures       = SUM(is_failure),\n"
+            "    failure_types  = VALUES(failure_reason),\n"
+            "    error_codes    = VALUES(error_code),\n"
+            "    networks_used  = VALUES(network_type),\n"
+            "    locations      = VALUES(location_area),\n"
+            "    hss_nodes      = VALUES(hss_name)\n"
+            "    BY time_bucket, imsi, subscriber_id\n"
+            "| EVAL failure_rate =\n"
+            "    ROUND(TO_DOUBLE(failures) / TO_DOUBLE(total_attempts) * 100, 2)\n"
+            "| SORT time_bucket DESC\n"
+            "| LIMIT 100",
+            language="esql"
+        )
+
+        with st.expander("▶ See it in Agent Builder — LAC-1001 results"):
+            st.image("src/ui/assets/screenshots/tmobile/agent_builder_chat_authfail_query.png",
+                     caption="Agent Builder reasoning + parameterized ES|QL execution (subscriber_id=LAC-1001)")
+            st.image("src/ui/assets/screenshots/tmobile/agent_builder_chat_authfail_response.png",
+                     caption="AI-synthesized diagnostic report for LAC-1001")
 
 
 def render_data_generation_tab():
@@ -1851,7 +2125,7 @@ Tool Metadata Structure:
         st.markdown("""
         **Tool ID Convention:**
         - Format: `{company}_{department}_{purpose}`
-        - Example: `tmobile_network_spike_detection`
+        - Example: `telco_network_spike_detection`
         - Ensures uniqueness across demos
         - Makes filtering by module possible
 
@@ -1954,7 +2228,7 @@ Headers:
 
 Body:
 {
-  "id": "tmobile_network_spike_detection",
+  "id": "telco_network_spike_detection",
   "type": "esql",
   "description": "Detects authentication failure spike events using INLINESTATS to compare current rates against baseline. Use when investigating sudden increases in authentication failures or potential security incidents.",
   "tags": ["network", "security", "anomaly-detection"],
@@ -2038,7 +2312,7 @@ def create_tool(self, tool_config: Dict) -> Dict:
         The Tools tab shows all tools deployed for the current demo:
 
         **Filtering:**
-        - Matches module prefix (e.g., `tmobile_network*`)
+        - Matches module prefix (e.g., `telco_network*`)
         - Handles both hyphens and underscores
         - Shows count of deployed tools
 
@@ -2127,11 +2401,11 @@ def render_agents_tab():
 # agent_metadata.json
 
 {
-  "id": "tmobile_network_operations_agent",
-  "name": "T-Mobile Network Operations Assistant",
-  "description": "AI assistant specialized in Network Operations for T-Mobile. I can help detect network issues proactively, analyze signaling storms, and troubleshoot authentication failures.",
+  "id": "telco_network_operations_agent",
+  "name": "Telco Network Operations Assistant",
+  "description": "AI assistant specialized in Network Operations for Telco. I can help detect network issues proactively, analyze signaling storms, and troubleshoot authentication failures.",
   "labels": [
-    "t-mobile",
+    "telco",
     "network_operations",
     "analytics",
     "telecommunications"
@@ -2139,7 +2413,7 @@ def render_agents_tab():
   "avatar_color": "#3B82F6",
   "avatar_symbol": "TM",
   "configuration": {
-    "instructions": "You are an AI assistant specialized in Network Operations for T-Mobile...\\n\\n**Your Expertise:**\\n- Proactive Network Anomaly Detection\\n- Cell Tower Handoff Analysis\\n- Core Network Troubleshooting\\n- Security & Authentication\\n\\n**Key Pain Points I Address:**\\n- HSS database failures\\n- MME software bugs\\n- Signaling storms\\n- Security attacks\\n\\n**Communication Style:**\\nI communicate clearly and urgently, understanding that network operations require rapid response...",
+    "instructions": "You are an AI assistant specialized in Network Operations for Telco...\\n\\n**Your Expertise:**\\n- Proactive Network Anomaly Detection\\n- Cell Tower Handoff Analysis\\n- Core Network Troubleshooting\\n- Security & Authentication\\n\\n**Key Pain Points I Address:**\\n- HSS database failures\\n- MME software bugs\\n- Signaling storms\\n- Security attacks\\n\\n**Communication Style:**\\nI communicate clearly and urgently, understanding that network operations require rapid response...",
     "tools": []
   }
 }
@@ -2148,7 +2422,7 @@ def render_agents_tab():
         st.markdown("""
         **ID Convention:**
         - Format: `{company}_{department}_agent`
-        - Example: `tmobile_network_operations_agent`
+        - Example: `telco_network_operations_agent`
         - Ensures uniqueness and module filtering
 
         **Avatar Colors:**
@@ -2168,7 +2442,7 @@ def render_agents_tab():
         """)
 
         st.code("""
-You are an AI assistant specialized in Network Operations for T-Mobile,
+You are an AI assistant specialized in Network Operations for Telco,
 one of the leading mobile network operators in the United States.
 
 **Your Expertise:**
@@ -2261,9 +2535,9 @@ How can I assist you with your network operations today?
 
         **Module-Specific Tools:**
         - Generated for this demo
-        - Prefix matches module (e.g., `tmobile_network_*`)
+        - Prefix matches module (e.g., `telco_network_*`)
         - Specific to use cases and pain points
-        - Example: `tmobile_network_spike_detection`
+        - Example: `telco_network_spike_detection`
 
         **Platform Tools:**
         - Shared across all demos
@@ -2279,16 +2553,16 @@ How can I assist you with your network operations today?
 # Agent with Tools Configuration
 
 {
-  "id": "tmobile_network_operations_agent",
-  "name": "T-Mobile Network Operations Assistant",
+  "id": "telco_network_operations_agent",
+  "name": "Telco Network Operations Assistant",
   "configuration": {
     "instructions": "...",
     "tools": [
       {
         "tool_ids": [
-          "tmobile_network_spike_detection",
-          "tmobile_network_handoff_analysis",
-          "tmobile_network_authentication_failures",
+          "telco_network_spike_detection",
+          "telco_network_handoff_analysis",
+          "telco_network_authentication_failures",
           "platform.core.search",
           "platform.core.generate_esql"
         ]
@@ -2404,7 +2678,7 @@ def create_agent(self, agent_config: Dict) -> Dict:
         User: Are there any authentication spike events in the us-east region?
 
         Agent: Let me check the authentication events for the us-east region...
-        [Invokes: tmobile_network_spike_detection with region=us-east]
+        [Invokes: telco_network_spike_detection with region=us-east]
 
         I found 3 spike events in us-east region in the last hour:
 
@@ -2549,10 +2823,10 @@ Create a guide with:
         """)
 
         st.markdown("""
-        **T-Mobile Network Operations Demo**
+        **Telco Network Operations Demo**
 
         **Customer Profile:**
-        T-Mobile is one of the leading mobile network operators in the United States,
+        This Telco is one of the leading mobile network operators in the United States,
         serving millions of subscribers across 4G LTE and 5G networks. Their Network
         Operations team is responsible for monitoring and maintaining critical infrastructure
         including MME hosts, HSS databases, cell towers, and core network components.
@@ -2586,7 +2860,7 @@ Create a guide with:
         st.markdown("""
         **Act 1: Establish the Problem**
 
-        "Let me show you a typical day in T-Mobile's Network Operations Center.
+        "Let me show you a typical day in Telco's Network Operations Center.
         It's 10:15 AM, and suddenly the help desk starts getting flooded with calls -
         subscribers can't authenticate to the network. By the time you realize there's
         a problem, you're already in crisis mode."
