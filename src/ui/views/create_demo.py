@@ -314,7 +314,7 @@ def render_create_demo_view():
                             current_status_placeholder.info(f"**Current:** {message}  \n_Updated {ts} | Elapsed: {elapsed_str}_")
 
 
-                        st.caption("⏳ Each LLM call takes 30-90 seconds. Please do not type or click anything during generation.")
+                        st.caption("⏳ The full generation pipeline takes 15–30 minutes depending on the LLM selected. Please do not type or click anything until generation completes.")
 
                         # Generate demo using modular orchestrator
                         # Pass inference endpoints from sidebar configuration
