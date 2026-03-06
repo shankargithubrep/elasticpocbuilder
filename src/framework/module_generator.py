@@ -4,6 +4,7 @@ Generates demo-specific modules that implement the base framework
 """
 
 import os
+import re
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -11,6 +12,19 @@ from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _make_slug(name: str, max_len: int = 20) -> str:
+    """Sanitize a name into a valid tool ID segment.
+
+    Produces lowercase alphanumeric + underscore only, no leading/trailing
+    underscores, truncated to max_len. Safe for use in Elastic Agent Builder
+    tool IDs which forbid hyphens, spaces, and special characters.
+    """
+    slug = name.lower()
+    slug = re.sub(r'[^a-z0-9]+', '_', slug)  # replace any non-alnum run with _
+    slug = slug.strip('_')
+    return slug[:max_len].rstrip('_')
 
 
 class ModuleGenerator:
@@ -63,10 +77,10 @@ class ModuleGenerator:
         """
         # Create unique module name with defensive handling for None values
         company_name = config.get('company_name') or 'demo'
-        company_slug = company_name.lower().replace(' ', '_')
-        
+        company_slug = _make_slug(company_name)
+
         department = config.get('department') or 'general'
-        department_slug = department.lower().replace(' ', '_')
+        department_slug = _make_slug(department)
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         module_name = f"{company_slug}_{department_slug}_{timestamp}"
@@ -126,10 +140,10 @@ class ModuleGenerator:
         """
         # Create unique module name with defensive handling for None values
         company_name = config.get('company_name') or 'demo'
-        company_slug = company_name.lower().replace(' ', '_')
-        
+        company_slug = _make_slug(company_name)
+
         department = config.get('department') or 'general'
-        department_slug = department.lower().replace(' ', '_')
+        department_slug = _make_slug(department)
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         module_name = f"{company_slug}_{department_slug}_{timestamp}"
@@ -195,10 +209,10 @@ class ModuleGenerator:
         """
         # Create unique module name with defensive handling for None values
         company_name = config.get('company_name') or 'demo'
-        company_slug = company_name.lower().replace(' ', '_')
-        
+        company_slug = _make_slug(company_name)
+
         department = config.get('department') or 'general'
-        department_slug = department.lower().replace(' ', '_')
+        department_slug = _make_slug(department)
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         module_name = f"{company_slug}_{department_slug}_{timestamp}"
@@ -895,8 +909,8 @@ Access data via self.datasets. Use correct MATCH/RERANK syntax. Use EXACT field 
         """Get instructions for generating tool metadata for Agent Builder"""
 
         # Extract company and department for tool ID generation
-        company_slug = config['company_name'].lower().replace(' ', '_')[:15]
-        dept_slug = config.get('department', 'analytics').lower().replace(' ', '_')[:10]
+        company_slug = _make_slug(config['company_name'], max_len=15)
+        dept_slug = _make_slug(config.get('department', 'analytics'), max_len=10)
 
         return f"""
 **IMPORTANT: Agent Builder Tool Metadata**
@@ -908,14 +922,15 @@ For EACH query you generate, include a 'tool_metadata' field with:
 
 1. 'tool_id': Unique identifier following pattern: <customer>_<dept>_<purpose>
    - MUST start and end with a letter or number
-   - ONLY lowercase letters, numbers, dots, underscores
+   - ONLY lowercase letters, numbers, dots, underscores — NO hyphens, NO spaces
    - Maximum 50 characters
    - Use company prefix: {company_slug}
    - Department: {dept_slug}
    - Examples:
      * "{company_slug}_{dept_slug}_performance" ✓
      * "{company_slug}_{dept_slug}_inventory_alerts" ✓
-     * "Query-1-{config['company_name']}" ✗ (no uppercase/hyphens)
+     * "Query-1-{config['company_name']}" ✗ (no uppercase, hyphens, or spaces)
+     * "{company_slug}-{dept_slug}-performance" ✗ (hyphens not allowed)
 
 2. 'description': Tool description for Agent Builder (NOT the same as query description)
    - First ~50 characters appear in tool list - make them count!
@@ -957,8 +972,8 @@ Tool metadata is REQUIRED - every query must have valid tool_metadata for Agent 
         tool_metadata_prompt = self._get_tool_metadata_instructions(config)
 
         # Get company and department slugs for the template
-        company_slug = config['company_name'].lower().replace(' ', '_')[:15]
-        dept_slug = config.get('department', 'analytics').lower().replace(' ', '_')[:10]
+        company_slug = _make_slug(config['company_name'], max_len=15)
+        dept_slug = _make_slug(config.get('department', 'analytics'), max_len=10)
 
         prompt = f"""Generate the `generate_queries()` method for a QueryGeneratorModule.
 
@@ -1082,8 +1097,8 @@ Generate ONLY the method implementation (including the def line and all queries)
         tool_metadata_prompt = self._get_tool_metadata_instructions(config)
 
         # Get company and department slugs for the template
-        company_slug = config['company_name'].lower().replace(' ', '_')[:15]
-        dept_slug = config.get('department', 'analytics').lower().replace(' ', '_')[:10]
+        company_slug = _make_slug(config['company_name'], max_len=15)
+        dept_slug = _make_slug(config.get('department', 'analytics'), max_len=10)
 
         prompt = f"""Generate the `generate_parameterized_queries()` method for a QueryGeneratorModule.
 
@@ -1264,8 +1279,8 @@ Generate ONLY the method implementation. Do NOT include class definition or impo
         tool_metadata_prompt = self._get_tool_metadata_instructions(config)
 
         # Get company and department slugs for the template
-        company_slug = config['company_name'].lower().replace(' ', '_')[:15]
-        dept_slug = config.get('department', 'analytics').lower().replace(' ', '_')[:10]
+        company_slug = _make_slug(config['company_name'], max_len=15)
+        dept_slug = _make_slug(config.get('department', 'analytics'), max_len=10)
 
         # Get endpoint IDs for substitution in prompt
         rerank_endpoint = self.inference_endpoints['rerank']
@@ -3425,8 +3440,8 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
         logger.info("=" * 60)
 
         # Generate agent ID and basic info
-        company_slug = config['company_name'].lower().replace(' ', '_')[:20]
-        dept_slug = config.get('department', 'general').lower().replace(' ', '_')[:15]
+        company_slug = _make_slug(config['company_name'], max_len=20)
+        dept_slug = _make_slug(config.get('department', 'general'), max_len=15)
         agent_id = f"{company_slug}_{dept_slug}_agent"
         logger.info(f"Generated agent_id: {agent_id}")
 
