@@ -209,6 +209,44 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
                 "- `@timestamp` must span 30 days for trend analysis"
             )
 
+        with st.expander("📋 See the prompt Vulcan uses to expand your brief input"):
+            st.caption(
+                "When 'Prompt expansion' is enabled in Settings, Vulcan feeds your brief "
+                "description through this prompt before generation. The result is a rich "
+                "technical context document that drives all downstream stages."
+            )
+            st.code(
+                """You are an Elastic Solutions Architect creating a detailed technical use case document.
+You will receive sparse customer context including company name, department, pain points,
+and basic use cases. Your task is to transform this into a comprehensive, realistic document
+that aligns with actual enterprise data sources and Elastic capabilities.
+
+OUTPUT REQUIREMENTS:
+
+1. Customer Profile — company, department, industry, use case category, primary interest
+
+2. Pain Points (3-6) — each with:
+   - Business impact (cost, risk, efficiency, customer experience)
+   - Technical root cause (tooling gaps, data silos, visibility issues)
+   - Realistic specifics: actual tools/systems (Kafka, Splunk, Prometheus, etc.)
+
+3. Key Metrics & Data Sources — for each metric category:
+   - Field names in dot.notation (ECS / OpenTelemetry conventions)
+   - Data collection method (Metricbeat, APM agents, Filebeat, OTel, etc.)
+   - Source system and breakdown dimensions
+
+4. Use Cases (4-6) — each with:
+   - Objective: one sentence business/technical goal
+   - Key metrics: 3-6 specific metrics with field names
+   - Output/Benefits: concrete insights and business value
+
+Tone: specific and technical, real product names, actual field names.
+No query language, no placeholders, no dashboard/ML references.
+
+Now expand: {user_prompt}""",
+                language="text"
+            )
+
     with st.expander("**Stage 3 — Generate & Index Data** (shaped to the strategy)"):
         col_a, col_b = st.columns(2, gap="large")
         with col_a:
@@ -224,6 +262,12 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
                 "    size=n, p=weights  # weighted: some hosts hotter\n"
                 ")",
                 language="python"
+            )
+            st.caption(
+                "Generated using **pandas** (DataFrames), **NumPy** (distributions: "
+                "lognormal, Poisson, normal, choice with weights), **random** (sampling, "
+                "shuffling), and Python's **datetime/timedelta** (time-series generation). "
+                "Each demo gets its own custom `data_generator.py` — no shared templates."
             )
         with col_b:
             st.markdown("**Indexed to Elasticsearch:**")
@@ -241,6 +285,48 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
             "value distributions, and date ranges. **Queries are then written against what's "
             "actually in Elasticsearch**, not against assumptions. This is what makes them work."
         )
+
+        col_prof, col_rules = st.columns(2, gap="large")
+        with col_prof:
+            st.markdown("**What profiling captures (example):**")
+            st.code(
+                "index: telco_network_events\n"
+                "  total_docs:   47,312\n"
+                "  date_range:   2025-02-04 → 2026-03-06\n"
+                "  fields:\n"
+                "    mme_host:         14 distinct values\n"
+                "    network_segment:  ['RAN', 'Core', 'Edge']\n"
+                "    failure_count:    min=0, max=312, p95=89\n"
+                "    error_code:       23 distinct values\n"
+                "    hss_node_id:      join key → hss_nodes index",
+                language="yaml"
+            )
+            st.caption(
+                "Cardinality, value samples, and date ranges are fed directly into "
+                "the query generation prompt — so field names, filter values, and "
+                "JOIN keys are always real, not guessed."
+            )
+        with col_rules:
+            st.markdown("**Query generation is governed by strict rules:**")
+            st.markdown(
+                "Vulcan's LLM is constrained by a detailed ES|QL ruleset covering "
+                "correct syntax, proven patterns, and explicit anti-patterns. "
+                "Key rules enforced:"
+            )
+            st.markdown(
+                "- `LOOKUP JOIN`: field must exist in **both** indices; no table prefix after join\n"
+                "- `INLINESTATS`: compute baselines inline — no pre-aggregated tables needed\n"
+                "- `FORK` + `FUSE LINEAR`: parallel branches, no named branches, no comments inside\n"
+                "- `COMPLETION`: must follow `MATCH`/`QSTR`; `inference_id` required\n"
+                "- `@timestamp`: never parameterize — use `NOW()` for recency\n"
+                "- Parameters: `?name` syntax only; no NULL checks; string literals only"
+            )
+            st.markdown(
+                "📄 [ES|QL patterns & rules](https://github.com/elastic/vulcan/blob/main/src/prompts/esql_strict_rules.py) · "
+                "[Command reference docs](https://github.com/elastic/vulcan/tree/main/docs/esql)",
+                unsafe_allow_html=False
+            )
+
         st.markdown("**Example — Cell Tower Handoff Cascade Failure Analysis:**")
         st.code(
             "FROM network_events\n"
@@ -275,10 +361,37 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
             "parameterized variants become Agent Builder tools."
         )
 
-    with st.expander("**Stage 5 — Deploy to Agent Builder** (ready to run)"):
+    with st.expander("**Stage 5 — You take control** (validate, deploy, deliver)"):
+        st.markdown(
+            "Generation produces the raw materials. **This stage is yours** — Vulcan gives you "
+            "a structured workflow to validate, deploy, and then deliver the demo."
+        )
+
         col_a, col_b = st.columns(2, gap="large")
         with col_a:
-            st.markdown("**Agent Builder tool (auto-generated):**")
+            st.markdown("**Your workflow in the Queries tab:**")
+            st.markdown(
+                "1. **Run each query** against the live index — see real results\n"
+                "2. **Mark as validated** — promotes the query to a tool candidate\n"
+                "3. **Edit tool metadata** — review the auto-generated `tool_id`, "
+                "description, and tags; adjust before saving\n"
+                "4. **Deploy tools** — pushes each validated query to Agent Builder "
+                "as a callable tool\n"
+            )
+            st.markdown("**Then in the Agents tab:**")
+            st.markdown(
+                "5. **Review agent config** — name, instructions, avatar auto-generated\n"
+                "6. **Deploy the agent** — creates the agent in Agent Builder\n"
+                "7. **Link tools → agent** — assigns all deployed tools to the agent\n"
+            )
+            st.markdown("**Finally, the Script tab:**")
+            st.markdown(
+                "8. **Use the auto-generated demo guide** — talk track, key insights, "
+                "suggested questions, and 'aha moment' prompts — to run the live demo "
+                "in Agent Builder with confidence\n"
+            )
+        with col_b:
+            st.markdown("**Example tool definitions (auto-generated):**")
             st.code(
                 '{\n'
                 '  "tool_id": "telco_network_ops_tower_handoff_cascade_failures",\n'
@@ -290,21 +403,6 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
                 '}',
                 language="json"
             )
-            st.markdown("**Parameterized tool (subscriber lookup):**")
-            st.code(
-                '{\n'
-                '  "tool_id": "telco_network_ops_auth_failures_param",\n'
-                '  "description": "Authentication failure activity for a specific\n'
-                '    subscriber, IMSI, or location area code. Use when\n'
-                '    investigating subscriber-level auth outages.",\n'
-                '  "parameters": [\n'
-                '    {"name": "subscriber_id", "type": "string",\n'
-                '     "description": "IMSI, subscriber ID, or LAC (e.g. LAC-1001)"}\n'
-                '  ]\n'
-                '}',
-                language="json"
-            )
-        with col_b:
             st.markdown("**Demo guide excerpt (auto-generated):**")
             st.info(
                 "_\"Start with the cascade failure scan — no parameters needed, it runs "
