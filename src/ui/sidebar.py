@@ -379,25 +379,6 @@ def render_sidebar():
             st.session_state.ai_expansion_used = False  # Re-enable expansion
             st.rerun()
 
-        if st.button("📋 Use Test Prompt", use_container_width=True):
-            test_prompt = """Salesforce's Customer Success team wants to prevent churn in their enterprise accounts. They manage 5,000+ accounts worth $10B in ARR but can only do quarterly business reviews. They need real-time health scores, usage analytics, and early warning signals. The CCO wants agents that can answer 'Which accounts are at risk this month and why?'"""
-            if (st.session_state.get("ai_expansion_enabled", True) and
-                    not st.session_state.get("ai_expansion_used", False) and
-                    len(st.session_state.messages) == 0):
-                # Route through expansion flow (same as chat input)
-                st.session_state.guided_expansion = {
-                    'stage': 'extracting',
-                    'original_prompt': test_prompt,
-                    'extraction': None,
-                    'validated_extraction': None,
-                    'expanded_content': None
-                }
-            else:
-                # Expansion disabled or already used — direct processing
-                st.session_state.messages.append({"role": "user", "content": test_prompt})
-                st.session_state.needs_processing = True
-            st.rerun()
-
         # About Vulcan button
         if st.button("💡 About Vulcan", use_container_width=True, key="under_the_hood_btn"):
             st.session_state.show_under_the_hood = True

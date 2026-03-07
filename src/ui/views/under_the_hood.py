@@ -209,42 +209,15 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
                 "- `@timestamp` must span 30 days for trend analysis"
             )
 
-        with st.expander("📋 See the prompt Vulcan uses to expand your brief input"):
-            st.caption(
+        with st.expander("📋 See the prompts Vulcan uses to expand your brief input"):
+            st.markdown(
                 "When 'Prompt expansion' is enabled in Settings, Vulcan feeds your brief "
-                "description through this prompt before generation. The result is a rich "
-                "technical context document that drives all downstream stages."
-            )
-            st.code(
-                """You are an Elastic Solutions Architect creating a detailed technical use case document.
-You will receive sparse customer context including company name, department, pain points,
-and basic use cases. Your task is to transform this into a comprehensive, realistic document
-that aligns with actual enterprise data sources and Elastic capabilities.
-
-OUTPUT REQUIREMENTS:
-
-1. Customer Profile — company, department, industry, use case category, primary interest
-
-2. Pain Points (3-6) — each with:
-   - Business impact (cost, risk, efficiency, customer experience)
-   - Technical root cause (tooling gaps, data silos, visibility issues)
-   - Realistic specifics: actual tools/systems (Kafka, Splunk, Prometheus, etc.)
-
-3. Key Metrics & Data Sources — for each metric category:
-   - Field names in dot.notation (ECS / OpenTelemetry conventions)
-   - Data collection method (Metricbeat, APM agents, Filebeat, OTel, etc.)
-   - Source system and breakdown dimensions
-
-4. Use Cases (4-6) — each with:
-   - Objective: one sentence business/technical goal
-   - Key metrics: 3-6 specific metrics with field names
-   - Output/Benefits: concrete insights and business value
-
-Tone: specific and technical, real product names, actual field names.
-No query language, no placeholders, no dashboard/ML references.
-
-Now expand: {user_prompt}""",
-                language="text"
+                "description through one of two templates before generation begins — one for "
+                "**Observability & Analytics** demos, one for **Search & Retrieval** demos. "
+                "The result is a rich, domain-specific context document that drives all "
+                "downstream pipeline stages.\n\n"
+                "📄 [View the full expansion prompts on GitHub]"
+                "(https://github.com/elastic/vulcan/blob/main/docs/EXPANSION_PROMPTS.md)"
             )
 
     with st.expander("**Stage 3 — Generate & Index Data** (shaped to the strategy)"):

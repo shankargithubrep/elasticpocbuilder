@@ -60,7 +60,6 @@ After generation, switch to Browse mode to:
 
 **Pro Tips:**
 - Be specific about metrics and KPIs
-- Click "Use Test Prompt" to see an example
 - Check the Status section if something isn't working
 """,
 
