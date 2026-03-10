@@ -111,18 +111,41 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
         st.success("#### ✅ Vulcan-generated (Telco Network Ops)")
         st.markdown("**Data fields**")
         st.code(
-            "imsi, mme_host, hss_node_id, cell_id,\nattach_failure_reason,\nsignaling_storm_severity, error_rate_pct",
+            "tower_id, network_segment, error_code,\nimsi, mme_host, affected_subscribers,\nevent_type, cascade_severity",
             language="text"
         )
         st.markdown("**Sample query**")
         st.code(
-            "FROM telco_network_events\n| INLINESTATS avg_failures = AVG(failure_count)\n    BY mme_host\n| WHERE failure_count > avg_failures * 1.5\n| SORT failure_count DESC",
+            'FROM network_events\n'
+            '| WHERE event_type == "handoff_failure"\n'
+            '| EVAL time_bucket = DATE_TRUNC(10 minutes, @timestamp)\n'
+            '| STATS\n'
+            '    failure_count        = COUNT(*),\n'
+            '    affected_subscribers = SUM(TO_LONG(affected_subscribers)),\n'
+            '    unique_towers        = COUNT_DISTINCT(tower_id),\n'
+            '    error_types          = VALUES(error_code)\n'
+            '    BY time_bucket, network_segment\n'
+            '| INLINESTATS\n'
+            '    avg_failures    = AVG(failure_count),\n'
+            '    stddev_failures = STD_DEV(failure_count)\n'
+            '    BY network_segment\n'
+            '| EVAL z_score = (failure_count - avg_failures)\n'
+            '               / COALESCE(stddev_failures, 1)\n'
+            '| EVAL cascade_severity = CASE(\n'
+            '    unique_towers >= 5 AND z_score > 3, "Critical Cascade",\n'
+            '    unique_towers >= 3 AND z_score > 2, "Moderate Cascade",\n'
+            '    unique_towers >= 2,                 "Localized Issue"\n'
+            '  )\n'
+            '| WHERE unique_towers >= 2\n'
+            '| SORT z_score DESC, unique_towers DESC\n'
+            '| LIMIT 100',
             language="esql"
         )
         st.markdown("**Talk track**")
         st.markdown(
-            "_\"Watch what happens when we isolate MME hosts where failure rates "
-            "exceed the fleet average by 50% — these are your signaling storm candidates...\"_"
+            "_\"See these cascade events? When three or more adjacent towers start failing "
+            "handoffs simultaneously, that's not random — it's a configuration drift or hardware "
+            "fault propagating across the radio network. This query catches it in real time.\"_"
         )
         st.caption("Domain vocabulary. Realistic distributions. Ready to present.")
 

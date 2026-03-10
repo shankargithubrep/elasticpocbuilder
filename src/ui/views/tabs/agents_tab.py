@@ -194,137 +194,287 @@ def render_agents_tab(agent_builder):
 
         st.divider()
 
-        # Section 2: Agent Configuration
-        st.markdown("#### 🎯 Agent Configuration")
-        st.caption("Configure and deploy your agent to Elastic Agent Builder")
+        # Section 2: Agent Configuration (collapsed by default)
+        with st.expander("🎯 Agent Configuration", expanded=False):
+            st.caption("Configure and deploy your agent to Elastic Agent Builder")
 
-        # Agent configuration form
-        with st.form("agent_config_form"):
-            # Pre-fill with metadata from module
-            agent_id = st.text_input(
-                "Agent ID",
-                value=agent_metadata.get('id', ''),
-                help="Unique identifier for the agent (lowercase, no spaces)"
-            )
-
-            agent_name = st.text_input(
-                "Agent Name",
-                value=agent_metadata.get('name', ''),
-                help="Display name for the agent"
-            )
-
-            agent_description = st.text_area(
-                "Agent Description",
-                value=agent_metadata.get('description', ''),
-                height=100,
-                help="Brief description shown to users"
-            )
-
-            # Avatar customization
-            col1, col2 = st.columns(2)
-            with col1:
-                avatar_symbol = st.text_input(
-                    "Avatar Symbol",
-                    value=agent_metadata.get('avatar_symbol', 'AI'),
-                    max_chars=2,
-                    help="1-2 letter symbol for the avatar"
+            # Agent configuration form
+            with st.form("agent_config_form"):
+                # Pre-fill with metadata from module
+                agent_id = st.text_input(
+                    "Agent ID",
+                    value=agent_metadata.get('id', ''),
+                    help="Unique identifier for the agent (lowercase, no spaces)"
                 )
 
-            with col2:
-                avatar_color = st.color_picker(
-                    "Avatar Color",
-                    value=agent_metadata.get('avatar_color', '#3B82F6')
+                agent_name = st.text_input(
+                    "Agent Name",
+                    value=agent_metadata.get('name', ''),
+                    help="Display name for the agent"
                 )
 
-            # Labels
-            labels_str = st.text_input(
-                "Labels (comma-separated)",
-                value=", ".join(agent_metadata.get('labels', [])),
-                help="Tags for categorizing the agent"
-            )
-            agent_labels = [l.strip() for l in labels_str.split(',') if l.strip()]
+                agent_description = st.text_area(
+                    "Agent Description",
+                    value=agent_metadata.get('description', ''),
+                    height=100,
+                    help="Brief description shown to users"
+                )
 
-            # Instructions
-            agent_instructions = st.text_area(
-                "Agent Instructions",
-                value=agent_metadata.get('configuration', {}).get('instructions', ''),
-                height=200,
-                help="System prompt/instructions for the agent"
-            )
+                # Avatar customization
+                col1, col2 = st.columns(2)
+                with col1:
+                    avatar_symbol = st.text_input(
+                        "Avatar Symbol",
+                        value=agent_metadata.get('avatar_symbol', 'AI'),
+                        max_chars=2,
+                        help="1-2 letter symbol for the avatar"
+                    )
 
-            # Form actions
-            col_save, col_deploy = st.columns(2)
+                with col2:
+                    avatar_color = st.color_picker(
+                        "Avatar Color",
+                        value=agent_metadata.get('avatar_color', '#3B82F6')
+                    )
 
-            with col_save:
-                if st.form_submit_button("💾 Save Configuration", use_container_width=True):
-                    # Update agent metadata in the file
-                    updated_metadata = {
-                        "id": agent_id,
-                        "name": agent_name,
-                        "description": agent_description,
-                        "labels": agent_labels,
-                        "avatar_color": avatar_color,
-                        "avatar_symbol": avatar_symbol,
-                        "configuration": {
-                            "instructions": agent_instructions,
-                            "tools": []  # Tools will be managed separately
+                # Labels
+                labels_str = st.text_input(
+                    "Labels (comma-separated)",
+                    value=", ".join(agent_metadata.get('labels', [])),
+                    help="Tags for categorizing the agent"
+                )
+                agent_labels = [l.strip() for l in labels_str.split(',') if l.strip()]
+
+                # Instructions
+                agent_instructions = st.text_area(
+                    "Agent Instructions",
+                    value=agent_metadata.get('configuration', {}).get('instructions', ''),
+                    height=200,
+                    help="System prompt/instructions for the agent"
+                )
+
+                # Form actions
+                col_save, col_deploy = st.columns(2)
+
+                with col_save:
+                    if st.form_submit_button("💾 Save Configuration", use_container_width=True):
+                        # Update agent metadata in the file
+                        updated_metadata = {
+                            "id": agent_id,
+                            "name": agent_name,
+                            "description": agent_description,
+                            "labels": agent_labels,
+                            "avatar_color": avatar_color,
+                            "avatar_symbol": avatar_symbol,
+                            "configuration": {
+                                "instructions": agent_instructions,
+                                "tools": []  # Tools will be managed separately
+                            }
                         }
-                    }
 
-                    try:
-                        with open(agent_metadata_path, 'w') as f:
-                            json.dump(updated_metadata, f, indent=2)
-                        st.success("✅ Agent configuration saved locally!")
-                    except Exception as e:
-                        st.error(f"Failed to save configuration: {e}")
+                        try:
+                            with open(agent_metadata_path, 'w') as f:
+                                json.dump(updated_metadata, f, indent=2)
+                            st.success("✅ Agent configuration saved locally!")
+                        except Exception as e:
+                            st.error(f"Failed to save configuration: {e}")
 
-            with col_deploy:
-                if st.form_submit_button("🚀 Deploy Agent", use_container_width=True, type="primary"):
-                    if not all([agent_id, agent_name, agent_description, agent_instructions]):
-                        st.error("Please fill in all required fields")
-                    else:
-                        with st.spinner("Deploying agent to Elastic Agent Builder..."):
-                            # Check if agent exists
-                            existing = [a for a in deployed_agents if a.get('id') == agent_id]
+                with col_deploy:
+                    if st.form_submit_button("🚀 Deploy Agent", use_container_width=True, type="primary"):
+                        if not all([agent_id, agent_name, agent_description, agent_instructions]):
+                            st.error("Please fill in all required fields")
+                        else:
+                            with st.spinner("Deploying agent to Elastic Agent Builder..."):
+                                # Check if agent exists
+                                existing = [a for a in deployed_agents if a.get('id') == agent_id]
 
-                            if existing:
-                                # Update existing agent
-                                result = agent_builder.update_agent(agent_id, {
-                                    'name': agent_name,
-                                    'description': agent_description,
-                                    'labels': agent_labels,
-                                    'avatar_color': avatar_color,
-                                    'avatar_symbol': avatar_symbol,
-                                    'instructions': agent_instructions
-                                })
-                                if result.get('success'):
-                                    st.success(f"✅ Agent updated successfully: {agent_id}")
+                                if existing:
+                                    # Update existing agent
+                                    result = agent_builder.update_agent(agent_id, {
+                                        'name': agent_name,
+                                        'description': agent_description,
+                                        'labels': agent_labels,
+                                        'avatar_color': avatar_color,
+                                        'avatar_symbol': avatar_symbol,
+                                        'instructions': agent_instructions
+                                    })
+                                    if result.get('success'):
+                                        st.success(f"✅ Agent updated successfully: {agent_id}")
+                                    else:
+                                        st.error(f"❌ Update failed: {result.get('error')}")
                                 else:
-                                    st.error(f"❌ Update failed: {result.get('error')}")
-                            else:
-                                # Create new agent
-                                result = agent_builder.create_agent({
-                                    'id': agent_id,
-                                    'name': agent_name,
-                                    'description': agent_description,
-                                    'labels': agent_labels,
-                                    'avatar_color': avatar_color,
-                                    'avatar_symbol': avatar_symbol,
-                                    'instructions': agent_instructions,
-                                    'tool_ids': []  # Start with no tools
-                                })
-                                if result.get('success'):
-                                    st.success(f"✅ Agent deployed successfully: {agent_id}")
-                                    st.balloons()
+                                    # Create new agent
+                                    result = agent_builder.create_agent({
+                                        'id': agent_id,
+                                        'name': agent_name,
+                                        'description': agent_description,
+                                        'labels': agent_labels,
+                                        'avatar_color': avatar_color,
+                                        'avatar_symbol': avatar_symbol,
+                                        'instructions': agent_instructions,
+                                        'tool_ids': []  # Start with no tools
+                                    })
+                                    if result.get('success'):
+                                        st.success(f"✅ Agent deployed successfully: {agent_id}")
+                                        st.balloons()
 
-                                    # Update progress tracking
-                                    try:
-                                        progress_service = get_progress_service(st.session_state.current_demo_module)
-                                        progress_service.mark_agent_deployed()
-                                    except Exception as e:
-                                        logger.warning(f"Could not update progress tracking: {e}")
-                                else:
-                                    st.error(f"❌ Deployment failed: {result.get('error')}")
+                                        # Update progress tracking
+                                        try:
+                                            progress_service = get_progress_service(st.session_state.current_demo_module)
+                                            progress_service.mark_agent_deployed()
+                                        except Exception as e:
+                                            logger.warning(f"Could not update progress tracking: {e}")
+                                    else:
+                                        st.error(f"❌ Deployment failed: {result.get('error')}")
 
-                            # Note: no st.rerun() here — it resets the active tab.
-                            # The success/error message above is sufficient.
+                                # Note: no st.rerun() here — it resets the active tab.
+                                # The success/error message above is sufficient.
+
+        st.divider()
+
+        # Section 3: Test Agent Chat (at the bottom, near the chat input)
+        if deployed_agents:
+            st.markdown("#### 💬 Test Agent")
+
+            # Agent and connector selectors
+            col_agent, col_connector = st.columns(2)
+
+            with col_agent:
+                agent_options = {a.get('name', a.get('id', 'Unknown')): a.get('id') for a in deployed_agents}
+                if len(agent_options) == 1:
+                    selected_agent_name = list(agent_options.keys())[0]
+                    selected_agent_id = list(agent_options.values())[0]
+                    st.caption(f"Agent: **{selected_agent_name}**")
+                else:
+                    selected_agent_name = st.selectbox(
+                        "Select agent to test",
+                        options=list(agent_options.keys()),
+                        key="agent_chat_selector"
+                    )
+                    selected_agent_id = agent_options[selected_agent_name]
+
+            with col_connector:
+                # LLM connector selector
+                llm_connectors = agent_builder.list_llm_connectors()
+                if llm_connectors:
+                    connector_options = {c["name"]: c["id"] for c in llm_connectors}
+                    # Default to an inference connector if available
+                    default_name = next(
+                        (c["name"] for c in llm_connectors if c["type"] == ".inference"),
+                        llm_connectors[0]["name"]
+                    )
+                    selected_connector_name = st.selectbox(
+                        "LLM Connector",
+                        options=list(connector_options.keys()),
+                        index=list(connector_options.keys()).index(default_name),
+                        key="agent_chat_connector"
+                    )
+                    selected_connector_id = connector_options[selected_connector_name]
+                else:
+                    selected_connector_id = None
+                    st.caption("No LLM connectors found")
+
+            # Session state keys for this agent
+            history_key = f"agent_chat_history_{selected_agent_id}"
+            conv_id_key = f"agent_chat_conversation_id_{selected_agent_id}"
+
+            if history_key not in st.session_state:
+                st.session_state[history_key] = []
+            if conv_id_key not in st.session_state:
+                st.session_state[conv_id_key] = None
+
+            # Clear conversation button
+            if st.session_state[history_key]:
+                if st.button("🗑️ Clear conversation", key="clear_agent_chat"):
+                    st.session_state[history_key] = []
+                    st.session_state[conv_id_key] = None
+                    st.rerun()
+
+            # Display chat history
+            chat_container = st.container()
+            with chat_container:
+                for msg in st.session_state[history_key]:
+                    with st.chat_message(msg["role"]):
+                        st.markdown(msg["content"])
+                        if msg.get("tools_used"):
+                            with st.expander(f"🛠️ Tools used ({len(msg['tools_used'])})"):
+                                for tool in msg["tools_used"]:
+                                    tool_name = tool.get("name", tool.get("tool_id", "unknown"))
+                                    st.markdown(f"**`{tool_name}`**")
+                                    if tool.get("input"):
+                                        st.caption("Input:")
+                                        st.json(tool["input"])
+                                    if tool.get("result"):
+                                        st.caption("Result:")
+                                        results = tool["result"]
+                                        # Results can be a list of typed result objects
+                                        if isinstance(results, list):
+                                            for r in results:
+                                                if isinstance(r, dict):
+                                                    r_type = r.get("type", "")
+                                                    r_data = r.get("data", {})
+                                                    if r_type == "query" and isinstance(r_data, dict) and r_data.get("esql"):
+                                                        st.code(r_data["esql"], language="sql")
+                                                    elif r_type == "esql_results" and isinstance(r_data, dict):
+                                                        cols = r_data.get("columns", [])
+                                                        vals = r_data.get("values", [])
+                                                        if cols and vals:
+                                                            import pandas as pd
+                                                            col_names = [c["name"] for c in cols]
+                                                            try:
+                                                                # Stringify any list/dict values to avoid mixed-type errors
+                                                                clean_vals = [
+                                                                    [str(v) if isinstance(v, (list, dict)) else v for v in row]
+                                                                    for row in vals
+                                                                ]
+                                                                df = pd.DataFrame(clean_vals, columns=col_names)
+                                                                st.dataframe(df, use_container_width=True)
+                                                            except Exception:
+                                                                st.json(r_data)
+                                                        else:
+                                                            st.json(r_data)
+                                                    else:
+                                                        st.json(r)
+                                                else:
+                                                    st.text(str(r))
+                                        else:
+                                            st.json(results)
+                                    st.divider()
+
+            # Chat input
+            user_message = st.chat_input("Ask the agent something...", key="agent_chat_input")
+            if user_message:
+                # Add user message to history
+                st.session_state[history_key].append({
+                    "role": "user",
+                    "content": user_message,
+                    "tools_used": []
+                })
+
+                # Call the converse API
+                with st.spinner("Agent is thinking..."):
+                    result = agent_builder.converse(
+                        agent_id=selected_agent_id,
+                        message=user_message,
+                        conversation_id=st.session_state[conv_id_key],
+                        connector_id=selected_connector_id
+                    )
+
+                if result.get("error"):
+                    st.error(f"Agent error: {result['error']}")
+                else:
+                    # Extract response from parsed SSE result
+                    reply = result.get("message", "")
+                    tools_used = result.get("tools_used", [])
+                    conversation_id = result.get("conversation_id") or st.session_state[conv_id_key]
+
+                    # Update conversation ID for multi-turn
+                    st.session_state[conv_id_key] = conversation_id
+
+                    # Add assistant message to history
+                    st.session_state[history_key].append({
+                        "role": "assistant",
+                        "content": reply,
+                        "tools_used": tools_used if isinstance(tools_used, list) else []
+                    })
+
+                    st.rerun()

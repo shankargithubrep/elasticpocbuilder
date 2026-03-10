@@ -53,44 +53,59 @@ def render_browse_demos_view():
         loader = manager.get_module(st.session_state.current_demo_module)
 
         if loader:
-            # Create tabs FIRST to prevent resets
-            # New order: Config, Data, Queries, Tools, Agents, Guide
-            tabs = st.tabs(["📋 Config", "🗂️ Data", "🔍 Queries", "🔧 Tools", "🤖 Agents", "📝 Guide"])
+            # Tab labels and icons — use a session-state-backed selector so
+            # the active tab survives Streamlit reruns (st.tabs resets on every
+            # rerun because it's a layout element, not a stateful widget).
+            TAB_OPTIONS = [
+                "📋 Config",
+                "🗂️ Data",
+                "🔍 Queries",
+                "🔧 Tools",
+                "🤖 Agents",
+                "📝 Guide",
+            ]
 
-            # Auto-load assets when demo is selected (after tabs are created)
-            # Use a session state key specific to this demo to track if we've loaded
+            if "browse_active_tab" not in st.session_state:
+                st.session_state["browse_active_tab"] = TAB_OPTIONS[0]
+
+            active_tab = st.segmented_control(
+                "Tab",
+                options=TAB_OPTIONS,
+                default=st.session_state["browse_active_tab"],
+                key="browse_active_tab",
+                label_visibility="collapsed",
+            )
+
+            # Auto-load assets when demo is selected
             assets_key = f"assets_loaded_{st.session_state.current_demo_module}"
 
             if not st.session_state.get(assets_key, False):
                 with st.spinner("Loading demo assets..."):
                     try:
-                        # Load all assets
                         datasets = load_demo_datasets(st.session_state.current_demo_module)
                         queries = load_demo_queries(st.session_state.current_demo_module)
                         guide = load_demo_guide(st.session_state.current_demo_module)
 
-                        # Mark assets as loaded for this specific demo
                         st.session_state[assets_key] = True
-                        st.session_state.assets_generated = True  # Keep for backwards compatibility
+                        st.session_state.assets_generated = True
                     except Exception as e:
                         logger.error(f"Error auto-loading assets: {e}")
                         st.error(f"Error loading assets: {e}")
 
-            # Render each tab using extracted modules
-            with tabs[0]:
+            # Render the selected tab
+            if active_tab == "📋 Config":
                 render_config_tab(loader, assets_key)
 
-            with tabs[1]:
+            elif active_tab == "🗂️ Data":
                 render_data_tab()
 
-            with tabs[2]:
+            elif active_tab == "🔍 Queries":
                 render_queries_tab(loader)
 
-            with tabs[3]:
+            elif active_tab == "🔧 Tools":
                 render_tools_tab(loader)
 
-            with tabs[4]:
-                # Initialize Agent Builder service for agents tab
+            elif active_tab == "🤖 Agents":
                 from src.services.agent_builder_service import AgentBuilderService
 
                 try:
@@ -100,7 +115,7 @@ def render_browse_demos_view():
                     st.error(f"❌ Agent Builder Service not configured: {e}")
                     st.info("Please set ELASTICSEARCH_KIBANA_URL and ELASTICSEARCH_API_KEY in your .env file")
 
-            with tabs[5]:
+            elif active_tab == "📝 Guide":
                 render_guide_tab()
         else:
             st.info("👈 Select a demo from the sidebar to view details")

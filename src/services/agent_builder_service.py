@@ -606,6 +606,173 @@ class AgentBuilderService:
 
         return param_definitions
 
+    def list_connectors(self) -> List[Dict[str, Any]]:
+        """List all Kibana connectors, useful for finding LLM connector IDs."""
+        try:
+            response = requests.get(
+                f"{self.kibana_url}/api/actions/connectors",
+                headers=self.headers,
+                timeout=15
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException:
+            return []
+
+    def list_llm_connectors(self) -> List[Dict[str, str]]:
+        """List connectors suitable for LLM use (inference and gen-ai types)."""
+        connectors = self.list_connectors()
+        llm_types = {'.inference', '.gen-ai'}
+        return [
+            {"id": c["id"], "name": c.get("name", c["id"]), "type": c.get("connector_type_id", "")}
+            for c in connectors
+            if c.get("connector_type_id") in llm_types
+        ]
+
+    def converse(
+        self,
+        agent_id: str,
+        message: str,
+        conversation_id: Optional[str] = None,
+        connector_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Send a message to a deployed agent and get a response.
+
+        Uses the async SSE endpoint and collects the streamed events into a
+        single result dict.
+
+        Args:
+            agent_id: The ID of the agent to converse with
+            message: The user message to send
+            conversation_id: Optional conversation ID for multi-turn context
+            connector_id: Optional LLM connector ID to use
+
+        Returns:
+            Dict with keys: message, conversation_id, tools_used, events
+        """
+        try:
+            payload: Dict[str, Any] = {
+                'agent_id': agent_id,
+                'input': message,
+            }
+            if conversation_id:
+                payload['conversation_id'] = conversation_id
+            if connector_id:
+                payload['connector_id'] = connector_id
+
+            response = requests.post(
+                f"{self.kibana_url}/api/agent_builder/converse/async",
+                headers={**self.write_headers, 'Accept': 'text/event-stream'},
+                json=payload,
+                timeout=120,
+                stream=True
+            )
+            response.raise_for_status()
+
+            return self._parse_sse_response(response)
+        except requests.exceptions.RequestException as e:
+            error_msg = str(e)
+            try:
+                if hasattr(e, 'response') and e.response is not None:
+                    error_detail = e.response.json()
+                    error_msg = f"{error_msg}\nAPI Response: {json.dumps(error_detail, indent=2)}"
+            except Exception:
+                if hasattr(e, 'response') and e.response is not None:
+                    error_msg = f"{error_msg}\nAPI Response: {e.response.text}"
+            return {
+                'error': error_msg,
+                'success': False
+            }
+
+    def _parse_sse_response(self, response) -> Dict[str, Any]:
+        """Parse an SSE stream from the converse/async endpoint.
+
+        Collects message chunks, tool calls/results, and the conversation ID
+        into a single dict.
+        """
+        result_message = ""
+        conversation_id = None
+        tools_used: List[Dict[str, Any]] = []
+        pending_tool_calls: Dict[str, Dict[str, Any]] = {}
+        events: List[Dict[str, Any]] = []
+
+        current_event_type = None
+
+        for raw_line in response.iter_lines():
+            if not raw_line:
+                continue
+            line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+            line = line.strip()
+
+            if line.startswith("event:"):
+                current_event_type = line[len("event:"):].strip()
+                continue
+
+            if line.startswith("data:"):
+                data_str = line[len("data:"):].strip()
+                if not data_str:
+                    continue
+
+                try:
+                    data = json.loads(data_str)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+                events.append({"type": current_event_type, "data": data})
+
+                # The SSE payload is double-nested: {"data": {actual fields}}
+                # Unwrap if present, otherwise use data directly.
+                inner = data.get("data", data) if isinstance(data, dict) else data
+
+                if current_event_type == "conversation_id_set":
+                    conversation_id = inner.get("conversation_id") if isinstance(inner, dict) else None
+
+                elif current_event_type == "message_chunk":
+                    chunk = inner.get("text_chunk", inner.get("content", inner.get("chunk", ""))) if isinstance(inner, dict) else ""
+                    result_message += chunk
+
+                elif current_event_type == "message_complete":
+                    content = inner.get("message_content", inner.get("content", "")) if isinstance(inner, dict) else ""
+                    if content:
+                        result_message = content
+
+                elif current_event_type == "tool_call":
+                    call_id = inner.get("tool_call_id", inner.get("id", ""))
+                    pending_tool_calls[call_id] = {
+                        "name": inner.get("tool_id", inner.get("name", "")),
+                        "input": inner.get("params", inner.get("input", inner.get("arguments", {}))),
+                    }
+
+                elif current_event_type == "tool_result":
+                    call_id = inner.get("tool_call_id", inner.get("id", ""))
+                    tool_entry = pending_tool_calls.pop(call_id, {"name": call_id, "input": {}})
+                    # Results can be a list of result objects
+                    results = inner.get("results", inner.get("result", inner.get("output", "")))
+                    tool_entry["result"] = results
+                    tools_used.append(tool_entry)
+
+                elif current_event_type == "error":
+                    err = inner.get("error", inner) if isinstance(inner, dict) else inner
+                    err_msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
+                    return {
+                        "error": err_msg,
+                        "events": events,
+                    }
+
+                current_event_type = None
+
+        # Any tool_calls without matching results still get recorded
+        for tool_id, entry in pending_tool_calls.items():
+            tools_used.append(entry)
+
+        return {
+            "message": result_message,
+            "conversation_id": conversation_id,
+            "tools_used": tools_used,
+            "events": events,
+        }
+
     def validate_connection(self) -> Dict[str, Any]:
         """
         Validate the connection to Kibana and Agent Builder API.

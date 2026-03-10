@@ -62,7 +62,7 @@ class TwoPhaseQueryStrategyGenerator:
         logger.info(f"Using dataset size preference: {size_preference}")
 
         # Phase 1: Generate lightweight query outlines
-        query_outlines = self._phase1_generate_outlines(context)
+        query_outlines = self._phase1_generate_outlines(context, size_preference)
         logger.info(f"Phase 1 complete: {len(query_outlines)} query outlines generated")
 
         # Phase 2: Enrich each query in parallel
@@ -85,7 +85,7 @@ class TwoPhaseQueryStrategyGenerator:
 
         return strategy
 
-    def _phase1_generate_outlines(self, context: Dict) -> List[QueryOutline]:
+    def _phase1_generate_outlines(self, context: Dict, size_preference: str = 'medium') -> List[QueryOutline]:
         """Phase 1: Generate lightweight query outlines
 
         This phase generates ONLY the structure, no detailed ES|QL or descriptions

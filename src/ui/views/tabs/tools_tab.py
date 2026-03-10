@@ -190,7 +190,12 @@ def render_tools_tab(loader):
                         st.success(f"✅ Successfully deleted tool: {tool_id}")
                         st.rerun()
                     else:
-                        st.error(f"❌ Failed to delete: {result.get('error')}")
+                        error_msg = result.get('error', '')
+                        if '409' in error_msg or 'Conflict' in error_msg:
+                            st.error(f"❌ Cannot delete **{tool_id}** — it is currently assigned to an agent. "
+                                     "Unassign it from the agent first (Agents tab → Manage Tool Assignment), then try again.")
+                        else:
+                            st.error(f"❌ Failed to delete: {error_msg}")
     else:
         st.info("No tools deployed for this demo yet.")
 
@@ -514,11 +519,28 @@ def render_tools_tab(loader):
                             st.info("ℹ️ Ensure required fields are filled out, then save before deploying")
 
         # Show already deployed queries at the bottom
+        # Cross-reference local state against actually deployed tools
+        deployed_tool_ids_live = {t.get('id') for t in deployed_tools}
         if already_deployed:
-            with st.expander(f"✅ Already Deployed ({len(already_deployed)})", expanded=False):
-                for deployed in already_deployed:
-                    deployed_tool_id = validation_service.get_deployed_tool_id(deployed['query_id'])
-                    st.success(f"• {deployed['query'].get('name', deployed['query_id'])} → {deployed_tool_id}")
+            still_deployed = []
+            stale_deployed = []
+            for dep in already_deployed:
+                dep_tool_id = validation_service.get_deployed_tool_id(dep['query_id'])
+                if dep_tool_id in deployed_tool_ids_live:
+                    still_deployed.append((dep, dep_tool_id))
+                else:
+                    stale_deployed.append((dep, dep_tool_id))
+                    # Clear stale local deployment state
+                    validation_service.mark_tool_undeployed(dep['query_id'])
+
+            if still_deployed:
+                with st.expander(f"✅ Already Deployed ({len(still_deployed)})", expanded=False):
+                    for dep, dep_tool_id in still_deployed:
+                        st.success(f"• {dep['query'].get('name', dep['query_id'])} → {dep_tool_id}")
+
+            if stale_deployed:
+                st.info(f"🔄 Cleared {len(stale_deployed)} stale deployment record(s) — tool(s) no longer exist in Agent Builder.")
+                st.rerun()
 
         if not undeployed_queries and not already_deployed:
             st.info("No validated queries found. Go to the Queries tab and validate queries after testing them.")

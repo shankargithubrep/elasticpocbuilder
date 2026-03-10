@@ -228,10 +228,8 @@ def render_progress_header(module_name: str):
         tools_tooltip = "✓ = At least 1 tool deployed. Shows deployed/validated queries (tool candidates)."
         if t_total == 0:
             st.markdown(f'<span title="{tools_tooltip}" style="cursor: help;">➖ <strong>Tools</strong></span>', unsafe_allow_html=True)
-        elif t_deployed == t_total and t_total > 0:
-            st.markdown(f'<span title="{tools_tooltip}" style="cursor: help;">✅ <strong>Tools</strong> {t_deployed}/{t_total}</span>', unsafe_allow_html=True)
         elif t_deployed > 0:
-            st.markdown(f'<span title="{tools_tooltip}" style="cursor: help;">🔶 <strong>Tools</strong> {t_deployed}/{t_total}</span>', unsafe_allow_html=True)
+            st.markdown(f'<span title="{tools_tooltip}" style="cursor: help;">✅ <strong>Tools</strong> {t_deployed}/{t_total}</span>', unsafe_allow_html=True)
         else:
             st.markdown(f'<span title="{tools_tooltip}" style="cursor: help;">⬜ <strong>Tools</strong> 0/{t_total}</span>', unsafe_allow_html=True)
 

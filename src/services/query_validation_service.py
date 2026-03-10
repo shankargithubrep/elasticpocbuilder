@@ -216,6 +216,14 @@ class QueryValidationService:
             self.tool_metadata[query_id]['deployed_at'] = datetime.now().isoformat()
             self._save_tool_metadata()
 
+    def mark_tool_undeployed(self, query_id: str):
+        """Clear the deployed state for a tool that no longer exists in Agent Builder."""
+        if query_id in self.tool_metadata:
+            self.tool_metadata[query_id]['deployed'] = False
+            self.tool_metadata[query_id].pop('deployed_tool_id', None)
+            self.tool_metadata[query_id].pop('deployed_at', None)
+            self._save_tool_metadata()
+
     def is_tool_deployed(self, query_id: str) -> bool:
         """
         Check if a tool has been deployed to Agent Builder.
