@@ -1,97 +1,6 @@
-# Vulcan: An AI-powered demo generation tool
+# Vulcan: AI-Powered Demo Generator for Elastic Agent Builder
 
-An AI-powered tool for generating sophisticated demo modules with a single user prompt. Each demo is built through a sophisticated planning process that aligns ES|QL queries with business intent, then designs data generation to support those queries. Supports both direct LLM-API and Elastic LLM Proxy connections. Module generation with experimental features enabled costs an average of $1 in API calls with Sonnet 4.5.
-
----
-
-## Overview
-
-Vulcan uses LLM code generation to create custom Python modules for each customer. These modules generate synthetic data, ES|QL queries, and demo narratives tailored to specific business contexts. The platform emphasizes query-first planning, where business intent drives query design, which then informs data generation strategy.
-
-### Key Approach
-
-```
-Customer Context → Query Planning → Data Generation Design → Asset Creation
-```
-
-Rather than filling templates, the system generates working Python code that implements customer-specific business logic. Each generated module is a standalone package that can be version-controlled, shared, and refined.
-
----
-
-## Core Capabilities
-
-### Intent-Driven Query Planning
-
-The system analyzes customer pain points and business questions to plan ES|QL queries before generating any data:
-
-1. **Intent Analysis**: Extracts business questions from customer context
-2. **Query Strategy**: Plans query types (scripted, parameterized, RAG) based on use cases
-3. **Data Requirements**: Designs datasets that support planned queries
-4. **Implementation**: Generates Python modules that create aligned data and queries
-
-This ensures queries answer real business questions with data structured to support those answers.
-
-### One-Shot Build Process
-
-The platform aims for working demos in a single generation cycle through:
-
-- **Pre-validation**: Syntax checking with automatic error correction
-- **Query Testing**: Optional Elasticsearch execution with result validation
-- **Constraint Optimization**: LLM-assisted query refinement for zero-result queries
-- **Interactive Editing**: Browser-based query modification and testing
-
-### Query Development Tools
-
-**Browse View Features**:
-- Edit queries directly in the browser with syntax highlighting
-- Test modified queries against indexed data
-- View results inline without saving changes
-- Parameter testing with sample values from data profiles
-- LLM-powered constraint relaxation for failed queries
-
-**Testing Support**:
-- Execute queries against real Elasticsearch clusters
-- Automatic retry with LLM-based error fixing (up to 3 attempts)
-- Sample value extraction from data profiles
-- Parameterized query testing interface
-
----
-
-## Demo Types: Search vs Analytics
-
-Vulcan supports two distinct demo types, each with specialized query strategies and data generation:
-
-### 🔍 Search/RAG Demos
-**When to use**: Document retrieval, knowledge base search, semantic search, policy lookup
-
-**Key Features**:
-- Semantic search with `MATCH`, `RERANK`, `COMPLETION` commands
-- RAG query pipelines for question-answering
-- `semantic_text` fields for vector-based search
-- Document-focused index strategy (`lookup` mode)
-
-**Example Use Cases**: Provider directory search, policy document retrieval, support ticket lookup, content discovery
-
-### 📊 Analytics Demos
-**When to use**: Metrics analysis, trends, aggregations, dashboards, reporting
-
-**Key Features**:
-- Time-series aggregations with `STATS` and `INLINESTATS`
-- Cross-dataset joins with `LOOKUP JOIN`
-- Statistical calculations and trend analysis
-- Data stream strategy for time-series data
-
-**Example Use Cases**: Engagement metrics, denial trend analysis, sales performance, customer journey analytics
-
-### How Classification Works
-
-Demo type is **automatically detected** during the conversational demo creation flow:
-- System analyzes your use case description
-- Identifies keywords (search: "find", "lookup", "retrieve" | analytics: "analyze", "trend", "metric")
-- Routes to appropriate strategy generator
-- You can also manually specify `demo_type` in configuration
-
-See `docs/RAG_SEARCH_ARCHITECTURE.md` for technical details on the dual-track architecture.
+Generate complete Elastic Agent Builder demos from a single prompt. Vulcan uses LLM code generation to create custom data, ES|QL queries, and demo narratives tailored to any industry or use case. Each demo is a standalone Python module you can version control, share, and refine.
 
 ---
 
@@ -100,516 +9,176 @@ See `docs/RAG_SEARCH_ARCHITECTURE.md` for technical details on the dual-track ar
 ### Prerequisites
 
 - Python 3.8+
-- Elasticsearch cluster (Cloud or local) with API key
-- Anthropic API key (for code generation)
-- Kibana instance with Agent Builder enabled (for tools & agents deployment)
+- Anthropic API key
+- Elasticsearch cluster with API key
+- Kibana instance with Agent Builder enabled
 
 ### Installation
 
 ```bash
-# Clone repository
 git clone https://github.com/elastic/vulcan.git
 cd vulcan
 
-# Setup environment
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Configure credentials
 cp .env.example .env
-# Edit .env with your API keys (see Configuration section below)
+# Edit .env with your credentials (see below)
 ```
 
-### Configuration
+### Configure Credentials
 
-Vulcan requires LLM access for code generation. You can choose from three options:
+Edit `.env` with your Anthropic API key and Elasticsearch credentials:
 
-**Option 1: LLM Proxy (Recommended)**
 ```bash
-LLM_PROXY_URL=https://your-proxy-url/v1
-LLM_PROXY_API_KEY=your-proxy-api-key
-```
-The proxy provides centralized model management and supports multiple providers (Anthropic, OpenAI, Google).
-
-**Option 2: Direct Anthropic API**
-```bash
+# LLM — Anthropic API key (required for demo generation)
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Elasticsearch — for data indexing and query testing
+ELASTICSEARCH_CLOUD_ID=your-deployment:base64string
+ELASTICSEARCH_API_KEY=your-api-key
+
+# Kibana — for Agent Builder deployment
+ELASTICSEARCH_KIBANA_URL=https://your-deployment.kb.region.cloud.es.io:443
 ```
 
-**Option 3: Direct OpenAI API**
-```bash
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+See `.env.example` for additional options (LLM Proxy, OpenAI fallback, custom models).
 
-**Configuration Precedence**:
-Vulcan checks for LLM credentials in the following order:
-1. **LLM Proxy** - If `LLM_PROXY_URL` and `LLM_PROXY_API_KEY` are set, the proxy is used
-2. **Anthropic** - If `ANTHROPIC_API_KEY` is set (and no proxy), Anthropic API is used directly
-3. **OpenAI** - If `OPENAI_API_KEY` is set (and no proxy/anthropic), OpenAI API is used directly
-4. **Mock Mode** - If no credentials are set, mock generation is used (testing only)
-
-When the LLM proxy is configured, direct API methods (Anthropic/OpenAI) are skipped entirely, allowing for centralized model management and cost control.
-
-### Start Application
+### Run
 
 ```bash
 source venv/bin/activate
 streamlit run app.py
 ```
 
-Access at `http://localhost:8501`
+Open `http://localhost:8501`.
+
+### Sample Demos
+
+Two pre-built demos are included in `demos/` so you can explore the Browse view immediately without generating anything:
+
+- **creative_brand_asset_discover** — Search/RAG demo for brand asset discovery
+- **telco_network_operations** — Analytics demo for network operations
 
 ---
 
-## Using the Application
+## How It Works
 
-### User Interface
+### Create a Demo
 
-Vulcan provides a streamlined Streamlit interface with two main modes accessible via the sidebar:
+1. Open the app and describe your customer scenario in the chat input:
 
-#### Create Demo Mode
-The primary interface for generating new demo modules using a single comprehensive prompt:
+   ```
+   T-Mobile network operations team needs to monitor MME node health,
+   detect authentication failures, and correlate cell site issues with
+   HSS database sync problems. 500K signaling events per day.
+   ```
 
-**Workflow**:
-1. **Configure Generation Options** (sidebar):
-   - **LLM Model**: Select complexity level (Fast, Balanced, Smart) to balance cost vs quality
-   - **Demo Complexity**:
-     - **Standard**: Direct processing of your prompt
-     - **Expanded**: LLM enhances brief prompts into detailed customer contexts (view expansion instructions via expandable section)
-   - **Demo Type**: Auto-detect based on keywords, or manually select Search vs Analytics
+2. The system extracts company, department, pain points, metrics, and auto-detects the demo type (Search vs Analytics).
 
-2. **Submit Customer Context**: Provide a single comprehensive prompt describing:
-   - Company name and department/role
-   - Key pain points and business challenges
-   - Use cases and desired analytics
-   - Important metrics and KPIs
-   - Data scale (optional)
+3. If **prompt expansion** is enabled (default), the system enriches your brief description into detailed customer context before generation.
 
-3. **Generate**: Click "🌋 Generate Demo" to create a complete module with data generators, queries, and demo guides
+4. Type `generate` to kick off the 8-phase build process:
+   - Query strategy planning
+   - Data module generation
+   - Dataset creation
+   - Elasticsearch indexing
+   - Data profiling
+   - Query generation
+   - Query testing & auto-fix
+   - Finalization
 
-**Note**: Module generation is LLM-assisted, so some variance is expected even with identical inputs. This is an experimental utility; if generation fails, try again with a smarter model or adjust complexity settings.
+5. Browse the result in the **Browse Demos** view.
 
-#### Browse Demos Mode
-Interactive library for managing generated demo modules:
+### Browse & Refine
 
-**Features**:
-- **Config Tab**: View customer context and generation metadata
-- **Data Tab**: Inspect generated datasets and statistics
-- **Queries Tab**: Edit, test, and validate ES|QL queries against indexed data
-- **Guide Tab**: View demo narrative and talk track
-- **Tools Tab**: Deploy validated queries as Agent Builder tools
-- **Agents Tab**: Create and configure AI agents with access to your tools
+Select any demo to inspect and iterate across six tabs:
 
-**Capabilities**:
-- Real-time query editing and testing
-- Parameter value testing with data profile samples
-- LLM-powered constraint optimization for zero-result queries
-- Agent Builder integration for production deployment
-- Module deletion and cleanup
+| Tab | What It Shows |
+|-----|---------------|
+| **Config** | Customer context, generation metadata |
+| **Data** | Generated datasets, field statistics |
+| **Queries** | Scripted, Parameterized, and Completion queries — edit, test, and validate inline |
+| **Tools** | Deploy validated queries as Agent Builder tools |
+| **Agents** | Create and configure AI agents with your tools |
+| **Guide** | Demo narrative and talk track |
 
-## Generation Process
+**Query editing**: Click any query to edit ES|QL in-browser, test against indexed data, and iterate without saving. Parameterized queries show suggested values and support one-click sample fill.
 
-### 1. Context Extraction
-
-Provide comprehensive customer information in a single prompt:
-
-```
-Bass Pro Shops needs to analyze fishing gear sales performance
-across regional stores. Product management team struggles with
-slow SQL reporting on 50K daily transactions. They need dashboards
-showing top products by region, seasonal trends, and inventory turnover.
-Key metrics: revenue per region, conversion rates, average order value.
-```
-
-The system extracts:
-- Company: Bass Pro Shops
-- Department: Product Management
-- Pain Points: Slow reporting, need for real-time insights
-- Use Cases: Regional performance, seasonal trends, inventory analytics
-- Scale: 50K transactions/day
-- Metrics: Revenue, conversion rate, AOV
-- Industry: Retail (auto-detected)
-- Demo Type: Analytics (auto-detected from "analyze", "trends", "dashboards")
-
-### 2. Query Strategy Planning
-
-LLM analyzes business questions and plans query approach:
-
-**Query Strategy Document** (`query_strategy.json`):
-```json
-{
-  "business_intent": [
-    "Identify top-selling products by region",
-    "Track seasonal patterns in fishing categories"
-  ],
-  "query_types": {
-    "scripted": ["regional_performance", "seasonal_trends"],
-    "parameterized": ["product_lookup", "category_filter"],
-    "rag": ["ask_about_sales"]
-  },
-  "datasets": [
-    {
-      "name": "product_catalog",
-      "type": "reference",
-      "purpose": "Support product lookups and JOINs",
-      "fields": ["product_id", "category", "price"]
-    },
-    {
-      "name": "sales_transactions",
-      "type": "timeseries",
-      "purpose": "Analyze temporal sales patterns",
-      "fields": ["@timestamp", "product_id", "region", "revenue"]
-    }
-  ]
-}
-```
-
-### 3. Data Generation Design
-
-LLM generates Python code that creates data supporting the planned queries:
-
-**Generated Module** (`data_generator.py`):
-```python
-class BassProShopsDataGenerator(DataGeneratorModule):
-    def generate_datasets(self):
-        # Reference data for JOINs
-        products = pd.DataFrame({
-            'product_id': range(1, 1501),
-            'category': self._assign_categories(),  # fishing_rods, reels, tackle
-            'price': np.random.uniform(15, 500, 1500)
-        })
-
-        # Time-series data for analytics
-        sales = pd.DataFrame({
-            'timestamp': pd.date_range(end=datetime.now(), periods=2000, freq='h'),
-            'product_id': np.random.choice(products['product_id'], 2000),
-            'region': np.random.choice(['Northeast', 'South', 'Midwest'], 2000),
-            'revenue': self._calculate_revenue(...)
-        })
-
-        return {'products': products, 'sales': sales}
-```
-
-### 4. Query Implementation
-
-LLM generates queries aligned with business intent and data structure:
-
-**Generated Module** (`query_generator.py`):
-```python
-class BassProShopsQueryGenerator(QueryGeneratorModule):
-    def generate_queries(self):
-        return [
-            {
-                'name': 'Regional Sales Performance',
-                'type': 'scripted',
-                'esql': '''
-                    FROM sales_transactions
-                    | WHERE @timestamp > NOW() - 90 days
-                    | STATS revenue = SUM(revenue) BY region
-                    | SORT revenue DESC
-                ''',
-                'purpose': 'Identify highest-revenue regions'
-            },
-            {
-                'name': 'Product Lookup',
-                'type': 'parameterized',
-                'esql': '''
-                    FROM product_catalog
-                    | WHERE product_id == ?product_id
-                ''',
-                'parameters': [{
-                    'name': 'product_id',
-                    'type': 'integer',
-                    'description': 'Product identifier'
-                }]
-            }
-        ]
-```
+**Agent Builder deployment**: Deploy validated queries as tools, then create agents that use those tools — all from the Browse view.
 
 ---
 
-## Query Testing & Refinement
+## Demo Types
 
-### Automated Testing
+### Search / Completion Demos
+For document retrieval, knowledge base search, semantic search, RAG applications.
 
-After generation, optionally test queries against real Elasticsearch:
+- ES|QL commands: `MATCH`, `MATCH_PHRASE`, `QSTR`, `RERANK`, `COMPLETION`
+- `semantic_text` fields for vector search (embeddings via ELSER)
+- MATCH → RERANK → COMPLETION pipeline for question-answering
+- Index strategy: `lookup` mode for document collections
 
-```python
-# 1. Index generated data
-indexer.index_dataset(products_df, 'product_catalog')
-indexer.index_dataset(sales_df, 'sales_transactions')
+### Analytics Demos
+For metrics analysis, trends, aggregations, dashboards, time-series data.
 
-# 2. Execute each query
-for query in queries:
-    result = es_client.query(query['esql'])
+- ES|QL commands: `STATS`, `INLINESTATS`, `LOOKUP JOIN`, `EVAL`, `DATE_TRUNC`
+- Time-series aggregations with `@timestamp`
+- Cross-dataset joins for enrichment
+- Index strategy: `data_stream` for time-series, `lookup` for reference data
 
-# 3. Auto-fix failures with LLM assistance
-if error:
-    fixed_query = llm.fix_query(query, error, data_profile)
-    retry(fixed_query)  # Up to 3 attempts
-```
-
-Results saved to `query_testing_results.json`:
-```json
-{
-  "total_queries": 6,
-  "passed": 4,
-  "fixed": 1,
-  "failed": 1,
-  "queries": [
-    {
-      "name": "Regional Performance",
-      "status": "fixed",
-      "attempts": 2,
-      "original_error": "Unknown field: timestamp",
-      "fix_applied": "Changed to @timestamp"
-    }
-  ]
-}
-```
-
-### Interactive Query Editing
-
-**Browse View Capabilities**:
-
-- **Edit Mode**: Click "Edit Query" checkbox to modify any query
-- **Test Execution**: Run modified queries without saving to disk
-- **Result Display**: View query results inline below editor
-- **Parameter Testing**: Test parameterized queries with sample values
-- **Constraint Optimization**: LLM suggests relaxed constraints for zero-result queries
-
-**Example Workflow**:
-1. Navigate to Browse Demos → Queries tab
-2. Check "Edit Query" on any query
-3. Modify ES|QL in text editor
-4. Click "Test This Query"
-5. View results below editor
-6. Iterate until satisfied
-
-### Zero-Results Optimization
-
-When queries return no results, the system can automatically suggest fixes:
-
-```python
-# Detect zero results
-if len(results['values']) == 0:
-    # Analyze constraints with data profile
-    optimized_query, explanation = relax_query_constraints(
-        query=original_query,
-        data_profile=data_profile,
-        llm_client=llm
-    )
-    # Suggests: "Relaxed date range from 7 days to 30 days"
-```
+Demo type is **auto-detected** from your prompt (search keywords vs analytics keywords), or you can set it manually.
 
 ---
 
-## Elastic Agent Builder Integration
+## Generated Module Structure
 
-### Overview
-
-Vulcan now includes full integration with Elastic Agent Builder, allowing you to deploy validated ES|QL queries as reusable tools and create AI agents that can use these tools. This enables your demos to become production-ready AI assistants.
-
-### Tools Deployment
-
-Transform validated ES|QL queries into Agent Builder tools:
-
-**Workflow**:
-1. Navigate to Browse Demos → Select a demo → Agents & Tools tab
-2. Tools subtab shows:
-   - **Deployed Tools**: Module-specific tools already in Agent Builder
-   - **Tool Candidates**: Validated queries ready for deployment
-3. For each candidate query:
-   - Review auto-generated tool metadata (ID, description, tags)
-   - Preview the exact API payload
-   - Deploy with one click
-
-**Tool Metadata**:
-Each query includes pre-generated metadata during module creation:
-```json
-{
-  "tool_id": "jpmc_infra_cpu_performance",
-  "description": "Analyzes CPU performance metrics. Compares Intel vs AMD for infrastructure optimization.",
-  "tags": ["infrastructure", "performance", "cpu", "esql"]
-}
-```
-
-**Filtering**: Tools are filtered by `company_department` prefix to show only relevant tools for each demo.
-
-### Agent Management
-
-Create and deploy AI agents that use your demo's tools:
-
-**Agent Metadata Generation**:
-- Automatically generated during module creation
-- Includes context-aware instructions based on your use cases
-- Professional persona tailored to industry and department
-
-**Agent Configuration**:
-```json
-{
-  "id": "jpmc_infra_agent",
-  "name": "JP Morgan Infrastructure Assistant",
-  "description": "AI assistant specialized in infrastructure analytics",
-  "avatar_symbol": "JP",
-  "avatar_color": "#3B82F6",
-  "labels": ["jpmc", "infrastructure", "analytics"],
-  "configuration": {
-    "instructions": "You are an infrastructure optimization specialist...",
-    "tools": []
-  }
-}
-```
-
-**Agent Deployment**:
-1. Navigate to Agents subtab
-2. Review/edit pre-populated agent configuration
-3. Deploy agent to Elastic Agent Builder
-4. Assign tools to agent:
-   - Module-specific tools (e.g., `jpmc_infra_*`)
-   - Platform tools (e.g., `platform.core.search`)
-
-### Tool Assignment
-
-Manage which tools are available to your agents:
-
-**Features**:
-- View currently assigned tools
-- Multi-select interface for adding/removing tools
-- Separate sections for module tools vs platform tools
-- One-click update to reassign tools
-
-**API Integration**:
-- Full CRUD operations for agents and tools
-- Real-time synchronization with Elastic Agent Builder
-- Connection validation and error handling
-
----
-
-### Module Structure
-
-Each generated demo is a standalone Python package:
+Each demo is a standalone Python package:
 
 ```
-demos/bass_pro_shops_product_mgmt_20251107/
+demos/telco_network_operations/
 ├── config.json              # Customer context + metadata
 ├── query_strategy.json      # Query planning document
 ├── data_profile.json        # Field statistics + sample values
 ├── agent_metadata.json      # Agent configuration for deployment
-├── data_generator.py        # Generated: Data creation logic
-├── query_generator.py       # Generated: ES|QL query definitions
-├── demo_guide.py            # Generated: Demo narrative
-├── data/                    # Static assets
-│   ├── product_catalog.csv
-│   └── sales_transactions.csv
-├── queries.json             # Compiled query definitions
-├── tool_metadata.json       # Tool deployment metadata (when validated)
-├── validated_queries.json   # Query validation status
-└── query_testing_results.json  # Test execution report
+├── data_generator.py        # Python: data creation logic
+├── query_generator.py       # Python: ES|QL query definitions
+├── demo_guide.py            # Python: demo narrative
+├── all_queries.json         # Compiled query definitions
+├── query_testing_results.json  # Test execution report
+└── data/                    # Generated CSV datasets
+    ├── signaling_logs.csv
+    ├── mme_system_logs.csv
+    └── ...
 ```
 
-### Key Components
-
-| Component | Purpose | Technology |
-|-----------|---------|------------|
-| `app.py` | User interface and orchestration | Streamlit |
-| `module_generator.py` | LLM-powered code generation (includes agent metadata) | Claude (Anthropic) |
-| `module_loader.py` | Dynamic Python module execution | importlib |
-| `elasticsearch_indexer.py` | Data upload + query execution | Elasticsearch Python client |
-| `query_optimizer.py` | Constraint relaxation for failed queries | Claude (Anthropic) |
-| `agent_builder_service.py` | Agent Builder API integration | Kibana REST API |
-| `query_validation_service.py` | Query validation and tool metadata | Local storage |
-
-### Generation Flow
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ 1. Context Extraction                                    │
-│ Natural language → Structured customer data              │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ 2. Query Strategy Planning                               │
-│ Business intent → Query types + data requirements        │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ 3. Code Generation                                       │
-│ LLM writes Python modules implementing strategy          │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ 4. Asset Creation                                        │
-│ Execute modules → CSV + JSON + Markdown                  │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ 5. Testing & Refinement                                  │
-│ Index data → Test queries → Fix errors → Iterate         │
-└─────────────────────────────────────────────────────────┘
-```
+Modules are self-contained — you can copy a `demos/` folder to share a complete demo with someone else.
 
 ---
 
-## Design Constraints
+## Configuration
 
-The system enforces rules to ensure generated code produces working demos:
+### LLM Providers
 
-### Time Handling
-- Data spans 0-120 days from current date
-- Use `pd.date_range(end=datetime.now(), periods=N)`
-- DataFrame column: `timestamp` (maps to `@timestamp` in Elasticsearch)
+Vulcan checks for LLM credentials in this order:
 
-### Data Size
-- Demos: 500-2000 rows maximum
-- Fast loading and indexing (<30 seconds)
-- Realistic but manageable scale
+| Priority | Provider | Env Vars |
+|----------|----------|----------|
+| 1 | **Anthropic** (recommended) | `ANTHROPIC_API_KEY` |
+| 2 | LLM Proxy | `LLM_PROXY_URL` + `LLM_PROXY_API_KEY` |
+| 3 | OpenAI (limited ES|QL support) | `OPENAI_API_KEY` |
+| 4 | Mock mode (testing only) | None set |
 
-### Query Compatibility
-- Reference datasets: `index.mode: lookup` for JOINs
-- Time-series datasets: `index.mode: data_stream` for temporal queries
-- Proper field types for JOIN compatibility
+### Sidebar Settings
 
-### ES|QL Best Practices
-- Use `@timestamp` field name in queries
-- Include time filters (`WHERE @timestamp > NOW() - N days`)
-- Avoid overly restrictive constraints in initial queries
+The app sidebar provides runtime configuration:
 
----
-
-## Testing
-
-### Test Suites
-
-```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Specific suites
-python -m pytest tests/test_llm_integration.py -v      # LLM services
-python -m pytest tests/test_data_generation.py -v      # Data generation
-python -m pytest tests/test_integration.py -v          # End-to-end
-```
-
-### Test Coverage
-- Framework: >90%
-- Services: >85%
-- UI: >70%
-
----
-
-## Documentation
-
-- [Modular Architecture](docs/MODULAR_ARCHITECTURE.md) - System design details
-- [Quick Start Guide](docs/QUICK_START_GUIDE.md) - Detailed walkthrough
-- [Developer Guide](docs/DEVELOPER_GUIDE.md) - Extending the platform
-- [API Reference](docs/API_REFERENCE.md) - Service documentation
-- [ES|QL Strategy](docs/ESQL_SKILL_ACCURACY_STRATEGY.md) - Query generation approach
+- **Prompt expansion** — LLM enriches brief prompts into detailed context (on by default)
+- **Embedding type** — Sparse (ELSER), Dense (Jina), or Custom
+- **Custom model override** — Use a specific LLM model
+- **Custom endpoints** — Override rerank/completion inference endpoints
+- **Connection status** — Live indicators for LLM and Elasticsearch
 
 ---
 
@@ -617,92 +186,58 @@ python -m pytest tests/test_integration.py -v          # End-to-end
 
 ```
 vulcan/
-├── app.py                          # Main Streamlit application
+├── app.py                          # Streamlit application
 ├── src/
 │   ├── framework/                  # Core generation framework
 │   │   ├── base.py                 # Abstract base classes
-│   │   ├── module_generator.py     # Legacy module generator (deprecated)
+│   │   ├── module_generator.py     # LLM-powered code generation
 │   │   ├── module_loader.py        # Dynamic module loading
-│   │   ├── orchestrator.py         # Generation orchestration
-│   │   └── generation/             # Modular generation system
-│   │       ├── module_generator.py # LLM-powered code generation
-│   │       ├── templates/          # Code generation templates
-│   │       │   ├── data_generator.py
-│   │       │   ├── query_generator.py
-│   │       │   ├── guide_generator.py
-│   │       │   └── agent_metadata.py
-│   │       └── generators/         # Static file generators
-│   │           ├── config_generator.py
-│   │           ├── static_files.py
-│   │           └── code_extractor.py
+│   │   └── orchestrator.py         # Generation orchestration
 │   ├── services/                   # Supporting services
-│   │   ├── llm_service.py          # Base LLM integration
-│   │   ├── llm_proxy_service.py    # LLM proxy client
-│   │   ├── elasticsearch_indexer.py # ES data operations
+│   │   ├── llm_service.py          # LLM integration
+│   │   ├── elasticsearch_indexer.py # Data indexing + query execution
 │   │   ├── query_optimizer.py      # Constraint relaxation
 │   │   ├── query_test_runner.py    # Query validation
 │   │   ├── query_strategy_generator.py  # Analytics query planning
-│   │   ├── search_strategy_generator.py # Search/RAG query planning
+│   │   ├── search_strategy_generator.py # Search query planning
 │   │   ├── agent_builder_service.py     # Agent Builder API
-│   │   ├── data_profiler.py        # Dataset statistics
-│   │   └── context_tracker.py      # Session context management
-│   ├── ui/                         # Streamlit UI components
-│   │   ├── views/
-│   │   │   ├── create_demo.py      # Single-prompt demo creation
-│   │   │   ├── browse_demos.py     # Module library & testing
-│   │   │   ├── under_the_hood.py   # Debug view
-│   │   │   └── tabs/               # Browse view tabs
-│   │   │       ├── config_tab.py
-│   │   │       ├── data_tab.py
-│   │   │       ├── queries_tab.py
-│   │   │       ├── guide_tab.py
-│   │   │       ├── tools_tab.py
-│   │   │       └── agents_tab.py
-│   │   ├── sidebar.py              # Generation options UI
-│   │   ├── context_extractor.py    # NL → structured context
-│   │   └── query_results_display.py # Query execution UI
-│   ├── prompts/                    # LLM prompt templates
-│   │   ├── conversation_prompts.py
-│   │   ├── esql_syntax_rules.py
-│   │   └── esql_strict_rules.py
-│   └── ui_helpers.py               # UI utility functions
+│   │   └── data_profiler.py        # Dataset statistics
+│   └── ui/                         # Streamlit UI components
+│       ├── views/
+│       │   ├── create_demo.py      # Demo creation flow
+│       │   ├── browse_demos.py     # Module library & testing
+│       │   └── tabs/               # Browse view tabs
+│       │       ├── config_tab.py
+│       │       ├── data_tab.py
+│       │       ├── queries_tab.py
+│       │       ├── guide_tab.py
+│       │       ├── tools_tab.py
+│       │       └── agents_tab.py
+│       ├── sidebar.py              # Settings UI
+│       └── query_results_display.py # Query execution UI
 ├── demos/                          # Generated demo modules
 ├── tests/                          # Test suites
-├── docs/                           # Documentation
-│   ├── RAG_SEARCH_ARCHITECTURE.md  # Search vs analytics architecture
-│   ├── ESQL_COMPLETE_REFERENCE.md  # ES|QL query guide
-│   └── ...
-└── .claude/                        # Claude Code integration
-    ├── skills/                     # ES|QL expertise modules
-    └── agents/                     # Specialized development agents
+└── docs/                           # Documentation
 ```
 
 ---
 
-## Key Features
+## Testing
 
-### Query-First Design
-- Business intent drives query planning
-- Data generation designed to support planned queries
-- Ensures queries answer real business questions
+```bash
+source venv/bin/activate
+python -m pytest tests/ -v
+```
 
-### Interactive Development
-- Edit queries in browser without saving
-- Test against real Elasticsearch data
-- View results inline
-- Parameter testing with sample values
+---
 
-### Automated Refinement
-- Syntax validation with auto-correction
-- Query execution testing
-- LLM-assisted constraint optimization
-- Zero-results troubleshooting
+## Documentation
 
-### Version Control
-- Generated modules are Git-tracked
-- Share modules across teams
-- Build organizational query libraries
-- Review changes like code
+- [Modular Architecture](docs/MODULAR_ARCHITECTURE.md)
+- [Quick Start Guide](docs/QUICK_START_GUIDE.md)
+- [RAG/Search Architecture](docs/RAG_SEARCH_ARCHITECTURE.md)
+- [ES|QL Reference](docs/ESQL_COMPLETE_REFERENCE.md)
+- [Expansion Prompts](docs/EXPANSION_PROMPTS.md)
 
 ---
 
