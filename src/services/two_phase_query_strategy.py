@@ -229,6 +229,7 @@ Generate ONLY the JSON with 7 query outlines. Keep descriptions brief."""
 3. If uses_lookup_join=true, include a LOOKUP JOIN
 4. Field names should be specific to the industry/use case
 5. Include @timestamp for timeseries data
+6. Do NOT include dense_vector fields or embedding arrays. Semantic/vector search uses semantic_text fields — Elasticsearch generates embeddings automatically.
 
 **Output Format (JSON only):**
 ```json

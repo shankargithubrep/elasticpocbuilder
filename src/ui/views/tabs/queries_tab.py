@@ -329,8 +329,9 @@ def render_queries_tab(loader):
                                                         st.code(st.session_state[f"{suggest_key}_value"], language=None)
                                                 st.divider()
 
-                                        # Add "Fill Sample Values" button if we have sample values
-                                        if sample_values_dict:
+                                        # Add "Fill Sample Values" button if we have sample values or suggested_values
+                                        has_suggested = any(p.get('suggested_values') for p in query['parameters'])
+                                        if sample_values_dict or has_suggested:
                                             fill_button_col1, fill_button_col2 = st.columns([2, 3])
                                             with fill_button_col1:
                                                 if st.button("🎯 Fill with Sample Values", key=f"fill_samples_{query_key}", use_container_width=True):
@@ -339,29 +340,50 @@ def render_queries_tab(loader):
                                                         param_name = param.get('name')
                                                         param_type = param.get('type', 'string')
 
-                                                        if param_name in sample_values_dict and sample_values_dict[param_name]:
-                                                            # Use first sample value
+                                                        # Prefer suggested_values from parameter definition
+                                                        param_suggested = param.get('suggested_values', [])
+                                                        if param_suggested:
+                                                            sample_value = param_suggested[0]
+                                                        elif param_name in sample_values_dict and sample_values_dict[param_name]:
+                                                            # Fallback to data profile
                                                             sample_value = sample_values_dict[param_name][0]
+                                                        else:
+                                                            continue
 
-                                                            # Convert to appropriate type
-                                                            if param_type in ['integer', 'long']:
-                                                                try:
-                                                                    sample_value = int(sample_value)
-                                                                except (ValueError, TypeError):
-                                                                    sample_value = 0
-                                                            elif param_type in ['double', 'float']:
-                                                                try:
-                                                                    sample_value = float(sample_value)
-                                                                except (ValueError, TypeError):
-                                                                    sample_value = 0.0
+                                                        # Convert to appropriate type
+                                                        if param_type in ['integer', 'long']:
+                                                            try:
+                                                                sample_value = int(sample_value)
+                                                            except (ValueError, TypeError):
+                                                                sample_value = 0
+                                                        elif param_type in ['double', 'float']:
+                                                            try:
+                                                                sample_value = float(sample_value)
+                                                            except (ValueError, TypeError):
+                                                                sample_value = 0.0
 
-                                                            # Set in session state using same key pattern as inputs
-                                                            st.session_state[f"param_{query_key}_{param_name}"] = sample_value
+                                                        # Set in session state using same key pattern as inputs
+                                                        st.session_state[f"param_{query_key}_{param_name}"] = sample_value
 
-                                                    st.success(f"✅ Filled {len(sample_values_dict)} parameters with sample values")
+                                                    filled = sum(1 for p in query['parameters'] if p.get('suggested_values') or p.get('name') in sample_values_dict)
+                                                    st.success(f"✅ Filled {filled} parameters with sample values")
                                                     st.rerun()
                                             with fill_button_col2:
                                                 st.caption("Auto-populate form fields with sample values from your data profile")
+
+                                    # Show suggested values from parameter definitions
+                                    all_suggested = {}
+                                    for param in query['parameters']:
+                                        pname = param.get('name', '')
+                                        sv = param.get('suggested_values', [])
+                                        if sv:
+                                            all_suggested[pname] = sv
+                                    if all_suggested:
+                                        hints = " | ".join(
+                                            f"**{k}**: {', '.join(str(v) for v in vals)}"
+                                            for k, vals in all_suggested.items()
+                                        )
+                                        st.caption(f"💡 Try: {hints}")
 
                                     param_values = display._render_parameter_inputs(
                                         query['parameters'],

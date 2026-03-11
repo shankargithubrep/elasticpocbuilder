@@ -88,6 +88,9 @@ class DataSpecificationExpander:
             if not specifications or 'datasets' not in specifications:
                 raise ValueError("Invalid specifications structure: missing 'datasets' key")
 
+            # Safety net: strip any dense_vector fields the LLM may have hallucinated
+            specifications = self._strip_dense_vector_fields(specifications)
+
             logger.info(f"Generated data specifications for {len(specifications.get('datasets', {}))} datasets")
 
             return specifications
@@ -99,6 +102,25 @@ class DataSpecificationExpander:
         except Exception as e:
             logger.error(f"Failed to expand data specifications: {e}", exc_info=True)
             raise
+
+    def _strip_dense_vector_fields(self, specifications: Dict) -> Dict:
+        """Remove any dense_vector fields from specifications.
+
+        The LLM sometimes hallucinates dense_vector/embedding fields, but real
+        vector search uses semantic_text fields where Elasticsearch generates
+        embeddings automatically via ELSER.
+        """
+        datasets = specifications.get('datasets', {})
+        for dataset_name, dataset_spec in datasets.items():
+            fields = dataset_spec.get('fields', {})
+            to_remove = [
+                fname for fname, fspec in fields.items()
+                if isinstance(fspec, dict) and fspec.get('type') == 'dense_vector'
+            ]
+            for fname in to_remove:
+                del fields[fname]
+                logger.info(f"Stripped dense_vector field '{fname}' from dataset '{dataset_name}'")
+        return specifications
 
     def _build_expansion_prompt(
         self,

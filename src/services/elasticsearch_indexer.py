@@ -167,8 +167,12 @@ class FieldMapper:
                     return {"type": "flattened"}
             elif isinstance(first_val, list):
                 # List values - check element type
+                # Note: numeric arrays map to flattened, NOT dense_vector.
+                # ES|QL doesn't support kNN vector search, so dense_vector
+                # mappings have no valid use case. Real vector search uses
+                # semantic_text fields where ES generates embeddings via ELSER.
                 if first_val and isinstance(first_val[0], (int, float, np.integer, np.floating)):
-                    return {"type": "dense_vector", "dims": len(first_val)}
+                    return {"type": "flattened"}
                 elif first_val and isinstance(first_val[0], str):
                     return {"type": "keyword"}  # Array of strings
                 return {"type": "flattened"}

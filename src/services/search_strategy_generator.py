@@ -296,6 +296,7 @@ Example of WRONG vs CORRECT:
 4. Use == for exact matches on `keyword` fields
 5. Focus on RELEVANCE (use _score), not metrics
 6. Include semantic_text fields for vector search
+7. Do NOT include dense_vector fields. Semantic/vector search is handled by semantic_text fields — Elasticsearch generates embeddings automatically via ELSER. Never add fields like "embedding", "vector", or any dense_vector type.
 7. Limit results (5-50 documents)
 8. NO STATS, NO GROUP BY, NO aggregations (that's analytics, not search)
 9. Choose correct index_mode based on LOOKUP JOIN usage:

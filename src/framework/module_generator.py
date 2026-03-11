@@ -711,10 +711,24 @@ queries.append({{
     "name": "Query Name",
     "description": "What it does",
     "esql": \"\"\"FROM index | WHERE field == ?param_name\"\"\",
-    "parameters": {{"param_name": "example_value"}},
+    "parameters": {{
+        "param_name": {{
+            "type": "keyword",
+            "description": "Filter description",
+            "default": "example_value",
+            "required": True,
+            "suggested_values": ["value1", "value2", "value3"]
+        }}
+    }},
     # ... other fields ...
 }})
 ```
+
+**CRITICAL - suggested_values:**
+Every parameter MUST include a `suggested_values` list with 2-3 realistic examples:
+- For keyword/enum params: use values that exist in the dataset
+- For free-text search params: use short 2-4 word phrases that would match data content (NOT full document titles)
+- Examples should demonstrate the parameter's purpose and produce meaningful results
 
 {esql_rules}
 
@@ -1181,13 +1195,15 @@ def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
                 "type": "keyword",
                 "description": "Business category filter",
                 "default": "example_category",
-                "required": True
+                "required": True,
+                "suggested_values": ["Electronics", "Apparel", "Home Goods"]
             }},
             "status": {{
                 "type": "keyword",
                 "description": "Status filter (active, pending, completed)",
                 "default": "active",
-                "required": False
+                "required": False,
+                "suggested_values": ["active", "pending", "completed"]
             }}
         }},
         "base_query": "related_scripted_query_name",
@@ -1198,6 +1214,12 @@ def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
 
     return param_queries
 ```
+
+**CRITICAL - suggested_values:**
+Every parameter MUST include a `suggested_values` list with 2-3 realistic examples:
+- For keyword/enum params: use values that exist in the dataset
+- For free-text search params: use short 2-4 word phrases that would match data content (NOT full document titles)
+- Examples should demonstrate the parameter's purpose and produce meaningful results
 
 🚨🚨🚨 CRITICAL - @timestamp ANTI-PATTERN 🚨🚨🚨
 NEVER EVER parameterize @timestamp! This is the #1 most common mistake!
@@ -1750,6 +1772,7 @@ CRITICAL RULES:
 - NEVER hardcode dates like '2023-01-01'
 - For geo_point fields: use dict with 'lat' and 'lon' keys
 - For semantic_text fields: generate ONLY that field (no separate text duplicate)
+- NEVER generate random vector/embedding arrays (e.g. np.random.rand(384).tolist()). Vector search uses semantic_text fields — Elasticsearch generates embeddings automatically via ELSER. Do NOT create fields like "embedding", "vector", or any dense_vector columns.
 - Generate rows as COMPLETE ENTITIES - all fields logically consistent
 - Every text/semantic_text value MUST be unique across all rows
 - When using .format(), ensure placeholder names EXACTLY match keyword arguments
@@ -2350,6 +2373,7 @@ The module should:
 5. Create proper foreign key relationships as specified
 6. Include semantic_text fields where specified
 7. For fields with type "semantic_text" in the requirements, generate ONLY that field (do NOT create a separate "description" text field alongside a "semantic_description" semantic_text field — the semantic_text field IS the description)
+8. NEVER generate random vector/embedding arrays (e.g. np.random.rand(384).tolist()). Vector search uses semantic_text fields — Elasticsearch generates embeddings automatically via ELSER. Do NOT create dense_vector columns.
 
 CRITICAL - SEARCH DATA QUALITY (if generating search/document data):
 - Generate rows as COMPLETE ENTITIES - all fields in a row must be logically consistent

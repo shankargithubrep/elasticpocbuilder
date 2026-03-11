@@ -377,12 +377,20 @@ class QueryResultsDisplay:
 
         else:  # string, keyword, or unknown
             default_val = str(param_default) if param_default else ""
+            # Build placeholder from suggested_values if available
+            suggested = param_info.get('suggested_values', [])
+            if suggested:
+                placeholder = f"e.g., {', '.join(str(v) for v in suggested)}"
+            elif '(e.g.,' in param_desc:
+                placeholder = f"e.g., {param_desc.split('(e.g., ')[-1].rstrip(')')}..."
+            else:
+                placeholder = f"Enter {param_name}"
             value = st.text_input(
                 label,
                 value=default_val,
                 key=f"param_{unique_key}_{param_name}",
                 help=help_text,
-                placeholder=f"e.g., {param_desc.split('(e.g., ')[-1].rstrip(')')}..." if '(e.g.,' in param_desc else f"Enter {param_name}"
+                placeholder=placeholder
             )
             return {param_name: value}
 
