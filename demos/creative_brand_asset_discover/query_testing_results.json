@@ -1,0 +1,256 @@
+{
+  "tested_at": "2026-03-10T17:10:07.628352",
+  "total_queries": 13,
+  "successfully_fixed": 13,
+  "needs_manual_fix": 0,
+  "early_exit": false,
+  "queries": [
+    {
+      "name": "asset_title_search_fuzzy",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM brand_asset_catalog METADATA _score\n| WHERE MATCH(asset_title, \"logo variations menu boards\", {\"fuzziness\": \"AUTO\"})\n  AND is_active == true\n| KEEP asset_id, _score, asset_title, asset_description, asset_type, content_category, owner_account_id, reuse_count\n| SORT _score DESC\n| LIMIT 20",
+          "result_count": 20
+        }
+      ],
+      "original_esql": "FROM brand_asset_catalog METADATA _score\n| WHERE MATCH(asset_title, \"logo variations menu boards\", {\"fuzziness\": \"AUTO\"})\n  AND is_active == true\n| KEEP asset_id, _score, asset_title, asset_description, asset_type, content_category, owner_account_id, reuse_count\n| SORT _score DESC\n| LIMIT 20",
+      "final_esql": "FROM brand_asset_catalog METADATA _score\n| WHERE MATCH(asset_title, \"logo variations menu boards\", {\"fuzziness\": \"AUTO\"})\n  AND is_active == true\n| KEEP asset_id, _score, asset_title, asset_description, asset_type, content_category, owner_account_id, reuse_count\n| SORT _score DESC\n| LIMIT 20",
+      "warnings": []
+    },
+    {
+      "name": "asset_title_search_hybrid",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"logo variations menu boards\", {\"fuzziness\": \"AUTO\"})\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"logo brand identity menu board coffee shop signage\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE\n| SORT _score DESC\n| LIMIT 15\n| KEEP asset_id, _score, asset_title, asset_type, content_category, search_type",
+          "result_count": 15
+        }
+      ],
+      "original_esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"logo variations menu boards\", {\"fuzziness\": \"AUTO\"})\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"logo brand identity menu board coffee shop signage\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE\n| SORT _score DESC\n| LIMIT 15\n| KEEP asset_id, _score, asset_title, asset_type, content_category, search_type",
+      "final_esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"logo variations menu boards\", {\"fuzziness\": \"AUTO\"})\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"logo brand identity menu board coffee shop signage\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE\n| SORT _score DESC\n| LIMIT 15\n| KEEP asset_id, _score, asset_title, asset_type, content_category, search_type",
+      "warnings": []
+    },
+    {
+      "name": "asset_title_search_sophisticated",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"logo menu board\", {\"fuzziness\": \"AUTO\"})\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"logo brand identity menu board coffee shop visual collateral\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE LINEAR WITH {\"weights\": {\"fork1\": 0.3, \"fork2\": 0.7}, \"normalizer\": \"minmax\"}\n| SORT _score DESC\n| LIMIT 15\n| KEEP asset_id, _score, asset_title, asset_type, content_category, search_type",
+          "result_count": 15
+        }
+      ],
+      "original_esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"logo menu board\", {\"fuzziness\": \"AUTO\"})\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"logo brand identity menu board coffee shop visual collateral\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE LINEAR WITH {\"weights\": {\"fork1\": 0.3, \"fork2\": 0.7}, \"normalizer\": \"minmax\"}\n| SORT _score DESC\n| LIMIT 15\n| KEEP asset_id, _score, asset_title, asset_type, content_category, search_type",
+      "final_esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"logo menu board\", {\"fuzziness\": \"AUTO\"})\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"logo brand identity menu board coffee shop visual collateral\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE LINEAR WITH {\"weights\": {\"fork1\": 0.3, \"fork2\": 0.7}, \"normalizer\": \"minmax\"}\n| SORT _score DESC\n| LIMIT 15\n| KEEP asset_id, _score, asset_title, asset_type, content_category, search_type",
+      "warnings": []
+    },
+    {
+      "name": "italian_food_semantic_search",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM brand_asset_catalog METADATA _score\n| WHERE MATCH(asset_description, \"Italian food cuisine pasta restaurant dining\")\n  AND business_vertical == \"Food & Beverage\"\n  AND is_active == true\n| KEEP asset_id, _score, asset_title, asset_description, asset_type, content_category\n| SORT _score DESC\n| LIMIT 10",
+          "result_count": 10
+        }
+      ],
+      "original_esql": "FROM brand_asset_catalog METADATA _score\n| WHERE MATCH(asset_description, \"Italian food cuisine pasta restaurant dining\")\n  AND business_vertical == \"Food & Beverage\"\n  AND is_active == true\n| KEEP asset_id, _score, asset_title, asset_description, asset_type, content_category\n| SORT _score DESC\n| LIMIT 10",
+      "final_esql": "FROM brand_asset_catalog METADATA _score\n| WHERE MATCH(asset_description, \"Italian food cuisine pasta restaurant dining\")\n  AND business_vertical == \"Food & Beverage\"\n  AND is_active == true\n| KEEP asset_id, _score, asset_title, asset_description, asset_type, content_category\n| SORT _score DESC\n| LIMIT 10",
+      "warnings": []
+    },
+    {
+      "name": "thematic_asset_discovery_hybrid",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"Italian food restaurant\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"Italian food cuisine pasta restaurant dining collateral food and beverage\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE\n| SORT _score DESC\n| LIMIT 15\n| KEEP asset_id, _score, asset_title, asset_type, content_category, search_type",
+          "result_count": 15
+        }
+      ],
+      "original_esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"Italian food restaurant\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"Italian food cuisine pasta restaurant dining collateral food and beverage\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE\n| SORT _score DESC\n| LIMIT 15\n| KEEP asset_id, _score, asset_title, asset_type, content_category, search_type",
+      "final_esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"Italian food restaurant\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"Italian food cuisine pasta restaurant dining collateral food and beverage\")\n    AND business_vertical == \"Food & Beverage\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE\n| SORT _score DESC\n| LIMIT 15\n| KEEP asset_id, _score, asset_title, asset_type, content_category, search_type",
+      "warnings": []
+    },
+    {
+      "name": "holiday_sale_campaign_hybrid",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"holiday sale\")\n    AND campaign_theme == \"Winter Warmth\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"holiday sale seasonal promotion discount festive campaign\")\n    AND campaign_theme == \"Winter Warmth\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE\n| SORT _score DESC\n| LIMIT 20\n| KEEP asset_id, _score, asset_title, asset_type, campaign_theme, search_type",
+          "result_count": 20
+        }
+      ],
+      "original_esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"holiday sale\")\n    AND campaign_theme == \"Winter Warmth\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"holiday sale seasonal promotion discount festive campaign\")\n    AND campaign_theme == \"Winter Warmth\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE\n| SORT _score DESC\n| LIMIT 20\n| KEEP asset_id, _score, asset_title, asset_type, campaign_theme, search_type",
+      "final_esql": "FROM brand_asset_catalog METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(asset_title, \"holiday sale\")\n    AND campaign_theme == \"Winter Warmth\"\n    AND is_active == true\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(asset_description, \"holiday sale seasonal promotion discount festive campaign\")\n    AND campaign_theme == \"Winter Warmth\"\n    AND is_active == true\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE\n| SORT _score DESC\n| LIMIT 20\n| KEEP asset_id, _score, asset_title, asset_type, campaign_theme, search_type",
+      "warnings": []
+    },
+    {
+      "name": "holiday_campaign_template_semantic",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM template_library METADATA _score\n| WHERE MATCH(template_description, \"holiday sale seasonal promotion discount festive\")\n  AND is_premium == false\n  AND campaign_type == \"Holiday Campaign\"\n| SORT _score DESC\n| LIMIT 50\n| KEEP template_id, _score, template_name, template_description, template_category, campaign_type, popularity_score",
+          "result_count": 50
+        }
+      ],
+      "original_esql": "FROM template_library METADATA _score\n| WHERE MATCH(template_description, \"holiday sale seasonal promotion discount festive\")\n  AND is_premium == false\n  AND campaign_type == \"Holiday Campaign\"\n| SORT _score DESC\n| LIMIT 50\n| KEEP template_id, _score, template_name, template_description, template_category, campaign_type, popularity_score",
+      "final_esql": "FROM template_library METADATA _score\n| WHERE MATCH(template_description, \"holiday sale seasonal promotion discount festive\")\n  AND is_premium == false\n  AND campaign_type == \"Holiday Campaign\"\n| SORT _score DESC\n| LIMIT 50\n| KEEP template_id, _score, template_name, template_description, template_category, campaign_type, popularity_score",
+      "warnings": []
+    },
+    {
+      "name": "modern_kitchen_faceted_semantic",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM visual_asset_embeddings METADATA _score\n| WHERE MATCH(visual_caption, \"modern kitchen contemporary interior design property real estate\")\n  AND modality == \"image\"\n| KEEP embedding_id, _score, asset_ref_title, visual_caption, source_asset_id, modality\n| SORT _score DESC\n| LIMIT 15",
+          "result_count": 15
+        }
+      ],
+      "original_esql": "FROM visual_asset_embeddings METADATA _score\n| WHERE MATCH(visual_caption, \"modern kitchen contemporary interior design property real estate\")\n  AND modality == \"image\"\n| KEEP embedding_id, _score, asset_ref_title, visual_caption, source_asset_id, modality\n| SORT _score DESC\n| LIMIT 15",
+      "final_esql": "FROM visual_asset_embeddings METADATA _score\n| WHERE MATCH(visual_caption, \"modern kitchen contemporary interior design property real estate\")\n  AND modality == \"image\"\n| KEEP embedding_id, _score, asset_ref_title, visual_caption, source_asset_id, modality\n| SORT _score DESC\n| LIMIT 15",
+      "warnings": []
+    },
+    {
+      "name": "fitness_template_discovery_sophisticated",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM template_library METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(template_name, \"class schedule promotional banner fitness\")\n    AND industry_tag == \"Fitness & Wellness\"\n    AND is_premium == false\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(template_description, \"fitness studio class schedule workout promotional banner gym exercise health wellness\")\n    AND industry_tag == \"Fitness & Wellness\"\n    AND is_premium == false\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE LINEAR WITH {\"weights\": {\"fork1\": 0.25, \"fork2\": 0.75}, \"normalizer\": \"minmax\"}\n| SORT _score DESC\n| LIMIT 15\n| KEEP template_id, _score, template_name, template_category, industry_tag, search_type",
+          "result_count": 15
+        }
+      ],
+      "original_esql": "FROM template_library METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(template_name, \"class schedule promotional banner fitness\")\n    AND industry_tag == \"Fitness & Wellness\"\n    AND is_premium == false\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(template_description, \"fitness studio class schedule workout promotional banner gym exercise health wellness\")\n    AND industry_tag == \"Fitness & Wellness\"\n    AND is_premium == false\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE LINEAR WITH {\"weights\": {\"fork1\": 0.25, \"fork2\": 0.75}, \"normalizer\": \"minmax\"}\n| SORT _score DESC\n| LIMIT 15\n| KEEP template_id, _score, template_name, template_category, industry_tag, search_type",
+      "final_esql": "FROM template_library METADATA _id, _index, _score\n| FORK\n  (WHERE MATCH(template_name, \"class schedule promotional banner fitness\")\n    AND industry_tag == \"Fitness & Wellness\"\n    AND is_premium == false\n   | EVAL search_type = \"bm25\"\n   | SORT _score DESC\n   | LIMIT 50)\n  (WHERE MATCH(template_description, \"fitness studio class schedule workout promotional banner gym exercise health wellness\")\n    AND industry_tag == \"Fitness & Wellness\"\n    AND is_premium == false\n   | EVAL search_type = \"semantic\"\n   | SORT _score DESC\n   | LIMIT 50)\n| FUSE LINEAR WITH {\"weights\": {\"fork1\": 0.25, \"fork2\": 0.75}, \"normalizer\": \"minmax\"}\n| SORT _score DESC\n| LIMIT 15\n| KEEP template_id, _score, template_name, template_category, industry_tag, search_type",
+      "warnings": []
+    },
+    {
+      "name": "spring_collection_template_search",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM template_library METADATA _score\n| WHERE MATCH(template_description, \"spring collection seasonal fashion new arrivals fresh colors boutique retail\")\n  AND is_premium == false\n  AND campaign_type == \"Spring Collection\"\n| KEEP template_id, _score, template_name, template_description, template_category, campaign_type, popularity_score\n| SORT _score DESC\n| LIMIT 12",
+          "result_count": 12
+        }
+      ],
+      "original_esql": "FROM template_library METADATA _score\n| WHERE MATCH(template_description, \"spring collection seasonal fashion new arrivals fresh colors boutique retail\")\n  AND is_premium == false\n  AND campaign_type == \"Spring Collection\"\n| KEEP template_id, _score, template_name, template_description, template_category, campaign_type, popularity_score\n| SORT _score DESC\n| LIMIT 12",
+      "final_esql": "FROM template_library METADATA _score\n| WHERE MATCH(template_description, \"spring collection seasonal fashion new arrivals fresh colors boutique retail\")\n  AND is_premium == false\n  AND campaign_type == \"Spring Collection\"\n| KEEP template_id, _score, template_name, template_description, template_category, campaign_type, popularity_score\n| SORT _score DESC\n| LIMIT 12",
+      "warnings": []
+    },
+    {
+      "name": "cross_modal_visual_similarity_search",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM visual_asset_embeddings METADATA _score\n| WHERE MATCH(visual_caption, \"workout fitness exercise gym training class energetic athletic movement\")\n  AND modality IN (\"graphic-design\", \"video-frame\")\n| KEEP embedding_id, _score, asset_ref_title, visual_caption, source_asset_id, modality, capture_date\n| SORT _score DESC\n| LIMIT 10",
+          "result_count": 10
+        }
+      ],
+      "original_esql": "FROM visual_asset_embeddings METADATA _score\n| WHERE MATCH(visual_caption, \"workout fitness exercise gym training class energetic athletic movement\")\n  AND modality IN (\"graphic-design\", \"video-frame\")\n| KEEP embedding_id, _score, asset_ref_title, visual_caption, source_asset_id, modality, capture_date\n| SORT _score DESC\n| LIMIT 10",
+      "final_esql": "FROM visual_asset_embeddings METADATA _score\n| WHERE MATCH(visual_caption, \"workout fitness exercise gym training class energetic athletic movement\")\n  AND modality IN (\"graphic-design\", \"video-frame\")\n| KEEP embedding_id, _score, asset_ref_title, visual_caption, source_asset_id, modality, capture_date\n| SORT _score DESC\n| LIMIT 10",
+      "warnings": []
+    },
+    {
+      "name": "top_reuse_assets_by_vertical",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM brand_asset_catalog\n| WHERE is_active == true\n  AND reuse_count > 27\n| STATS\n    total_assets = COUNT(*),\n    avg_reuse = AVG(reuse_count),\n    max_reuse = MAX(reuse_count),\n    top_asset_count = COUNT(*)\n  BY business_vertical, asset_type\n| SORT avg_reuse DESC\n| LIMIT 20",
+          "result_count": 20
+        }
+      ],
+      "original_esql": "FROM brand_asset_catalog\n| WHERE is_active == true\n  AND reuse_count > 27\n| STATS\n    total_assets = COUNT(*),\n    avg_reuse = AVG(reuse_count),\n    max_reuse = MAX(reuse_count),\n    top_asset_count = COUNT(*)\n  BY business_vertical, asset_type\n| SORT avg_reuse DESC\n| LIMIT 20",
+      "final_esql": "FROM brand_asset_catalog\n| WHERE is_active == true\n  AND reuse_count > 27\n| STATS\n    total_assets = COUNT(*),\n    avg_reuse = AVG(reuse_count),\n    max_reuse = MAX(reuse_count),\n    top_asset_count = COUNT(*)\n  BY business_vertical, asset_type\n| SORT avg_reuse DESC\n| LIMIT 20",
+      "warnings": []
+    },
+    {
+      "name": "free_template_popularity_by_industry",
+      "was_fixed": true,
+      "needs_manual_fix": false,
+      "fix_attempts": 1,
+      "original_error": null,
+      "final_error": null,
+      "fix_history": [
+        {
+          "attempt": 1,
+          "succeeded": true,
+          "esql": "FROM template_library\n| WHERE is_premium == false\n  AND popularity_score > 8.04\n| STATS\n    template_count = COUNT(*),\n    avg_popularity = AVG(popularity_score),\n    max_popularity = MAX(popularity_score)\n  BY industry_tag, platform_target\n| SORT avg_popularity DESC\n| LIMIT 25",
+          "result_count": 25
+        }
+      ],
+      "original_esql": "FROM template_library\n| WHERE is_premium == false\n  AND popularity_score > 8.04\n| STATS\n    template_count = COUNT(*),\n    avg_popularity = AVG(popularity_score),\n    max_popularity = MAX(popularity_score)\n  BY industry_tag, platform_target\n| SORT avg_popularity DESC\n| LIMIT 25",
+      "final_esql": "FROM template_library\n| WHERE is_premium == false\n  AND popularity_score > 8.04\n| STATS\n    template_count = COUNT(*),\n    avg_popularity = AVG(popularity_score),\n    max_popularity = MAX(popularity_score)\n  BY industry_tag, platform_target\n| SORT avg_popularity DESC\n| LIMIT 25",
+      "warnings": []
+    }
+  ]
+}

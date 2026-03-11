@@ -1,0 +1,568 @@
+{
+  "datasets": [
+    {
+      "name": "data_session_logs",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "5000-10000",
+      "required_fields": {
+        "@timestamp": "date",
+        "session_id": "keyword",
+        "session_status": "keyword",
+        "termination_cause": "keyword",
+        "rat_type": "keyword",
+        "subscriber_id": "keyword",
+        "apn": "keyword",
+        "cell_id": "keyword",
+        "session_duration_seconds": "keyword",
+        "bytes_transferred": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    },
+    {
+      "name": "call_detail_records",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200-1000",
+      "required_fields": {
+        "@timestamp": "date",
+        "cell_tower_id": "keyword",
+        "call_dropped": "keyword",
+        "call_attempt": "keyword",
+        "handoff_event": "keyword",
+        "subscriber_id": "keyword",
+        "call_duration_seconds": "keyword",
+        "signal_strength_dbm": "keyword",
+        "network_type": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    },
+    {
+      "name": "cell_tower_reference",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200-1000",
+      "required_fields": {
+        "cell_tower_id": "keyword",
+        "mobility_zone": "keyword",
+        "handoff_zone_type": "keyword",
+        "geographic_region": "keyword",
+        "tower_vendor": "keyword",
+        "latitude": "keyword",
+        "longitude": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    },
+    {
+      "name": "core_network_events",
+      "type": "timeseries",
+      "index_mode": "data_stream",
+      "row_count": "5000-10000",
+      "required_fields": {
+        "@timestamp": "date",
+        "event_id": "keyword",
+        "event_title": "keyword",
+        "event_description": "text",
+        "alert_message": "text",
+        "node_id": "keyword",
+        "node_role": "keyword",
+        "cluster_id": "keyword",
+        "network_region": "keyword",
+        "severity": "keyword",
+        "event_type": "keyword",
+        "consensus_state": "keyword",
+        "affected_peers": "keyword",
+        "score": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    },
+    {
+      "name": "mme_system_logs",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200-1000",
+      "required_fields": {
+        "@timestamp": "date",
+        "mme_node_id": "keyword",
+        "mme_pool_id": "keyword",
+        "cpu_utilization_pct": "keyword",
+        "memory_utilization_pct": "keyword",
+        "active_ue_sessions": "keyword",
+        "attach_request_rate": "keyword",
+        "attach_failure_rate": "keyword",
+        "s1ap_error_count": "integer",
+        "nas_signaling_error_count": "integer",
+        "software_version": "keyword",
+        "process_name": "keyword",
+        "log_severity": "keyword",
+        "error_code": "keyword",
+        "fault_code": "keyword",
+        "fault_category": "keyword",
+        "fault_severity": "keyword",
+        "affected_subscribers": "keyword",
+        "attach_failures": "keyword",
+        "detach_events": "keyword",
+        "s1ap_errors": "keyword",
+        "nas_procedure_failures": "keyword",
+        "core_dump_generated": "keyword",
+        "log_level": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    },
+    {
+      "name": "mme_bug_signature_lookup",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200-1000",
+      "required_fields": {
+        "software_version": "keyword",
+        "bug_id": "keyword",
+        "bug_description": "text",
+        "affected_component": "keyword",
+        "patch_available": "keyword",
+        "severity_rating": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    },
+    {
+      "name": "signaling_logs",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200-1000",
+      "required_fields": {
+        "@timestamp": "date",
+        "network_element_id": "keyword",
+        "signaling_protocol": "keyword",
+        "message_type": "text",
+        "source_node": "keyword",
+        "destination_node": "keyword",
+        "message_direction": "text",
+        "session_id": "keyword",
+        "cause_code": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    },
+    {
+      "name": "network_element_registry",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200-1000",
+      "required_fields": {
+        "network_element_id": "keyword",
+        "element_name": "keyword",
+        "element_type": "keyword",
+        "region": "keyword",
+        "vendor": "keyword",
+        "capacity_threshold_msg_per_min": "keyword",
+        "criticality_tier": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    },
+    {
+      "name": "ran_performance_metrics",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200-1000",
+      "required_fields": {
+        "@timestamp": "date",
+        "ran_node_id": "keyword",
+        "cell_id": "keyword",
+        "handover_attempts": "keyword",
+        "handover_failures": "keyword",
+        "handover_type": "keyword",
+        "source_rat": "keyword",
+        "target_rat": "keyword",
+        "ue_count": "integer"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    },
+    {
+      "name": "ran_site_reference",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200-1000",
+      "required_fields": {
+        "ran_node_id": "keyword",
+        "site_name": "keyword",
+        "region": "keyword",
+        "sub_region": "keyword",
+        "vendor": "keyword",
+        "technology_generation": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    },
+    {
+      "name": "mme_bug_signatures",
+      "type": "reference",
+      "index_mode": "lookup",
+      "row_count": "200-1000",
+      "required_fields": {
+        "fault_code": "keyword",
+        "bug_id": "keyword",
+        "bug_title": "keyword",
+        "bug_severity": "keyword",
+        "affected_software_versions": "keyword",
+        "bug_category": "keyword",
+        "patch_available": "keyword",
+        "patch_version": "keyword",
+        "cve_reference": "keyword",
+        "workaround_available": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": []
+    }
+  ],
+  "queries": [
+    {
+      "name": "Data Session Interruption Trending Over Time",
+      "pain_point": "Tracks rising frequency of interrupted data sessions to surface degradation patterns early.",
+      "description": "This query analyzes data session logs to identify and trend interrupted sessions over hourly time buckets. It filters for sessions with an 'interrupted' or 'abnormal_termination' status, then groups counts by hour and network technology (e.g., 4G, 5G, 3G) to reveal degradation patterns across different radio access technologies. By sorting results chronologically and computing an interruption rate per bucket, network operations teams can quickly spot rising failure trends and correlate them with network events, maintenance windows, or infrastructure changes before they escalate into widespread outages.",
+      "esql_features": [
+        "FROM",
+        "WHERE",
+        "EVAL",
+        "STATS",
+        "SORT",
+        "DATE_TRUNC",
+        "COUNT",
+        "ROUND"
+      ],
+      "required_datasets": [
+        "data_session_logs"
+      ],
+      "required_fields": {
+        "data_session_logs": [
+          "@timestamp",
+          "session_id",
+          "session_status",
+          "termination_cause",
+          "rat_type",
+          "subscriber_id",
+          "apn",
+          "cell_id",
+          "session_duration_seconds",
+          "bytes_transferred"
+        ]
+      },
+      "complexity": "medium",
+      "esql_query": "FROM data_session_logs\n| WHERE session_status IN (\"interrupted\", \"abnormal_termination\", \"forced_termination\")\n  AND @timestamp >= NOW() - 7 days\n| EVAL time_bucket = DATE_TRUNC(1 hour, @timestamp)\n| EVAL is_short_session = CASE(session_duration_seconds < 30, 1, 0)\n| STATS\n    interrupted_session_count = COUNT(session_id),\n    affected_subscribers = COUNT_DISTINCT(subscriber_id),\n    affected_cells = COUNT_DISTINCT(cell_id),\n    short_session_count = SUM(is_short_session),\n    avg_session_duration_sec = ROUND(AVG(session_duration_seconds), 2)\n  BY time_bucket, rat_type\n| EVAL short_session_pct = ROUND((short_session_count / interrupted_session_count) * 100, 1)\n| SORT time_bucket DESC, interrupted_session_count DESC"
+    },
+    {
+      "name": "Dropped Call Rate by Cell Tower and Mobility Zone",
+      "pain_point": "Identifies abnormal dropped call spikes during handoff events across mobility zones.",
+      "description": "This query analyzes call detail records to detect anomalous dropped call rates at the cell tower level, segmented by mobility zone. It aggregates dropped call counts and total call attempts per tower per 15-minute time bucket, computes a per-tower dropped call rate, and then uses INLINESTATS to derive the mean and standard deviation of that rate across all time buckets for each tower. A Z-score is calculated to flag towers exhibiting statistically significant spikes (beyond 3 standard deviations). A LOOKUP JOIN enriches each tower record with its associated mobility zone classification, handoff zone type, and geographic region from a reference index, enabling network operations teams to quickly correlate anomalies with specific handoff corridors or high-mobility areas such as highways or transit hubs.",
+      "esql_features": [
+        "FROM",
+        "LOOKUP JOIN",
+        "STATS",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE",
+        "COALESCE",
+        "SORT",
+        "KEEP"
+      ],
+      "required_datasets": [
+        "call_detail_records",
+        "cell_tower_reference"
+      ],
+      "required_fields": {
+        "call_detail_records": [
+          "@timestamp",
+          "cell_tower_id",
+          "call_dropped",
+          "call_attempt",
+          "handoff_event",
+          "subscriber_id",
+          "call_duration_seconds",
+          "signal_strength_dbm",
+          "network_type"
+        ],
+        "cell_tower_reference": [
+          "cell_tower_id",
+          "mobility_zone",
+          "handoff_zone_type",
+          "geographic_region",
+          "tower_vendor",
+          "latitude",
+          "longitude"
+        ]
+      },
+      "complexity": "complex",
+      "esql_query": "FROM call_detail_records\n| WHERE @timestamp >= NOW() - 7 days\n  AND handoff_event == true\n| EVAL time_bucket = DATE_TRUNC(15 minutes, @timestamp)\n| STATS\n    total_dropped   = SUM(CASE WHEN call_dropped == true THEN 1 ELSE 0 END),\n    total_attempts  = COUNT(*),\n    avg_signal_dbm  = AVG(signal_strength_dbm)\n  BY time_bucket, cell_tower_id\n| EVAL dropped_call_rate = total_dropped / COALESCE(total_attempts::double, 1.0)\n| LOOKUP JOIN cell_tower_reference ON cell_tower_id\n| INLINESTATS\n    avg_dropped_rate    = AVG(dropped_call_rate),\n    stddev_dropped_rate = STD_DEV(dropped_call_rate)\n  BY cell_tower_id\n| EVAL z_score = (dropped_call_rate - avg_dropped_rate) / COALESCE(stddev_dropped_rate, 1.0)\n| WHERE z_score > 3 OR z_score < -3\n| KEEP\n    time_bucket,\n    cell_tower_id,\n    mobility_zone,\n    handoff_zone_type,\n    geographic_region,\n    tower_vendor,\n    latitude,\n    longitude,\n    total_dropped,\n    total_attempts,\n    dropped_call_rate,\n    avg_dropped_rate,\n    stddev_dropped_rate,\n    z_score,\n    avg_signal_dbm\n| SORT z_score DESC, time_bucket ASC"
+    },
+    {
+      "name": "Core Network Split-Brain Event Search",
+      "pain_point": "Enables rapid search for split-brain conditions across core network nodes by time window.",
+      "description": "Performs a full-text search across core network event records to rapidly identify split-brain conditions \u2014 scenarios where network nodes lose consensus and operate independently, causing routing inconsistencies and service degradation. The query accepts a dynamic search term and time window as parameters, matches against event descriptions and alert messages using ES|QL MATCH, scores results by relevance, and surfaces the most critical split-brain events first. This enables Network Operations engineers to quickly triage active split-brain incidents across distributed core nodes without manually scanning raw logs.",
+      "esql_features": [
+        "WHERE",
+        "MATCH",
+        "AND",
+        "KEEP",
+        "SORT",
+        "LIMIT"
+      ],
+      "required_datasets": [
+        "core_network_events"
+      ],
+      "required_fields": {
+        "core_network_events": [
+          "@timestamp",
+          "event_id",
+          "event_title",
+          "event_description",
+          "alert_message",
+          "node_id",
+          "node_role",
+          "cluster_id",
+          "network_region",
+          "severity",
+          "event_type",
+          "consensus_state",
+          "affected_peers",
+          "score"
+        ]
+      },
+      "complexity": "medium",
+      "esql_query": "FROM core_network_events\n| WHERE @timestamp >= ?start_time AND @timestamp <= ?end_time\n| WHERE MATCH(event_description, ?query) OR MATCH(alert_message, ?query) OR MATCH(event_title, ?query)\n| WHERE event_type == \"split_brain\" OR consensus_state == \"partitioned\"\n| EVAL relevance_score = score()\n| KEEP event_id, event_title, event_description, alert_message, node_id, node_role, cluster_id, network_region, severity, consensus_state, affected_peers, @timestamp, relevance_score\n| SORT relevance_score DESC, severity ASC, @timestamp DESC\n| LIMIT 25"
+    },
+    {
+      "name": "MME Resource Exhaustion and Error Surge Detection",
+      "pain_point": "Detects MME memory and CPU exhaustion events correlated with software bug signatures.",
+      "description": "This query analyzes MME (Mobility Management Entity) system logs to detect resource exhaustion anomalies by computing per-node CPU and memory utilization statistics across 5-minute time buckets. It applies Z-score based anomaly detection using INLINESTATS to identify nodes exhibiting statistically significant spikes (Z-score > 3) in resource consumption. A LOOKUP JOIN enriches each anomalous event with known software bug signatures from a reference table, enabling network operations teams to quickly correlate whether the exhaustion event is tied to a known defect, patch level, or firmware issue. The result surfaces the most critical MME nodes at risk of service degradation or signaling failure, prioritized by severity and error rate surge.",
+      "esql_features": [
+        "STATS",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE",
+        "LOOKUP JOIN",
+        "COALESCE",
+        "SORT",
+        "DATE_TRUNC",
+        "ROUND"
+      ],
+      "required_datasets": [
+        "mme_system_logs",
+        "mme_bug_signature_lookup"
+      ],
+      "required_fields": {
+        "mme_system_logs": [
+          "@timestamp",
+          "mme_node_id",
+          "mme_pool_id",
+          "cpu_utilization_pct",
+          "memory_utilization_pct",
+          "active_ue_sessions",
+          "attach_request_rate",
+          "attach_failure_rate",
+          "s1ap_error_count",
+          "nas_signaling_error_count",
+          "software_version",
+          "process_name",
+          "log_severity",
+          "error_code"
+        ],
+        "mme_bug_signature_lookup": [
+          "software_version",
+          "bug_id",
+          "bug_description",
+          "affected_component",
+          "patch_available",
+          "severity_rating"
+        ]
+      },
+      "complexity": "complex",
+      "esql_query": "FROM mme_system_logs\n| WHERE @timestamp >= NOW() - 6 HOURS\n  AND log_severity IN (\"ERROR\", \"CRITICAL\", \"WARNING\")\n| EVAL time_bucket = DATE_TRUNC(5 minutes, @timestamp)\n| STATS\n    avg_cpu = AVG(cpu_utilization_pct),\n    avg_memory = AVG(memory_utilization_pct),\n    total_s1ap_errors = SUM(s1ap_error_count),\n    total_nas_errors = SUM(nas_signaling_error_count),\n    total_attach_failures = SUM(attach_failure_rate),\n    avg_ue_sessions = AVG(active_ue_sessions),\n    event_count = COUNT()\n  BY time_bucket, mme_node_id, mme_pool_id, software_version\n| INLINESTATS\n    baseline_cpu = AVG(avg_cpu),\n    stddev_cpu = STD_DEV(avg_cpu),\n    baseline_memory = AVG(avg_memory),\n    stddev_memory = STD_DEV(avg_memory),\n    baseline_s1ap_errors = AVG(total_s1ap_errors),\n    stddev_s1ap_errors = STD_DEV(total_s1ap_errors)\n  BY mme_node_id\n| EVAL\n    cpu_z_score = ROUND((avg_cpu - baseline_cpu) / COALESCE(stddev_cpu, 1), 2),\n    memory_z_score = ROUND((avg_memory - baseline_memory) / COALESCE(stddev_memory, 1), 2),\n    s1ap_error_z_score = ROUND((total_s1ap_errors - baseline_s1ap_errors) / COALESCE(stddev_s1ap_errors, 1), 2)\n| EVAL\n    cpu_exhaustion_flag = CASE(avg_cpu >= 90, \"CRITICAL\", avg_cpu >= 75, \"WARNING\", \"NORMAL\"),\n    memory_exhaustion_flag = CASE(avg_memory >= 90, \"CRITICAL\", avg_memory >= 75, \"WARNING\", \"NORMAL\"),\n    anomaly_score = ROUND((cpu_z_score + memory_z_score + s1ap_error_z_score) / 3, 2)\n| WHERE cpu_z_score > 3 OR memory_z_score > 3 OR s1ap_error_z_score > 3\n| LOOKUP JOIN mme_bug_signature_lookup ON software_version\n| EVAL\n    bug_correlated = CASE(bug_id IS NOT NULL, \"YES\", \"NO\"),\n    remediation_priority = CASE(\n      patch_available == \"YES\" AND severity_rating == \"CRITICAL\", \"IMMEDIATE\",\n      patch_available == \"YES\" AND severity_rating == \"HIGH\", \"HIGH\",\n      patch_available == \"NO\" AND anomaly_score > 5, \"ESCALATE\",\n      \"MONITOR\"\n    )\n| KEEP\n    time_bucket,\n    mme_node_id,\n    mme_pool_id,\n    software_version,\n    avg_cpu,\n    avg_memory,\n    cpu_z_score,\n    memory_z_score,\n    s1ap_error_z_score,\n    anomaly_score,\n    cpu_exhaustion_flag,\n    memory_exhaustion_flag,\n    total_s1ap_errors,\n    total_nas_errors,\n    total_attach_failures,\n    avg_ue_sessions,\n    event_count,\n    bug_id,\n    bug_description,\n    affected_component,\n    patch_available,\n    severity_rating,\n    bug_correlated,\n    remediation_priority\n| SORT anomaly_score DESC, time_bucket DESC"
+    },
+    {
+      "name": "Signaling Storm Detection Across Network Elements",
+      "pain_point": "Identifies abnormal signaling message volume bursts that indicate storm conditions in the core.",
+      "description": "Detects signaling storm conditions across core network elements by analyzing message volume per network node over rolling time buckets. The query aggregates signaling message counts by network element and protocol type, then applies z-score statistical analysis using INLINESTATS to identify nodes experiencing abnormal burst activity. A LOOKUP JOIN enriches each network element with its classification, region, and capacity thresholds from a reference table. Nodes with z-scores exceeding 3 standard deviations above the mean are flagged as storm candidates, enabling NOC engineers to rapidly isolate affected elements before cascading failures propagate through the signaling fabric.",
+      "esql_features": [
+        "STATS",
+        "INLINESTATS",
+        "EVAL",
+        "WHERE",
+        "LOOKUP JOIN",
+        "SORT",
+        "COALESCE",
+        "DATE_TRUNC"
+      ],
+      "required_datasets": [
+        "signaling_logs",
+        "network_element_registry"
+      ],
+      "required_fields": {
+        "signaling_logs": [
+          "@timestamp",
+          "network_element_id",
+          "signaling_protocol",
+          "message_type",
+          "source_node",
+          "destination_node",
+          "message_direction",
+          "session_id",
+          "cause_code"
+        ],
+        "network_element_registry": [
+          "network_element_id",
+          "element_name",
+          "element_type",
+          "region",
+          "vendor",
+          "capacity_threshold_msg_per_min",
+          "criticality_tier"
+        ]
+      },
+      "complexity": "complex",
+      "esql_query": "FROM signaling_logs\n| WHERE @timestamp >= NOW() - 2 HOURS\n| EVAL time_bucket = DATE_TRUNC(1 minute, @timestamp)\n| STATS message_count = COUNT(*),\n        unique_sources = COUNT_DISTINCT(source_node),\n        unique_destinations = COUNT_DISTINCT(destination_node)\n  BY time_bucket, network_element_id, signaling_protocol\n| INLINESTATS avg_message_count = AVG(message_count),\n              stddev_message_count = STD_DEV(message_count)\n  BY network_element_id, signaling_protocol\n| EVAL z_score = (message_count - avg_message_count) / COALESCE(stddev_message_count, 1),\n       burst_ratio = message_count / COALESCE(avg_message_count, 1)\n| WHERE z_score > 3\n| LOOKUP JOIN network_element_registry ON network_element_id\n| EVAL storm_severity = CASE(\n    z_score >= 6, \"CRITICAL\",\n    z_score >= 4.5, \"HIGH\",\n    z_score >= 3, \"MODERATE\",\n    \"LOW\"\n  ),\n  capacity_breach = CASE(\n    message_count > capacity_threshold_msg_per_min, true,\n    false\n  )\n| KEEP time_bucket, network_element_id, element_name, element_type, region,\n        vendor, criticality_tier, signaling_protocol, message_count,\n        avg_message_count, stddev_message_count, z_score, burst_ratio,\n        unique_sources, unique_destinations, storm_severity,\n        capacity_threshold_msg_per_min, capacity_breach\n| SORT z_score DESC, time_bucket ASC"
+    },
+    {
+      "name": "Handover Failure Analytics by RAN and Region",
+      "pain_point": "Analyzes handover failure rates by radio access node and geographic region to pinpoint mobility issues.",
+      "description": "This query analyzes handover failure rates across radio access nodes (RANs) and geographic regions to identify mobility bottlenecks in the network. It calculates total handover attempts, failures, and success rates per node and region, then enriches each node with site metadata via a LOOKUP JOIN against a RAN site reference table. The results highlight nodes and regions with the highest failure rates, enabling Network Operations teams to prioritize corrective actions such as neighbor list optimization, coverage adjustments, or parameter tuning to improve mobility performance.",
+      "esql_features": [
+        "STATS",
+        "EVAL",
+        "LOOKUP JOIN",
+        "SORT",
+        "WHERE",
+        "ROUND"
+      ],
+      "required_datasets": [
+        "ran_performance_metrics",
+        "ran_site_reference"
+      ],
+      "required_fields": {
+        "ran_performance_metrics": [
+          "@timestamp",
+          "ran_node_id",
+          "cell_id",
+          "handover_attempts",
+          "handover_failures",
+          "handover_type",
+          "source_rat",
+          "target_rat",
+          "ue_count"
+        ],
+        "ran_site_reference": [
+          "ran_node_id",
+          "site_name",
+          "region",
+          "sub_region",
+          "vendor",
+          "technology_generation"
+        ]
+      },
+      "complexity": "medium",
+      "esql_query": "FROM ran_performance_metrics\n| WHERE @timestamp >= NOW() - 24 hours\n  AND handover_attempts > 0\n| STATS\n    total_handover_attempts = SUM(handover_attempts),\n    total_handover_failures = SUM(handover_failures),\n    avg_ue_count = AVG(ue_count),\n    sample_count = COUNT(*)\n  BY ran_node_id, handover_type, source_rat, target_rat\n| EVAL handover_failure_rate = ROUND(\n    (total_handover_failures / total_handover_attempts) * 100, 2\n  )\n| EVAL handover_success_rate = ROUND(\n    100.0 - handover_failure_rate, 2\n  )\n| LOOKUP JOIN ran_site_reference ON ran_node_id\n| STATS\n    region_total_attempts = SUM(total_handover_attempts),\n    region_total_failures = SUM(total_handover_failures),\n    node_count = COUNT_DISTINCT(ran_node_id),\n    avg_failure_rate = ROUND(AVG(handover_failure_rate), 2),\n    max_failure_rate = MAX(handover_failure_rate),\n    avg_ue_count = AVG(avg_ue_count)\n  BY region, sub_region, handover_type, source_rat, target_rat, vendor, technology_generation\n| EVAL region_failure_rate = ROUND(\n    (region_total_failures / region_total_attempts) * 100, 2\n  )\n| EVAL failure_severity = CASE(\n    region_failure_rate >= 10, \"CRITICAL\",\n    region_failure_rate >= 5,  \"HIGH\",\n    region_failure_rate >= 2,  \"MEDIUM\",\n    \"LOW\"\n  )\n| SORT region_failure_rate DESC, region_total_failures DESC"
+    },
+    {
+      "name": "MME Software Bug Enrichment and Impact Correlation",
+      "pain_point": "Enriches MME fault events with known bug signatures to correlate software defects with service impact.",
+      "description": "This query enriches MME (Mobility Management Entity) fault and error events from system logs with a known software bug signature reference table. By performing a LOOKUP JOIN against the bug_signatures reference dataset, each fault event is annotated with bug metadata such as bug ID, severity classification, affected software version, and recommended remediation status. The query then aggregates enriched events to surface which software defects are causing the highest service impact, measured by affected subscriber counts and fault frequency. This enables Network Operations teams to prioritize patching efforts, correlate recurring faults to specific software releases, and quantify the operational impact of unresolved bugs across the MME fleet.",
+      "esql_features": [
+        "FROM",
+        "WHERE",
+        "LOOKUP JOIN",
+        "EVAL",
+        "STATS",
+        "SORT",
+        "LIMIT"
+      ],
+      "required_datasets": [
+        "mme_system_logs",
+        "mme_bug_signatures"
+      ],
+      "required_fields": {
+        "mme_system_logs": [
+          "@timestamp",
+          "mme_node_id",
+          "software_version",
+          "fault_code",
+          "fault_category",
+          "fault_severity",
+          "affected_subscribers",
+          "attach_failures",
+          "detach_events",
+          "s1ap_errors",
+          "nas_procedure_failures",
+          "process_name",
+          "core_dump_generated",
+          "log_level"
+        ],
+        "mme_bug_signatures": [
+          "fault_code",
+          "bug_id",
+          "bug_title",
+          "bug_severity",
+          "affected_software_versions",
+          "bug_category",
+          "patch_available",
+          "patch_version",
+          "cve_reference",
+          "workaround_available"
+        ]
+      },
+      "complexity": "complex",
+      "esql_query": "FROM mme_system_logs\n| WHERE @timestamp >= NOW() - 7 days\n  AND log_level IN (\"ERROR\", \"CRITICAL\", \"WARNING\")\n  AND fault_code IS NOT NULL\n| EVAL fault_hour = DATE_TRUNC(1 hour, @timestamp),\n       is_critical_fault = CASE(\n         fault_severity == \"CRITICAL\", true,\n         fault_severity == \"HIGH\",     true,\n         false\n       ),\n       has_core_dump = COALESCE(core_dump_generated, false)\n| LOOKUP JOIN mme_bug_signatures ON fault_code\n| WHERE bug_id IS NOT NULL\n| EVAL impact_score = CASE(\n    bug_severity == \"CRITICAL\" AND patch_available == false, 5,\n    bug_severity == \"CRITICAL\" AND patch_available == true,  4,\n    bug_severity == \"HIGH\"     AND patch_available == false, 3,\n    bug_severity == \"HIGH\"     AND patch_available == true,  2,\n    1\n  ),\n  remediation_status = CASE(\n    patch_available == true,      \"Patch Available\",\n    workaround_available == true, \"Workaround Available\",\n    \"No Remediation\"\n  )\n| STATS\n    total_fault_events       = COUNT(*),\n    total_affected_subscribers = SUM(affected_subscribers),\n    total_attach_failures    = SUM(attach_failures),\n    total_nas_failures       = SUM(nas_procedure_failures),\n    total_s1ap_errors        = SUM(s1ap_errors),\n    core_dump_count          = COUNT_DISTINCT(mme_node_id) BY has_core_dump == true,\n    affected_nodes           = COUNT_DISTINCT(mme_node_id),\n    max_impact_score         = MAX(impact_score),\n    unique_software_versions = COUNT_DISTINCT(software_version)\n  BY\n    bug_id,\n    bug_title,\n    bug_category,\n    bug_severity,\n    fault_code,\n    patch_available,\n    patch_version,\n    cve_reference,\n    remediation_status\n| EVAL subscriber_impact_per_node = ROUND(total_affected_subscribers / affected_nodes, 2)\n| SORT max_impact_score DESC, total_affected_subscribers DESC\n| LIMIT 50"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "call_detail_records",
+      "to": "cell_tower_reference",
+      "type": "many-to-one",
+      "join_field": "cell_tower_id"
+    },
+    {
+      "from": "mme_system_logs",
+      "to": "mme_bug_signature_lookup",
+      "type": "many-to-one",
+      "join_field": "software_version"
+    },
+    {
+      "from": "signaling_logs",
+      "to": "network_element_registry",
+      "type": "many-to-one",
+      "join_field": "network_element_id"
+    },
+    {
+      "from": "ran_performance_metrics",
+      "to": "ran_site_reference",
+      "type": "many-to-one",
+      "join_field": "ran_node_id"
+    },
+    {
+      "from": "mme_system_logs",
+      "to": "mme_bug_signatures",
+      "type": "many-to-one",
+      "join_field": "fault_code"
+    }
+  ],
+  "field_mappings": {
+    "call_detail_records.cell_tower_id": "cell_tower_reference.cell_tower_id",
+    "mme_system_logs.software_version": "mme_bug_signature_lookup.software_version",
+    "signaling_logs.network_element_id": "network_element_registry.network_element_id",
+    "ran_performance_metrics.ran_node_id": "ran_site_reference.ran_node_id",
+    "mme_system_logs.fault_code": "mme_bug_signatures.fault_code"
+  },
+  "text_fields": {
+    "core_network_events": [
+      "event_description",
+      "alert_message",
+      "event_title"
+    ]
+  }
+}

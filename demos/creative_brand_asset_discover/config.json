@@ -1,0 +1,512 @@
+{
+  "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+  "demo_type": "search",
+  "module_version": "1.0.0",
+  "generated_at": "2026-03-10T16:56:50.000562",
+  "customer_context": {
+    "company_name": "Creative",
+    "department": "Brand Asset Discovery",
+    "industry": "Marketing Technology",
+    "pain_points": [
+      "Need cost-effective serverless search solution that scales with usage",
+      "Current Azure AI search limitations for multimodal content discovery",
+      "Tight MVP deadline before Christmas requires proven, reliable search technology",
+      "Small businesses need lightweight marketing platform alternative to complex enterprise tools"
+    ],
+    "use_cases": [
+      "Coffee shop manager searches existing brand assets to find logo variations, menu boards, and loyalty program graphics for new location setup",
+      "Restaurant marketing manager searches for 'Italian food' images and discovers pasta photos, menu layouts, and Instagram story templates",
+      "Small business owner searches 'summer promotion' and finds relevant product photos, email templates, and social media graphics from their content library",
+      "E-commerce retailer searches 'holiday sale' and gets recommended product images, discount badges, and seasonal email campaign templates",
+      "Real estate agent searches 'modern kitchen' and finds property photos, virtual tour assets, and matching listing description templates",
+      "Small SaaS company searches 'customer testimonial' to find video clips, quote graphics, and case study templates for marketing campaigns",
+      "Local fitness studio owner uploads workout video and system automatically suggests matching promotional banners and class schedule templates",
+      "Boutique owner creates social media campaign by searching 'spring collection' to discover fashion photos, color palettes, and promotional copy"
+    ],
+    "metrics": [
+      "Search accuracy and relevance",
+      "Content reuse rate",
+      "Campaign creation time reduction",
+      "Content discovery success rate",
+      "User engagement with search results",
+      "Query response time",
+      "Cost per search operation"
+    ],
+    "demo_type": "search",
+    "dataset_size_preference": "medium",
+    "use_enhanced_generation": true,
+    "full_technical_context": "# Creative \u2014 Brand Asset Discovery\n## Elastic Search & Retrieval Use Case Document\n\n---\n\n## 1. Customer Profile\n\n| Attribute | Detail |\n|---|---|\n| **Company** | Creative |\n| **Department** | Brand Asset Discovery |\n| **Industry** | Marketing Technology |\n| **Use Case Category** | Content Discovery / RAG/AI Assistant |\n| **Primary Interest** | Elasticsearch Search \u2014 Hybrid Search (Full-text + Semantic + Vector/Multimodal) |\n| **Deployment Model** | Serverless Elasticsearch (Elastic Cloud) |\n| **Target Audience** | Small business owners, marketing managers, local business operators |\n| **Solution Stage** | MVP pre-Christmas deadline |\n\nCreative is building a lightweight, cost-effective marketing platform that enables small businesses to search and discover multimodal brand assets \u2014 including images, videos, and templates \u2014 without the complexity or cost of enterprise-grade tools. The platform must deliver highly relevant, meaning-aware search results across heterogeneous content types (visual, video, document) through a serverless search solution that scales elastically with usage and stays within tight operational budgets.\n\n---\n\n## 2. Pain Points\n\n### 2.1 Current Azure AI Search Limitations for Multimodal Content Discovery\n\nSmall businesses working with diverse brand assets \u2014 product photos, logo variations, Instagram story templates, and promotional banners \u2014 require a search engine that understands content across modalities, not just text metadata. Azure AI Search imposes rigid schema requirements and limited vector pipeline flexibility that make it difficult to unify image, video, and template assets into a single discoverable index. As a result, users must browse multiple disconnected asset libraries manually, dramatically increasing campaign creation time and reducing content reuse rates.\n\n### 2.2 Keyword-Only Search Fails to Surface Semantically Relevant Brand Assets\n\nWhen a restaurant marketing manager searches for \"Italian food,\" the current system returns only assets whose file names or tags contain that exact phrase, missing pasta photos tagged as \"cuisine photography,\" menu layouts labeled \"restaurant collateral,\" or Instagram story templates categorized under \"food & beverage.\" This lack of semantic understanding means high-value brand assets remain buried and undiscovered, directly reducing content discovery success rates and forcing users to upload duplicate assets rather than reusing existing ones.\n\n### 2.3 No Cross-Modal Asset Suggestion Capability\n\nSmall business owners \u2014 such as a local fitness studio owner \u2014 expect to upload a workout video and receive automatic suggestions for matching promotional banners and class schedule templates that share visual style, color palette, or thematic relevance. The current platform has no mechanism to bridge modalities: video assets, static graphics, and document templates exist in isolated silos with no shared semantic layer. This absence of cross-modal discovery forces manual curation, adding hours to every campaign creation workflow.\n\n### 2.4 Cost and Scalability Constraints Limit Search Infrastructure Choices\n\nSmall businesses operate on tight margins, and the platform must deliver a serverless search solution that charges only for actual query volume rather than reserved capacity. Existing enterprise search infrastructure is provisioned for peak load, generating significant idle cost that is untenable for an MVP targeting cost-conscious small business customers. Without a usage-based scaling model, the platform cannot price competitively against lightweight alternatives while still meeting the query response time and search accuracy expectations of its users.\n\n### 2.5 Tight MVP Deadline Requires Proven, Reliable Search Technology\n\nThe platform must reach feature-complete MVP status before Christmas, leaving insufficient time to build and validate custom search pipelines from scratch. The current development approach \u2014 attempting to extend Azure AI Search with custom multimodal connectors \u2014 has introduced integration risk and schedule slippage. A proven, reliable search technology with native support for semantic text, vector embeddings, and hybrid ranking is required to de-risk delivery and meet the launch deadline without sacrificing search relevancy or content discovery success rates.\n\n---\n\n## 3. Document Collections\n\n### 3.1 Brand Asset Catalog\n\n* **Purpose**: The central searchable repository of all multimodal brand assets uploaded by small business users. Marketing managers, business owners, and campaign creators search this collection to discover images, videos, and templates relevant to their current campaign.\n* **Document Type**: Multimodal brand assets \u2014 product photos, logo variations, social media graphics, promotional banners, video clips, and visual design files\n\n* **Key Search Fields**:\n  - `asset_title` (text): Short, human-readable asset name optimized for BM25 keyword search (e.g., file name or user-assigned label). Enables fast exact and fuzzy title lookups.\n  - `asset_description` (semantic_text): Rich descriptive content capturing visual subject matter, mood, color palette, intended use, and thematic context. Powers semantic search so that a query for \"Italian food\" surfaces pasta photos, menu layouts, and food-themed graphics even when those exact words do not appear in the title. Also stores the original text for full-text search.\n  - `asset_type` (keyword): Broad content modality classification. Enables filtering to restrict results to a single content type (e.g., only images, only videos, only templates).\n  - `content_category` (keyword): Thematic or subject-matter category assigned at upload or inferred by the AI pipeline. Used for faceted browsing and filter combinations alongside keyword search.\n  - `business_vertical` (keyword): The industry or business type the asset was created for or is most relevant to. Allows vertical-specific scoping of search results.\n  - `campaign_theme` (keyword): High-level campaign or seasonal theme tag. Supports filtering brand assets by promotional context (e.g., holiday, seasonal, product launch).\n  - `color_palette_tags` (keyword): Dominant color descriptors extracted from visual assets. Enables color-constrained discovery for brand consistency.\n  - `file_format` (keyword): Technical format of the asset (image format, video codec, document format). Used for compatibility filtering.\n  - `owner_account_id` (keyword): Identifier of the small business account that owns or uploaded the asset. Ensures search is scoped to the correct tenant's content library.\n  - `is_active` (boolean): Flags whether the asset is currently published and available for use. Filters out archived or draft assets by default.\n  - `upload_date` (date): Date the asset was added to the library. Supports recency-based ranking boosts for freshly uploaded content.\n  - `reuse_count` (integer): Number of times the asset has been selected or used in campaigns. Used as a popularity signal in relevancy ranking.\n  - `aspect_ratio` (keyword): Dimensional format of visual assets. Enables filtering for platform-specific requirements (e.g., square for Instagram, widescreen for banners).\n\n* **Search Patterns**:\n  - **Semantic search**: \"Italian food\" retrieves pasta photos, menu layouts, and food-themed Instagram story templates based on meaning, not just tag matching\n  - **Fuzzy search**: Typo-tolerant lookup for asset titles (e.g., \"promotiom banner\" still returns promotional banners)\n  - **Faceted/filtered search**: Combine content category, business vertical, and campaign theme filters to narrow results\n  - **Hybrid search**: Combine BM25 keyword match on `asset_title` with semantic match on `asset_description` for maximum recall and precision\n\n* **Volume**: Hundreds of thousands to low millions of assets across all small business tenants\n\n* **Value Diversity Requirements**:\n  - `asset_type`: Need 5\u20137 distinct values representing the full spectrum of multimodal content types the platform supports. Derive from the user's explicitly mentioned content modalities (images, videos, templates) and expand to cover sub-types relevant to small business marketing.\n  - `content_category`: Need 12\u201318 distinct values representing the breadth of subject matter small businesses create assets for. Include food/restaurant, fitness, real estate, retail/e-commerce, and coffee/caf\u00e9 verticals explicitly mentioned by the user, plus logically adjacent categories for variety.\n  - `business_vertical`: Need 8\u201312 distinct values representing the small business types the platform serves. Anchor on the user's validated scenarios (restaurant, fitness studio, e-commerce retailer, real estate, boutique, coffee shop, SaaS) plus 2\u20133 additional small business types.\n  - `campaign_theme`: Need 10\u201315 distinct values representing seasonal, promotional, and evergreen campaign contexts. Include the user's explicitly mentioned themes (summer promotion, holiday sale, spring collection, seasonal email campaign) plus logically related campaign types.\n  - `color_palette_tags`: Need 8\u201312 distinct color descriptor values. Represent both specific brand colors and broad palette descriptors (warm, cool, neutral, bold, pastel) to support brand consistency filtering.\n  - `aspect_ratio`: Need 5\u20137 distinct values covering the platform-specific format requirements most relevant to small business social media and email marketing.\n\n**Common Search Scenarios**:\n\n1. \"Restaurant marketing manager searches for 'Italian food' images and needs to filter to Instagram story templates only, within their own content library\"\n   - Combines: `asset_description` (semantic), `asset_type`, `business_vertical`, `owner_account_id`\n   - Why realistic: Directly derived from validated scenario #1 \u2014 the user wants semantic discovery but scoped to a specific content type and their own uploaded assets\n   - Guidance for data: Ensure a meaningful proportion of food/restaurant assets exist across multiple `asset_type` values so the filter meaningfully narrows results\n\n2. \"E-commerce retailer searches 'holiday sale' and filters to promotional banners and seasonal email campaign templates that are currently active\"\n   - Combines: `asset_description` (semantic + keyword), `campaign_theme`, `asset_type`, `is_active`\n   - Why realistic: Derived from validated scenario #4 \u2014 holiday campaign preparation requires finding assets across multiple content types that share a seasonal theme\n   - Guidance for data: Ensure holiday/seasonal `campaign_theme` values are populated across both image and template `asset_type` values with `is_active: true`\n\n3. \"Coffee shop manager setting up a new location searches for existing logo variations and menu boards, sorted by most recently uploaded\"\n   - Combines: `asset_title` (keyword/fuzzy), `content_category`, `owner_account_id`, `upload_date` (sort), `reuse_count` (sort)\n   - Why realistic: Derived from validated scenario #7 \u2014 brand consistency setup requires finding specific asset types within a single business's own library, ranked by recency and prior use\n   - Guidance for data: Ensure each simulated business account has a variety of asset types so scoped searches return meaningful result sets\n\n---\n\n### 3.2 Template Library\n\n* **Purpose**: A curated, platform-managed collection of ready-to-use design templates that small businesses can discover, customize, and deploy in campaigns. Searched by business owners and marketing managers looking for starting points for new campaigns.\n* **Document Type**: Design templates \u2014 Instagram story templates, email templates, promotional banners, class schedule templates, listing description templates, loyalty program graphics, menu boards\n\n* **Key Search Fields**:\n  - `template_name` (text): Short, descriptive template title optimized for keyword search and autocomplete suggestions\n  - `template_description` (semantic_text): Detailed description of the template's intended use, visual style, target audience, and customization options. Enables semantic discovery so \"summer promotion\" surfaces email templates and social media graphics even when tagged differently. Also supports full-text search on the same field.\n  - `template_category` (keyword): Primary classification of the template by content format or function. Used for faceted filtering.\n  - `industry_tag` (keyword): The business vertical or industry the template was designed for. Enables vertical-specific filtering.\n  - `campaign_type` (keyword): The promotional or content context the template is optimized for. Supports campaign-theme-based filtering.\n  - `platform_target` (keyword): The digital channel or platform the template is sized and styled for (e.g., Instagram, email, web banner). Critical for platform-specific asset discovery.\n  - `customization_complexity` (keyword): Indicator of how much editing is required to use the template. Helps small business owners with limited design skills filter to simpler options.\n  - `is_premium` (boolean): Distinguishes free templates from paid/premium options. Used as a default filter for cost-conscious small businesses.\n  - `popularity_score` (float): Aggregate engagement and usage signal across all platform users. Used as a ranking boost factor.\n  - `last_updated` (date): Date the template was last revised. Supports recency filtering and freshness ranking.\n\n* **Search Patterns**:\n  - **Semantic search**: \"spring collection\" discovers fashion photo templates, color palette guides, and promotional copy templates based on thematic meaning\n  - **Keyword search**: Exact lookup of template name or category for users who know what they want\n  - **Faceted search**: Filter by `platform_target` (Instagram), `industry_tag` (restaurant), and `campaign_type` (seasonal) simultaneously\n  - **Hybrid search**: Combine keyword match on `template_name` with semantic match on `template_description` for comprehensive template discovery\n\n* **Volume**: Tens of thousands of templates across all supported business verticals and platforms\n\n* **Value Diversity Requirements**:\n  - `template_category`: Need 8\u201312 distinct values representing the full range of template formats the platform offers. Anchor on the user's explicitly mentioned formats (Instagram story templates, email templates, promotional banners, class schedule templates, listing description templates, menu boards, loyalty program graphics) and add 1\u20132 additional format types.\n  - `industry_tag`: Need 8\u201312 distinct values mirroring the business verticals from the Brand Asset Catalog for cross-collection consistency.\n  - `campaign_type`: Need 10\u201314 distinct values representing the promotional contexts templates are designed for. Include the user's validated campaign themes and expand to cover evergreen campaign types.\n  - `platform_target`: Need 6\u20139 distinct values representing the digital channels small businesses publish to. Include social media platforms, email, and web/display advertising.\n  - `customization_complexity`: Need 3\u20134 tiered values representing the spectrum from plug-and-play to fully customizable templates.\n\n**Common Search Scenarios**:\n\n1. \"Small business owner searches 'summer promotion' and wants to see email templates and social media graphics, filtered to free templates only\"\n   - Combines: `template_description` (semantic), `template_category`, `is_premium`, `campaign_type`\n   - Why realistic: Derived from validated scenario #2 \u2014 cost-conscious small business owners need to discover relevant templates scoped to their budget and content format needs\n\n2. \"Local fitness studio owner looks for class schedule templates and promotional banners that match their industry, sorted by most popular\"\n   - Combines: `template_description` (semantic), `template_category`, `industry_tag`, `popularity_score` (sort)\n   - Why realistic: Derived from validated scenario #3 \u2014 fitness businesses need industry-specific templates ranked by community adoption to ensure professional results\n\n3. \"Real estate agent searches 'modern kitchen' and filters to listing description templates and property photo templates for a specific platform target\"\n   - Combines: `template_description` (semantic), `template_category`, `industry_tag`, `platform_target`\n   - Why realistic: Derived from validated scenario #5 \u2014 real estate professionals need both visual and copy templates scoped to their industry and distribution channel\n\n---\n\n### 3.3 Visual Asset Embeddings Index\n\n* **Purpose**: Stores vector embeddings generated from the visual content of images and video keyframes, enabling similarity-based cross-modal discovery. Powers the \"upload and discover similar assets\" capability without requiring users to describe what they're looking for in words.\n* **Document Type**: Vector representations of visual brand assets \u2014 product photos, logo variations, social media graphics, promotional banners, video keyframes\n\n* **Key Search Fields**:\n  - `asset_ref_title` (text): Human-readable label linking this embedding record back to the source asset. Supports hybrid queries that combine visual similarity with keyword filtering.\n  - `visual_caption` (semantic_text): Auto-generated natural language description of the visual content (produced by a vision-language model). Enables text-to-image semantic search \u2014 a query like \"modern kitchen\" retrieves property photos and virtual tour assets whose captions describe contemporary kitchen spaces. Also supports full-text search on the caption text.\n  - `source_asset_id` (keyword): Foreign key linking back to the corresponding document in the Brand Asset Catalog. Enables joined retrieval of full asset metadata after similarity search.\n  - `embedding_model_version` (keyword): Version identifier of the embedding model used to generate the vector. Ensures consistency when re-ranking or refreshing embeddings.\n  - `modality` (keyword): Whether the embedding was generated from a static image or a video keyframe. Supports modality-specific similarity searches.\n  - `owner_account_id` (keyword): Tenant scoping field \u2014 ensures visual similarity search is constrained to the correct business's content library.\n  - `capture_date` (date): Date the visual content was created or ingested. Supports recency filtering in similarity results.\n\n* **Search Patterns**:\n  - **Vector/semantic search**: Upload a workout video \u2192 extract keyframe embeddings \u2192 find visually similar promotional banners and class schedule templates\n  - **Text-to-image semantic search**: Query \"modern kitchen\" retrieves property photos and virtual tour assets via caption-based semantic matching\n  - **Hybrid search**: Combine visual similarity (vector) with keyword filter on `modality` and `owner_account_id` for tenant-scoped cross-modal discovery\n  - **Cross-collection lookup**: Use `source_asset_id` to join similarity results back to full asset metadata in the Brand Asset Catalog\n\n* **Volume**: Millions of embedding records (one per image asset; multiple per video for keyframe coverage)\n\n* **Value Diversity Requirements**:\n  - `modality`: Need 2\u20133 distinct values distinguishing static visual content from video-derived frames, with potential for future modality types.\n  - `embedding_model_version`: Need 2\u20133 distinct version identifiers to simulate realistic model lifecycle management and enable version-filtered re-ranking.\n\n---\n\n## 4. Use Cases\n\n---\n\n### 1. Keyword & Fuzzy Search for Brand Asset Discovery by Title\n\n**Search Challenge**: Small business owners frequently search for brand assets using approximate or misspelled terms \u2014 a coffee shop manager searching for \"loggo variations\" or \"menue boards\" should still retrieve the correct logo variations and menu boards from their content library without returning zero results.\n\n**Search Strategy**: Fuzzy matching with BM25 full-text search on short title fields, with configurable edit-distance tolerance\n\n**Document Collection**: Brand Asset Catalog (`asset_title` field), Template Library (`template_name` field)\n\n**Example Query Pattern**: Find \"logo variatons\" and \"menue boards\" within a specific coffee shop's content library, tolerating up to two character edits in the search term\n\n**Success Criteria**:\n- Top results should include logo variations and menu board assets belonging to the querying account despite title typos\n- Fuzzy matching should not degrade precision \u2014 irrelevant assets with accidentally similar titles should rank below threshold\n- Search should complete in under 100ms for the fuzzy lookup phase\n\n**Business Value**: Eliminates zero-result failures caused by minor spelling errors, which currently force users to browse manually through their entire asset library. Reduces campaign creation time by ensuring asset discovery succeeds on the first search attempt regardless of input quality.\n\n---\n\n### 2. Semantic Search for Thematic Brand Asset Discovery\n\n**Search Challenge**: When a restaurant marketing manager searches for \"Italian food,\" the system must surface pasta photos, menu layouts, and Instagram story templates even when those assets are tagged with terms like \"cuisine photography,\" \"restaurant collateral,\" or \"food & beverage\" \u2014 not the literal phrase \"Italian food.\" Keyword-only search misses these semantically relevant brand assets entirely.\n\n**Search Strategy**: Semantic search using `semantic_text` field embeddings on `asset_description` and `template_description`, enabling meaning-based retrieval across the full multimodal content library\n\n**Document Collection**: Brand Asset Catalog + Template Library (federated semantic query)\n\n**Example Query Pattern**: Search \"Italian food\" across both collections, retrieving pasta photos, menu layouts, and Instagram story templates ranked by semantic relevance to the restaurant marketing context\n\n**Success Criteria**:\n- Top 5 results should include at least one asset from each of the three content types: product photos, layout assets, and Instagram story templates\n- Results should not require the literal query phrase to appear in any metadata field\n- Semantic search should complete in under 200ms on the serverless deployment\n\n**Business Value**: Transforms brand asset discovery from a tag-browsing exercise into an intelligent search experience. Directly increases content discovery success rates and content reuse rates by surfacing existing assets that users would otherwise never find \u2014 reducing redundant uploads and campaign creation time.\n\n---\n\n### 3. Hybrid Search for Multi-Theme Campaign Asset Assembly\n\n**Search Challenge**: An e-commerce retailer searching for \"holiday sale\" assets needs results that are both keyword-precise (the word \"holiday\" or \"sale\" must be contextually relevant) and semantically broad enough to surface product images, discount badges, and seasonal email campaign templates that use varied terminology. Neither pure keyword nor pure semantic search alone achieves the right balance of precision and recall.\n\n**Search Strategy**: Hybrid search combining BM25 keyword matching on `asset_title` / `template_name` with semantic matching on `asset_description` / `template_description`, with Reciprocal Rank Fusion (RRF) merging the two ranked lists\n\n**Document Collection**: Brand Asset Catalog + Template Library\n\n**Example Query Pattern**: Hybrid search for \"holiday sale\" retrieving product images, discount badges, and seasonal email campaign templates, filtered by `campaign_theme` and `is_active`, ranked by combined keyword + semantic score boosted by `reuse_count`\n\n**Success Criteria**:\n- Top 10 results should span at least three distinct `asset_type` or `template_category` values (images, badges, email templates)\n- Hybrid ranking should outperform either keyword-only or semantic-only search on precision@5 for campaign-specific queries\n- Filter on `campaign_theme` and `is_active` should reduce result set to only currently available holiday-themed assets\n\n**Business Value**: Enables complete campaign asset assembly from a single search query, directly reducing the campaign creation time metric. Small businesses can discover all the components needed for a holiday sale campaign \u2014 product images, promotional banners, and seasonal email campaign templates \u2014 in one search session rather than conducting multiple manual browsing sessions.\n\n---\n\n### 4. Cross-Modal Asset Suggestion via Visual Similarity Search\n\n**Search Challenge**: A local fitness studio owner uploads a workout video and expects the platform to automatically suggest matching promotional banners and class schedule templates that share visual style or thematic relevance. There is no text query \u2014 the input is the video itself \u2014 so traditional keyword and semantic text search cannot be the primary retrieval mechanism.\n\n**Search Strategy**: Vector similarity search on the Visual Asset Embeddings Index using keyframe embeddings extracted from the uploaded workout video, followed by cross-collection lookup to retrieve matching promotional banners and class schedule templates from the Template Library\n\n**Document Collection**: Visual Asset Embeddings Index (primary similarity search) \u2192 Template Library (joined retrieval via `source_asset_id` and `template_category` filter)\n\n**Example Query Pattern**: Extract embedding from uploaded workout video keyframes \u2192 find nearest-neighbor visual embeddings \u2192 filter results to `template_category` values matching promotional banners and class schedule templates \u2192 return ranked suggestions with full template metadata\n\n**Success Criteria**:\n- System should return at least 5 visually or thematically relevant template suggestions without any text input from the user\n- Suggestions should include assets from at least two distinct `template_category` values (promotional banners and class schedule templates)\n- End-to-end suggestion pipeline (embedding extraction + similarity search + metadata join) should complete in under 500ms\n\n**Business Value**: Delivers the \"upload and discover\" experience that differentiates the platform from simple asset management tools. Directly reduces campaign creation time by automating the asset matching step that currently requires manual browsing, and increases content reuse rates by surfacing existing templates the fitness studio owner may not have known existed.\n\n---\n\n### 5. Faceted Multi-Filter Search for Vertical-Specific Asset Discovery\n\n**Search Challenge**: A real estate agent searching for \"modern kitchen\" assets needs to simultaneously filter by content type (property photos and virtual tour assets), industry (real estate), and platform target (listing platforms) \u2014 not just retrieve semantically relevant results. Without multi-dimensional faceted filtering, the result set is diluted with irrelevant assets from other business verticals and content formats.\n\n**Search Strategy**: Faceted search combining semantic retrieval on `visual_caption` and `template_description` with simultaneous filtering on `business_vertical`, `asset_type`, and `platform_target` keyword fields, with aggregations surfacing available facet values for progressive refinement\n\n**Document Collection**: Visual Asset Embeddings Index + Template Library\n\n**Example Query Pattern**: Semantic search for \"modern kitchen\" filtered to `business_vertical: real estate`, `asset_type: [property photos, virtual tour assets]`, and `template_category: listing description templates`, with facet aggregations on `color_palette_tags` and `platform_target` for result refinement\n\n**Success Criteria**:\n- All top results should belong to the real estate `business_vertical` \u2014 no fitness, restaurant, or retail assets should appear in the filtered result set\n- Facet aggregations should return accurate counts enabling the real estate agent to further refine by color palette or platform target\n- Multi-filter query should not degrade response time beyond 250ms compared to unfiltered semantic search\n\n**Business Value**: Enables industry-specific asset discovery that respects the real estate agent's professional context, eliminating the noise of irrelevant content from other business verticals. Faceted refinement gives users control over result precision without requiring them to reformulate their search query, directly improving user engagement with search results.\n\n---\n\n### 6. Semantic Search with Reranking for Campaign Copy and Visual Asset Co-Discovery\n\n**Search Challenge**: A small SaaS company searching for \"customer testimonial\" assets needs to find video clips, quote graphics, and case study templates that are genuinely relevant to a B2B marketing context \u2014 not just assets that contain the word \"testimonial\" in their metadata. After initial retrieval, the ranked list needs further refinement to ensure the most campaign-ready and contextually appropriate assets appear at the top.\n\n**Search Strategy**: Two-phase retrieval using semantic search on `asset_description` and `template_description` for broad recall, followed by semantic reranking (Elastic Rerank) to promote the most contextually relevant video clips, quote graphics, and case study templates to the top positions\n\n**Document Collection**: Brand Asset Catalog + Template Library\n\n**Example Query Pattern**: Semantic search for \"customer testimonial\" across both collections with initial retrieval of top 25 candidates, then rerank to surface video clips, quote graphics, and case study templates most relevant to a SaaS marketing campaign context, boosted by `popularity_score` and `reuse_count`\n\n**Success Criteria**:\n- Post-rerank top 5 results should include at least one asset from each of the three target types: video clips, quote graphics, and case study templates\n- Reranking should measurably improve precision@5 compared to the initial semantic retrieval order\n- The full two-phase retrieval + rerank pipeline should complete in under 400ms\n\n**Business Value**: Delivers the search accuracy and relevance metric that Creative's small business customers depend on for high-stakes campaign creation. For a SaaS company assembling marketing campaigns, receiving precisely relevant assets in the first five results \u2014 rather than having to scroll through partially relevant content \u2014 directly reduces campaign creation time and improves user engagement with search results.\n\n---\n\n## 5. Search Relevancy Requirements\n\n### 5.1 Precision Requirements\n\n**High precision is critical** for this platform. Small business users \u2014 restaurant marketing managers, fitness studio owners, real estate agents \u2014 have limited time and low tolerance for irrelevant results. When a boutique owner searches for \"spring collection\" assets, the top 5 results must be immediately usable fashion photos, color palettes, and promotional copy \u2014 not tangentially related content from other verticals. Precision@5 is the primary relevancy metric, and multi-filter faceted search is the primary mechanism for achieving it.\n\n### 5.2 Recall Requirements\n\n**High recall is equally important** for the content reuse rate metric. The platform's core value proposition is that existing brand assets \u2014 product photos, logo variations, seasonal email campaign templates \u2014 are discoverable even when users search with imprecise or varied terminology. Semantic search on `semantic_text` fields is the primary mechanism for ensuring that assets tagged differently from the query term are still surfaced. Hybrid search combining BM25 and semantic retrieval provides the best balance of recall and precision for this use case.\n\n### 5.3 Ranking Factors\n\nResults should be ranked by a combination of the following signals, applied in this priority order:\n\n| Rank | Signal | Rationale |\n|---|---|---|\n| 1 | Hybrid relevance score (BM25 + semantic) | Core query relevance \u2014 the asset must match what the user is looking for |\n| 2 | Rerank score (where applied) | Contextual precision for complex multi-type queries |\n| 3 | `reuse_count` (popularity boost) | Assets frequently selected by other users are more likely to be high quality |\n| 4 | `popularity_score` (template library) | Platform-curated quality signal for templates |\n| 5 | `upload_date` / `last_updated` (recency boost) | Fresh assets reflect current design trends; seasonal email campaign templates benefit from recency |\n| 6 | Tenant match (`owner_account_id`) | Assets from the user's own content library should be promoted over platform-default assets |\n\n### 5.4 Personalization Needs\n\n| Dimension | Requirement |\n|---|---|\n| **Tenant scoping** | All searches must be scoped to the querying business's `owner_account_id` by default, with an explicit opt-in to search the broader platform template library |\n| **Business vertical context** | Search results should be implicitly biased toward the user's registered `business_vertical` (e.g., a fitness studio's searches should rank fitness-relevant assets higher) |\n| **Content type preference** | Users who consistently select images over templates should see image-type assets ranked higher in mixed-type result sets |\n| **Recency sensitivity** | Seasonal campaigns (holiday sale, spring collection, summer promotion) should apply a stronger recency boost than evergreen brand asset searches |\n| **Role-based defaults** | Marketing managers may prefer broader cross-type results; business owners setting up a new location (coffee shop scenario) may prefer high-reuse, proven assets \u2014 role context should influence default ranking weights |\n\n---\n\n## Validation Checklist\n\n| Check | Status |\n|---|---|\n| All content is search/retrieval focused (no APM, metrics, monitoring) | \u2705 |\n| Document collections have realistic field types | \u2705 |\n| Value diversity guidance describes types of values, not hardcoded examples | \u2705 |\n| Common filter combinations derived from user's validated scenarios | \u2705 |\n| Use cases demonstrate different search strategies (BM25, fuzzy, semantic, hybrid, vector, rerank) | \u2705 |\n| Example query patterns use terminology from user's validated input | \u2705 |\n| Pain points describe search/retrieval failures | \u2705 |\n| No ES\\|QL, KQL, or query syntax appears anywhere | \u2705 |\n| Field names use appropriate types (text, keyword, semantic_text, geo_point) | \u2705 |\n| No redundant field pairs (no `field` text + `field_semantic` semantic_text antipattern) | \u2705 |\n| Each dataset has exactly ONE `text` field (short) and ONE `semantic_text` field (long) | \u2705 |\n| Variety across use case examples (different entities across use cases) | \u2705 |\n| No hardcoded domain values that could leak into every demo | \u2705 |\n| Validated customer entities used exclusively (brand assets, multimodal content discovery, Instagram story templates, social media graphics, promotional banners, email templates, product photos, logo variations, seasonal email campaign templates, serverless search solution) | \u2705 |",
+    "llm_model": null,
+    "search_narrative": {
+      "search_scenarios": [
+        {
+          "scenario_id": "coffee_shop_brand_assets",
+          "description": "Coffee shop manager setting up a new location searches for existing brand assets including logo variations, menu boards, and loyalty program graphics to maintain visual consistency",
+          "domain": "food_beverage",
+          "exact_phrases": [
+            "coffee shop logo",
+            "menu board",
+            "loyalty program",
+            "brand assets",
+            "loyalty card",
+            "coffee branding"
+          ],
+          "semantic_phrases": [
+            "cafe identity",
+            "rewards program graphics",
+            "storefront signage",
+            "visual brand guidelines",
+            "customer retention design",
+            "beverage menu layout"
+          ],
+          "target_distribution": {
+            "exact_matches": 14,
+            "semantic_matches": 22,
+            "noise": 45
+          }
+        },
+        {
+          "scenario_id": "italian_restaurant_marketing",
+          "description": "Restaurant marketing manager searches for Italian food imagery and discovers pasta photos, menu layouts, and Instagram story templates to build a social media campaign",
+          "domain": "food_beverage",
+          "exact_phrases": [
+            "Italian food",
+            "pasta dishes",
+            "Italian restaurant",
+            "menu layout",
+            "Instagram story template",
+            "Italian cuisine"
+          ],
+          "semantic_phrases": [
+            "Mediterranean dining",
+            "European comfort food",
+            "rustic trattoria",
+            "handmade noodles",
+            "social media food content",
+            "authentic flavors"
+          ],
+          "target_distribution": {
+            "exact_matches": 15,
+            "semantic_matches": 24,
+            "noise": 42
+          }
+        },
+        {
+          "scenario_id": "summer_promotion_assets",
+          "description": "Small business owner searches for summer promotion content and finds relevant product photos, email templates, and social media graphics from their existing content library",
+          "domain": "retail",
+          "exact_phrases": [
+            "summer promotion",
+            "summer sale",
+            "email template",
+            "social media graphics",
+            "seasonal campaign",
+            "summer marketing"
+          ],
+          "semantic_phrases": [
+            "warm weather offers",
+            "mid-year discount",
+            "sunshine deals",
+            "outdoor lifestyle content",
+            "newsletter design",
+            "promotional banner"
+          ],
+          "target_distribution": {
+            "exact_matches": 13,
+            "semantic_matches": 20,
+            "noise": 48
+          }
+        },
+        {
+          "scenario_id": "holiday_sale_ecommerce",
+          "description": "E-commerce retailer searches for holiday sale assets and receives recommended product images, discount badges, and seasonal email campaign templates to accelerate campaign creation",
+          "domain": "retail",
+          "exact_phrases": [
+            "holiday sale",
+            "discount badge",
+            "seasonal campaign",
+            "holiday email template",
+            "product images",
+            "holiday promotion"
+          ],
+          "semantic_phrases": [
+            "festive offers",
+            "end-of-year deals",
+            "gift season marketing",
+            "winter shopping event",
+            "limited time discount",
+            "Black Friday assets"
+          ],
+          "target_distribution": {
+            "exact_matches": 16,
+            "semantic_matches": 23,
+            "noise": 44
+          }
+        },
+        {
+          "scenario_id": "modern_kitchen_real_estate",
+          "description": "Real estate agent searches for modern kitchen property photos, virtual tour assets, and matching listing description templates to create compelling property listings",
+          "domain": "real_estate",
+          "exact_phrases": [
+            "modern kitchen",
+            "virtual tour",
+            "property listing",
+            "listing description",
+            "kitchen renovation",
+            "real estate photography"
+          ],
+          "semantic_phrases": [
+            "contemporary home interior",
+            "open-plan cooking space",
+            "luxury appliances",
+            "property showcase",
+            "home staging content",
+            "residential interior design"
+          ],
+          "target_distribution": {
+            "exact_matches": 12,
+            "semantic_matches": 19,
+            "noise": 40
+          }
+        },
+        {
+          "scenario_id": "customer_testimonial_saas",
+          "description": "Small SaaS company marketing team searches for customer testimonial assets including video clips, quote graphics, and case study templates to build social proof content",
+          "domain": "technology",
+          "exact_phrases": [
+            "customer testimonial",
+            "case study template",
+            "quote graphic",
+            "client success story",
+            "testimonial video",
+            "social proof"
+          ],
+          "semantic_phrases": [
+            "user review content",
+            "brand advocacy assets",
+            "customer feedback design",
+            "trust-building marketing",
+            "client spotlight",
+            "product endorsement"
+          ],
+          "target_distribution": {
+            "exact_matches": 11,
+            "semantic_matches": 18,
+            "noise": 38
+          }
+        },
+        {
+          "scenario_id": "fitness_studio_promotion",
+          "description": "Local fitness studio owner uploads a workout video and the system automatically suggests matching promotional banners, class schedule templates, and social media content to streamline marketing",
+          "domain": "fitness",
+          "exact_phrases": [
+            "workout video",
+            "class schedule",
+            "promotional banner",
+            "fitness studio",
+            "gym promotion",
+            "fitness class"
+          ],
+          "semantic_phrases": [
+            "exercise session content",
+            "training timetable",
+            "wellness marketing",
+            "active lifestyle graphics",
+            "membership campaign",
+            "personal training assets"
+          ],
+          "target_distribution": {
+            "exact_matches": 13,
+            "semantic_matches": 21,
+            "noise": 41
+          }
+        },
+        {
+          "scenario_id": "spring_fashion_collection",
+          "description": "Boutique owner creating a social media campaign searches for spring collection assets and discovers fashion photos, color palettes, and promotional copy to coordinate their seasonal launch",
+          "domain": "fashion",
+          "exact_phrases": [
+            "spring collection",
+            "fashion photography",
+            "color palette",
+            "promotional copy",
+            "spring lookbook",
+            "boutique fashion"
+          ],
+          "semantic_phrases": [
+            "seasonal wardrobe launch",
+            "pastel tones",
+            "new arrivals campaign",
+            "style inspiration content",
+            "apparel editorial",
+            "trend-forward design"
+          ],
+          "target_distribution": {
+            "exact_matches": 14,
+            "semantic_matches": 22,
+            "noise": 43
+          }
+        },
+        {
+          "scenario_id": "hospitality_brand_refresh",
+          "description": "Hotel marketing coordinator searches for brand refresh assets to update guest-facing materials including welcome signage, room service menus, and social media templates across multiple properties",
+          "domain": "hospitality",
+          "exact_phrases": [
+            "hotel branding",
+            "welcome signage",
+            "room service menu",
+            "guest experience",
+            "hospitality marketing",
+            "hotel social media"
+          ],
+          "semantic_phrases": [
+            "lodging visual identity",
+            "accommodation promotional content",
+            "resort brand guidelines",
+            "concierge service graphics",
+            "property marketing materials",
+            "travel lifestyle imagery"
+          ],
+          "target_distribution": {
+            "exact_matches": 12,
+            "semantic_matches": 20,
+            "noise": 40
+          }
+        },
+        {
+          "scenario_id": "education_course_launch",
+          "description": "Online education startup searches for course launch marketing assets including instructor headshots, course preview graphics, and email drip campaign templates to promote a new learning program",
+          "domain": "education",
+          "exact_phrases": [
+            "course launch",
+            "email drip campaign",
+            "instructor headshot",
+            "online learning",
+            "course preview",
+            "educational marketing"
+          ],
+          "semantic_phrases": [
+            "e-learning promotion",
+            "student enrollment campaign",
+            "training program graphics",
+            "knowledge platform branding",
+            "webinar promotional assets",
+            "curriculum announcement"
+          ],
+          "target_distribution": {
+            "exact_matches": 11,
+            "semantic_matches": 18,
+            "noise": 37
+          }
+        }
+      ]
+    },
+    "custom_domain_library": {
+      "brand_asset_types": [
+        "coffee shop logo",
+        "menu board",
+        "loyalty program graphics",
+        "discount badge",
+        "quote graphic",
+        "promotional banner",
+        "welcome signage",
+        "room service menu",
+        "instructor headshot",
+        "course preview graphic",
+        "loyalty card",
+        "class schedule template",
+        "Instagram story template",
+        "email drip campaign template",
+        "case study template",
+        "listing description template",
+        "color palette",
+        "brand guidelines"
+      ],
+      "content_categories": [
+        "Italian food imagery",
+        "pasta dishes",
+        "fashion photography",
+        "workout video",
+        "testimonial video",
+        "product images",
+        "modern kitchen photography",
+        "virtual tour assets",
+        "spring collection assets",
+        "customer testimonial",
+        "client success story",
+        "apparel editorial",
+        "social media food content",
+        "property showcase"
+      ],
+      "campaign_contexts": [
+        "summer promotion",
+        "holiday sale",
+        "spring collection launch",
+        "course launch",
+        "brand refresh",
+        "social media campaign",
+        "email campaign",
+        "seasonal campaign",
+        "new arrivals campaign",
+        "gym promotion",
+        "hotel social media",
+        "boutique fashion campaign",
+        "student enrollment campaign",
+        "fitness studio marketing"
+      ],
+      "industry_verticals": [
+        "coffee shop",
+        "Italian restaurant",
+        "e-commerce retail",
+        "real estate",
+        "SaaS marketing",
+        "fitness studio",
+        "boutique fashion",
+        "hotel hospitality",
+        "online education",
+        "food and beverage",
+        "wellness marketing",
+        "educational marketing",
+        "hospitality marketing"
+      ],
+      "design_descriptors": [
+        "trend-forward",
+        "contemporary",
+        "seasonal",
+        "pastel tones",
+        "luxury",
+        "open-plan",
+        "visual consistency",
+        "brand-aligned",
+        "guest-facing",
+        "promotional",
+        "editorial",
+        "lifestyle-driven",
+        "modern",
+        "boutique aesthetic",
+        "resort-inspired"
+      ],
+      "marketing_processes": [
+        "brand asset discovery",
+        "campaign creation",
+        "social proof building",
+        "visual consistency maintenance",
+        "content library search",
+        "asset recommendation",
+        "campaign acceleration",
+        "seasonal launch coordination",
+        "multi-property brand management",
+        "promotional copy development",
+        "marketing collateral production",
+        "brand identity refresh"
+      ],
+      "asset_functions": [
+        "customer retention design",
+        "trust-building marketing",
+        "brand advocacy",
+        "product endorsement",
+        "membership campaign",
+        "rewards program",
+        "client spotlight",
+        "user review content",
+        "guest experience design",
+        "e-learning promotion",
+        "gift season marketing",
+        "winter shopping event",
+        "Mediterranean dining promotion",
+        "style inspiration content"
+      ],
+      "related_concepts": [
+        "cafe identity",
+        "resort brand guidelines",
+        "beverage menu layout",
+        "luxury appliances",
+        "contemporary home interior",
+        "training program graphics",
+        "training timetable",
+        "wellness marketing",
+        "social media templates",
+        "promotional copy",
+        "email template",
+        "digital asset management",
+        "content discovery",
+        "visual branding"
+      ]
+    }
+  },
+  "module_components": {
+    "data_generator": "data_generator.py",
+    "query_generator": "query_generator.py",
+    "demo_guide": "demo_guide.py"
+  },
+  "inference_endpoints": {
+    "embedding_type": "sparse",
+    "embedding_endpoint": ".elser-2-elasticsearch",
+    "rerank": ".rerank-v1-elasticsearch",
+    "completion": "completion-vulcan"
+  },
+  "query_testing": {
+    "enabled": true,
+    "queries_fixed": 13,
+    "queries_need_manual_fix": 0,
+    "total_tested": 13,
+    "tested_at": "2026-03-10T17:10:07.628352"
+  },
+  "generation_timing": {
+    "total_seconds": 1525.4,
+    "phases": [
+      {
+        "phase": "1_strategy_generation",
+        "seconds": 127.3
+      },
+      {
+        "phase": "1.5_data_spec_expansion",
+        "seconds": 101.8
+      },
+      {
+        "phase": "2_data_module_codegen",
+        "seconds": 259.1
+      },
+      {
+        "phase": "3_data_execution",
+        "seconds": 0.1
+      },
+      {
+        "phase": "4_elasticsearch_indexing",
+        "seconds": 588.2
+      },
+      {
+        "phase": "4.5_data_profiling",
+        "seconds": 2.5
+      },
+      {
+        "phase": "5_query_module_generation",
+        "seconds": 206.9
+      },
+      {
+        "phase": "6_query_testing",
+        "seconds": 1.6
+      },
+      {
+        "phase": "6.5_guide_generation",
+        "seconds": 237.2
+      },
+      {
+        "phase": "7_cleanup",
+        "seconds": 0.7
+      }
+    ],
+    "phase_summary": {
+      "1_strategy_generation": 127.3,
+      "1.5_data_spec_expansion": 101.8,
+      "2_data_module_codegen": 259.1,
+      "3_data_execution": 0.1,
+      "4_elasticsearch_indexing": 588.2,
+      "4.5_data_profiling": 2.5,
+      "5_query_module_generation": 206.9,
+      "6_query_testing": 1.6,
+      "6.5_guide_generation": 237.2,
+      "7_cleanup": 0.7
+    }
+  }
+}

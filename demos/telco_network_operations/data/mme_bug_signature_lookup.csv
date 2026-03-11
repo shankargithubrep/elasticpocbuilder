@@ -1,0 +1,201 @@
+software_version,bug_id,bug_description,affected_component,patch_available,severity_rating
+v4.2.3,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,IN-PROGRESS,CRITICAL
+v5.0.2,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,NO,HIGH
+v4.2.3,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,IN-PROGRESS,HIGH
+v5.1.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v5.0.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,IN-PROGRESS,HIGH
+v4.2.3,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v5.1.0,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v4.2.1,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v5.1.0,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,YES,CRITICAL
+v4.2.1,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v5.1.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v5.0.2,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,NO,HIGH
+v5.1.0,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v4.2.1,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,NO,CRITICAL
+v5.0.2,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v4.2.1,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,IN-PROGRESS,MEDIUM
+v4.3.0,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v4.3.1,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v4.3.1,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,YES,CRITICAL
+v4.3.1,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v4.3.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v5.0.0,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,YES,HIGH
+v4.2.3,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v4.3.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,NO,CRITICAL
+v5.1.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,NO,HIGH
+v4.3.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v4.2.3,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,NO,MEDIUM
+v4.2.1,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v4.3.1,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,YES,CRITICAL
+v5.1.0,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v5.0.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,IN-PROGRESS,CRITICAL
+v4.2.3,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,NO,HIGH
+v4.2.1,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v5.0.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v5.0.2,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v4.3.1,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,NO,MEDIUM
+v4.2.3,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,IN-PROGRESS,MEDIUM
+v5.0.2,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,NO,HIGH
+v4.2.1,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,YES,CRITICAL
+v5.1.0,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v5.1.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v4.2.1,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,IN-PROGRESS,HIGH
+v5.1.0,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,IN-PROGRESS,HIGH
+v5.1.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v4.3.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v4.3.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,IN-PROGRESS,MEDIUM
+v4.3.0,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v5.0.2,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,NO,HIGH
+v5.0.2,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,NO,CRITICAL
+v5.0.2,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,NO,HIGH
+v4.3.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v4.3.0,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,YES,HIGH
+v4.3.1,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,IN-PROGRESS,HIGH
+v5.1.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v4.3.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,NO,HIGH
+v4.2.3,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,IN-PROGRESS,MEDIUM
+v5.0.2,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v4.2.1,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,IN-PROGRESS,HIGH
+v5.0.0,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,IN-PROGRESS,CRITICAL
+v4.3.1,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,IN-PROGRESS,HIGH
+v5.0.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,NO,CRITICAL
+v5.1.0,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,YES,HIGH
+v5.0.2,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v4.3.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v4.3.1,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v5.0.2,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v5.1.0,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,IN-PROGRESS,MEDIUM
+v4.3.1,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v4.2.3,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,IN-PROGRESS,CRITICAL
+v4.3.1,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v4.2.3,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v4.3.1,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,YES,HIGH
+v5.0.0,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v5.1.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v4.2.3,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v4.2.1,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,IN-PROGRESS,MEDIUM
+v5.0.2,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v4.3.1,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v5.1.0,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,NO,CRITICAL
+v5.0.2,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v4.2.3,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,IN-PROGRESS,CRITICAL
+v4.3.1,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,YES,HIGH
+v5.1.0,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v5.0.2,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v4.2.3,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v5.0.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v4.3.1,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,IN-PROGRESS,MEDIUM
+v4.3.1,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,IN-PROGRESS,HIGH
+v4.3.0,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,YES,CRITICAL
+v5.1.0,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,NO,HIGH
+v4.3.1,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v5.0.0,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,YES,HIGH
+v4.2.3,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v4.3.1,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,NO,CRITICAL
+v5.1.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,NO,HIGH
+v4.3.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v4.2.3,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,NO,MEDIUM
+v4.2.3,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,IN-PROGRESS,HIGH
+v4.2.3,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,YES,CRITICAL
+v5.0.0,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v5.1.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v5.0.2,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,NO,HIGH
+v4.3.1,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v5.1.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v5.0.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,IN-PROGRESS,HIGH
+v4.2.1,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,NO,MEDIUM
+v4.3.0,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v5.0.0,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v4.3.1,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,IN-PROGRESS,CRITICAL
+v5.1.0,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v5.0.2,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v4.2.1,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,YES,HIGH
+v5.0.2,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,IN-PROGRESS,HIGH
+v5.0.2,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,NO,CRITICAL
+v4.2.3,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v4.2.3,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v5.0.2,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,IN-PROGRESS,MEDIUM
+v5.0.0,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v4.3.0,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,NO,CRITICAL
+v4.3.1,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v5.0.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v5.0.2,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,NO,HIGH
+v4.2.3,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,NO,HIGH
+v5.0.2,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,NO,CRITICAL
+v4.3.1,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v5.1.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v4.3.1,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v4.2.3,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v4.2.3,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,YES,CRITICAL
+v5.0.0,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v5.0.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v4.2.3,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,NO,HIGH
+v5.0.0,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v4.3.1,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v5.1.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v5.0.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v5.0.2,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v5.0.2,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,IN-PROGRESS,HIGH
+v5.0.2,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,IN-PROGRESS,CRITICAL
+v4.3.1,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v4.3.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v5.0.2,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,YES,HIGH
+v4.2.3,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v4.3.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v4.3.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v4.3.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,IN-PROGRESS,MEDIUM
+v5.0.0,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v4.2.1,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v4.3.1,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,YES,CRITICAL
+v4.2.1,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v5.1.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v5.0.0,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,YES,HIGH
+v5.0.2,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v4.3.1,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,IN-PROGRESS,CRITICAL
+v5.1.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,NO,HIGH
+v5.0.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v5.0.0,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,NO,MEDIUM
+v4.2.3,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v4.2.3,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,YES,CRITICAL
+v4.2.1,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,NO,HIGH
+v5.1.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v5.0.0,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,NO,HIGH
+v5.1.0,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v5.0.2,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v4.3.1,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v5.1.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v5.0.0,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v5.1.0,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,IN-PROGRESS,HIGH
+v4.3.0,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,YES,CRITICAL
+v5.1.0,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v5.1.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,NO,CRITICAL
+v4.2.1,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,YES,HIGH
+v5.0.0,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v4.3.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,IN-PROGRESS,CRITICAL
+v4.2.1,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,NO,HIGH
+v5.0.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,IN-PROGRESS,MEDIUM
+v4.3.1,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,NO,MEDIUM
+v4.2.1,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,YES,HIGH
+v4.3.1,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,IN-PROGRESS,CRITICAL
+v4.2.3,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v5.1.0,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v5.1.0,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,IN-PROGRESS,HIGH
+v5.1.0,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,IN-PROGRESS,HIGH
+v4.2.1,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,IN-PROGRESS,CRITICAL
+v5.0.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v5.0.0,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v4.2.3,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v5.0.0,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,IN-PROGRESS,HIGH
+v5.0.2,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,NO,CRITICAL
+v4.3.0,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,YES,HIGH
+v4.2.1,BUG-10001,MME process crash due to null pointer dereference in S1AP handler,S1AP,YES,CRITICAL
+v5.0.2,BUG-10002,Memory leak in NAS signaling module causing gradual resource exhaustion over 72 hours,NAS,NO,HIGH
+v4.2.1,BUG-10003,Race condition in attach procedure leading to duplicate session creation,SESSION-MGMT,YES,HIGH
+v5.1.0,BUG-10004,CPU spike triggered by malformed TAU request flooding from specific UE firmware,TAU-HANDLER,YES,CRITICAL
+v4.3.0,BUG-10005,HSS connection pool exhaustion under high concurrent authentication load,HSS-INTERFACE,YES,HIGH
+v4.2.3,BUG-10006,Incorrect handling of handover failure causing stale S1 context accumulation,HANDOVER,YES,MEDIUM
+v4.3.1,BUG-10007,Timer leak in paging procedure under heavy paging load conditions,PAGING,YES,MEDIUM
+v4.3.0,BUG-10008,Deadlock in bearer management module when SGW responds with unexpected cause code,BEARER-MGMT,IN-PROGRESS,HIGH
+v4.3.1,BUG-10009,Incorrect IMSI validation leading to false authentication rejections,AUTH,IN-PROGRESS,CRITICAL
+v5.1.0,BUG-10010,S6a interface timeout not properly handled causing subscriber authentication loop,S6A,NO,HIGH

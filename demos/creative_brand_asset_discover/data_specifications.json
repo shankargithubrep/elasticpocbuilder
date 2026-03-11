@@ -1,0 +1,494 @@
+{
+  "datasets": {
+    "brand_asset_catalog": {
+      "fields": {
+        "asset_id": {
+          "type": "keyword",
+          "cardinality": 400,
+          "examples": [
+            "BA-001042",
+            "BA-002187",
+            "BA-003456",
+            "BA-004891",
+            "BA-005234",
+            "BA-006677",
+            "BA-007123",
+            "BA-008945"
+          ],
+          "description": "Unique identifier for each brand asset in the catalog",
+          "diversity_guidance": "Generate sequential or pseudo-random alphanumeric IDs with consistent prefix 'BA-' followed by 6-digit number"
+        },
+        "asset_title": {
+          "type": "text",
+          "content_pattern": "[Brand/Business Type] [Asset Type] - [Descriptor/Theme/Season/Use Case]",
+          "diversity_guidance": "Vary business types (coffee shop, restaurant, boutique, fitness studio, real estate, SaaS, e-commerce), asset types (logo, menu board, banner, social graphic, email header, loyalty card, story template), and descriptors (seasonal, promotional, lifestyle, product-focused). Keep titles concise (3-8 words).",
+          "query_alignment": "Include terms like 'logo variations', 'menu board', 'Italian food', 'summer promotion', 'holiday sale', 'modern kitchen', 'customer testimonial', 'spring collection', 'loyalty program', 'Instagram story', 'pasta', 'coffee shop', 'brand identity'"
+        },
+        "asset_description": {
+          "type": "semantic_text",
+          "content_pattern": "2-4 sentences describing the visual asset's purpose, visual style, color scheme, intended use case, and which marketing channels or business contexts it supports. Reference the asset_type, campaign_theme, and business_vertical.",
+          "diversity_guidance": "Vary sentence structure, description length (80-250 words), vocabulary (collateral, visual identity, brand asset, marketing material, promotional graphic), and level of design detail. Some descriptions focus on visual style, others on use case, others on campaign context.",
+          "query_alignment": "Include searchable terms: 'logo variations', 'menu board', 'brand identity', 'coffee shop signage', 'Italian food', 'pasta', 'restaurant dining', 'food and beverage collateral', 'summer promotion', 'holiday sale', 'modern kitchen', 'customer testimonial', 'spring collection', 'loyalty program graphics', 'Instagram story template', 'social media graphic', 'email template', 'product photo', 'discount badge', 'seasonal campaign', 'promotional banner', 'class schedule', 'fashion photo', 'color palette', 'virtual tour', 'listing description', 'case study', 'quote graphic', 'video clip'",
+          "tiering_guidance": "Tier 1 (20%): Dense marketing asset terminology \u2014 explicitly mention logo variations, menu boards, brand identity, specific food/beverage imagery, loyalty program graphics, seasonal promotions, and multimodal content types. Tier 2 (40%): Use synonymous vocabulary \u2014 visual collateral, brand materials, promotional content, campaign assets, marketing graphics, business signage, social content \u2014 without exact query keyword matches. Tier 3 (40%): Tangentially related content \u2014 generic design descriptions, abstract color/layout notes, administrative metadata descriptions, or assets from unrelated verticals (e.g., legal document templates, HR onboarding graphics).",
+          "coherence_rules": {
+            "must_reference": [
+              "asset_type",
+              "campaign_theme",
+              "business_vertical",
+              "color_palette_tags"
+            ],
+            "uniqueness": "each row unique"
+          }
+        },
+        "asset_type": {
+          "type": "keyword",
+          "cardinality": 18,
+          "examples": [
+            "Logo",
+            "Menu Board",
+            "Social Media Graphic",
+            "Email Template Header",
+            "Promotional Banner",
+            "Instagram Story Template",
+            "Loyalty Card",
+            "Product Photo",
+            "Video Clip",
+            "Quote Graphic",
+            "Discount Badge",
+            "Signage",
+            "Color Palette Swatch",
+            "Case Study Template",
+            "Virtual Tour Asset",
+            "Class Schedule Graphic",
+            "Fashion Lookbook Photo",
+            "Seasonal Campaign Graphic"
+          ],
+          "description": "The type or format category of the brand asset",
+          "diversity_guidance": "Distribute across all 18 types; weight Logo, Social Media Graphic, and Promotional Banner slightly higher (10% each); ensure all types appear at least 10 times across 400 rows"
+        },
+        "content_category": {
+          "type": "keyword",
+          "cardinality": 12,
+          "examples": [
+            "Brand Identity",
+            "Food & Beverage Imagery",
+            "Seasonal Promotion",
+            "Social Media Content",
+            "Email Marketing",
+            "Product Showcase",
+            "Customer Testimonial",
+            "Event & Campaign",
+            "Interior & Lifestyle",
+            "Property & Real Estate",
+            "Fitness & Wellness",
+            "Fashion & Apparel"
+          ],
+          "description": "High-level content category grouping for the asset, used for faceted filtering and discovery",
+          "diversity_guidance": "Mix evenly across all 12 categories; Brand Identity and Social Media Content can be slightly more frequent as they apply across verticals"
+        },
+        "business_vertical": {
+          "type": "keyword",
+          "cardinality": 10,
+          "examples": [
+            "Food & Beverage",
+            "Retail & E-commerce",
+            "Real Estate",
+            "Fitness & Wellness",
+            "Fashion & Apparel",
+            "SaaS & Technology",
+            "Hospitality",
+            "Professional Services",
+            "Beauty & Personal Care",
+            "General Small Business"
+          ],
+          "description": "The industry vertical the asset is designed for or most applicable to",
+          "diversity_guidance": "Weight Food & Beverage (20%), Retail & E-commerce (15%), and General Small Business (15%) slightly higher to reflect core use cases; distribute remaining 50% across other verticals"
+        },
+        "campaign_theme": {
+          "type": "keyword",
+          "cardinality": 22,
+          "examples": [
+            "Summer Promotion",
+            "Holiday Sale",
+            "Spring Collection",
+            "New Location Launch",
+            "Loyalty Program",
+            "Italian Cuisine Feature",
+            "Brand Refresh",
+            "Customer Testimonial Campaign",
+            "Seasonal Menu Rollout",
+            "Back to School",
+            "Valentine's Day",
+            "Black Friday",
+            "Grand Opening",
+            "Anniversary Sale",
+            "Wellness Challenge",
+            "Modern Kitchen Showcase",
+            "Social Proof Campaign",
+            "Flash Sale",
+            "Product Launch",
+            "Community Event",
+            "Referral Program",
+            "Year-End Review"
+          ],
+          "description": "The marketing campaign theme or promotional context the asset belongs to",
+          "diversity_guidance": "Ensure Summer Promotion, Holiday Sale, Spring Collection, and Loyalty Program appear frequently (5-8% each); distribute remaining themes evenly"
+        },
+        "color_palette_tags": {
+          "type": "keyword",
+          "cardinality": 20,
+          "examples": [
+            "warm-earth-tones",
+            "bold-red-gold",
+            "pastel-spring",
+            "monochrome-black-white",
+            "navy-gold-premium",
+            "fresh-green-white",
+            "sunset-orange-coral",
+            "deep-burgundy-cream",
+            "bright-summer-yellow",
+            "cool-blue-silver",
+            "rose-gold-blush",
+            "forest-green-brown",
+            "electric-purple-neon",
+            "soft-lavender-mint",
+            "rustic-terracotta",
+            "clean-white-minimal",
+            "vibrant-multicolor",
+            "charcoal-slate-modern",
+            "tropical-teal-lime",
+            "classic-red-white-blue"
+          ],
+          "description": "Color palette descriptors for the asset, enabling color-based discovery and brand consistency matching",
+          "diversity_guidance": "Each row should have 1-3 color palette tags; allow multi-value; distribute across warm, cool, neutral, and seasonal palettes"
+        },
+        "file_format": {
+          "type": "keyword",
+          "cardinality": 8,
+          "examples": [
+            "PNG",
+            "SVG",
+            "JPEG",
+            "MP4",
+            "GIF",
+            "PDF",
+            "PSD",
+            "AI"
+          ],
+          "description": "The file format of the brand asset",
+          "diversity_guidance": "PNG (30%), JPEG (25%), SVG (15%), PDF (10%), MP4 (8%), GIF (5%), PSD (4%), AI (3%)"
+        },
+        "owner_account_id": {
+          "type": "keyword",
+          "cardinality": 50,
+          "examples": [
+            "ACC-1001",
+            "ACC-1042",
+            "ACC-1187",
+            "ACC-1256",
+            "ACC-1334",
+            "ACC-1412",
+            "ACC-1578",
+            "ACC-1690",
+            "ACC-1723",
+            "ACC-1899"
+          ],
+          "description": "The account ID of the business or user who owns this asset",
+          "diversity_guidance": "Generate 50 distinct account IDs; distribute assets unevenly (some accounts have 20+ assets, most have 3-8, simulating real usage patterns)"
+        },
+        "is_active": {
+          "type": "boolean",
+          "description": "Whether the asset is currently active and available for use",
+          "diversity_guidance": "85% true (active), 15% false (archived or deprecated assets)"
+        },
+        "upload_date": {
+          "type": "date",
+          "description": "The date the asset was uploaded to the platform",
+          "diversity_guidance": "Range from 2022-01-01 to 2024-12-15; weight 60% of dates in last 18 months; include some seasonal clustering around Q4 (holiday campaigns) and Q1-Q2 (spring/summer campaigns)"
+        },
+        "reuse_count": {
+          "type": "integer",
+          "description": "Number of times the asset has been reused or referenced across campaigns",
+          "diversity_guidance": "Range 0-500; use a right-skewed distribution: 40% of assets have 0-5 reuses, 40% have 6-50, 15% have 51-200, 5% have 201-500 (viral/flagship assets)"
+        },
+        "aspect_ratio": {
+          "type": "keyword",
+          "cardinality": 8,
+          "examples": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:5",
+            "3:2",
+            "2:3",
+            "4:3",
+            "1.91:1"
+          ],
+          "description": "Aspect ratio of the visual asset, indicating platform suitability (e.g., 9:16 for Stories, 1:1 for feed posts)",
+          "diversity_guidance": "1:1 (25%), 9:16 (20%), 16:9 (20%), 4:5 (15%), 3:2 (10%), others split remaining 10%"
+        }
+      }
+    },
+    "template_library": {
+      "fields": {
+        "template_id": {
+          "type": "keyword",
+          "cardinality": 350,
+          "examples": [
+            "TPL-00123",
+            "TPL-00456",
+            "TPL-00789",
+            "TPL-01042",
+            "TPL-01187",
+            "TPL-01334",
+            "TPL-01578",
+            "TPL-01899"
+          ],
+          "description": "Unique identifier for each template in the library",
+          "diversity_guidance": "Generate sequential alphanumeric IDs with prefix 'TPL-' followed by 5-digit number"
+        },
+        "template_name": {
+          "type": "text",
+          "content_pattern": "[Industry/Theme] [Platform] [Content Type] Template - [Descriptor]",
+          "diversity_guidance": "Vary industry tags (Coffee Shop, Restaurant, Boutique, Real Estate, Fitness), platform targets (Instagram, Email, Facebook, Print, Google Ads), content types (Story, Post, Banner, Newsletter, Flyer, Campaign), and descriptors (Seasonal, Minimal, Bold, Elegant, Playful). Keep names concise (4-9 words).",
+          "query_alignment": "Include terms like 'menu board', 'Instagram story', 'email campaign', 'social media', 'promotional banner', 'loyalty program', 'holiday sale', 'summer promotion', 'Italian restaurant', 'coffee shop', 'spring collection', 'customer testimonial', 'class schedule', 'listing description', 'case study', 'discount badge', 'seasonal email'"
+        },
+        "template_description": {
+          "type": "semantic_text",
+          "content_pattern": "3-5 sentences describing the template's design purpose, visual style, customization options, target business type, and ideal marketing use case. Reference the template_category, industry_tag, campaign_type, and platform_target.",
+          "diversity_guidance": "Vary description length (100-300 words), vocabulary (template, layout, design framework, creative scaffold, marketing format), and focus (some emphasize design aesthetics, others emphasize use case, others emphasize customization ease). Mix formal and conversational tones.",
+          "query_alignment": "Include searchable terms: 'menu board layout', 'Instagram story template', 'email campaign template', 'social media graphic', 'promotional banner', 'loyalty program design', 'holiday sale template', 'summer promotion layout', 'Italian restaurant', 'food and beverage', 'coffee shop branding', 'spring collection', 'customer testimonial graphic', 'quote template', 'case study layout', 'class schedule template', 'fitness studio', 'real estate listing', 'modern kitchen', 'virtual tour', 'e-commerce product', 'discount badge', 'seasonal marketing', 'small business marketing', 'brand identity', 'social proof'",
+          "tiering_guidance": "Tier 1 (20%): Explicitly mention specific template use cases matching demo queries \u2014 menu board templates for restaurants, Instagram story templates for seasonal promotions, email templates for holiday sales, loyalty card designs for coffee shops, testimonial quote graphics for SaaS companies. Tier 2 (40%): Use related vocabulary \u2014 marketing layouts, promotional design frameworks, social content scaffolds, campaign visual systems, digital marketing materials \u2014 without exact query matches. Tier 3 (40%): Generic or tangentially related templates \u2014 corporate presentation decks, internal HR communication templates, generic grid layouts, abstract design systems with no specific industry context.",
+          "coherence_rules": {
+            "must_reference": [
+              "template_category",
+              "industry_tag",
+              "campaign_type",
+              "platform_target"
+            ],
+            "uniqueness": "each row unique"
+          }
+        },
+        "template_category": {
+          "type": "keyword",
+          "cardinality": 12,
+          "examples": [
+            "Social Media Post",
+            "Email Newsletter",
+            "Promotional Banner",
+            "Menu & Signage",
+            "Story & Reel",
+            "Print Collateral",
+            "Loyalty & Rewards",
+            "Testimonial & Social Proof",
+            "Product Showcase",
+            "Event Announcement",
+            "Brand Identity Kit",
+            "Seasonal Campaign"
+          ],
+          "description": "The functional category of the template based on its primary marketing use",
+          "diversity_guidance": "Distribute evenly; Social Media Post and Email Newsletter can be slightly more frequent (10-12% each); ensure all 12 categories appear meaningfully"
+        },
+        "industry_tag": {
+          "type": "keyword",
+          "cardinality": 14,
+          "examples": [
+            "Food & Beverage",
+            "Coffee & Cafe",
+            "Restaurant & Dining",
+            "Retail & E-commerce",
+            "Fashion & Apparel",
+            "Fitness & Wellness",
+            "Real Estate",
+            "SaaS & Technology",
+            "Beauty & Salon",
+            "Hospitality & Travel",
+            "Professional Services",
+            "Health & Medical",
+            "Education",
+            "General Small Business"
+          ],
+          "description": "The industry or business vertical the template is designed for",
+          "diversity_guidance": "Weight Food & Beverage (15%), Coffee & Cafe (10%), Restaurant & Dining (10%), and Retail & E-commerce (12%) higher; distribute remaining 53% across other industries"
+        },
+        "campaign_type": {
+          "type": "keyword",
+          "cardinality": 16,
+          "examples": [
+            "Seasonal Promotion",
+            "Product Launch",
+            "Brand Awareness",
+            "Customer Retention",
+            "Holiday Campaign",
+            "New Location Announcement",
+            "Flash Sale",
+            "Loyalty Program",
+            "Testimonial Collection",
+            "Event Marketing",
+            "Content Marketing",
+            "Lead Generation",
+            "Re-engagement",
+            "Social Proof",
+            "Referral Program",
+            "Anniversary Campaign"
+          ],
+          "description": "The type of marketing campaign the template is optimized for",
+          "diversity_guidance": "Seasonal Promotion (10%), Holiday Campaign (10%), and Brand Awareness (8%) should be most common; distribute remaining evenly"
+        },
+        "platform_target": {
+          "type": "keyword",
+          "cardinality": 12,
+          "examples": [
+            "Instagram Feed",
+            "Instagram Story",
+            "Facebook Post",
+            "Facebook Ad",
+            "Email Newsletter",
+            "Google Display Ad",
+            "Print / In-Store",
+            "Pinterest",
+            "TikTok",
+            "LinkedIn",
+            "SMS / Push Notification",
+            "Multi-Platform"
+          ],
+          "description": "The digital or physical platform the template is designed and sized for",
+          "diversity_guidance": "Instagram Feed (18%), Instagram Story (15%), Email Newsletter (15%), Facebook Post (12%) most common; distribute remaining 40% across other platforms"
+        },
+        "customization_complexity": {
+          "type": "keyword",
+          "cardinality": 3,
+          "examples": [
+            "Beginner",
+            "Intermediate",
+            "Advanced"
+          ],
+          "description": "The level of design skill or effort required to customize the template",
+          "diversity_guidance": "Beginner (45%), Intermediate (40%), Advanced (15%) \u2014 reflecting the small business focus of the platform"
+        },
+        "is_premium": {
+          "type": "boolean",
+          "description": "Whether the template is part of the premium paid tier or available in the free plan",
+          "diversity_guidance": "35% true (premium), 65% false (free) \u2014 reflecting freemium model for small business accessibility"
+        },
+        "popularity_score": {
+          "type": "float",
+          "description": "Normalized popularity score based on downloads, uses, and user ratings (0.0 to 10.0)",
+          "diversity_guidance": "Use a right-skewed distribution: range 0.5 to 10.0; most scores between 3.0-7.5; top 10% of templates score 8.0-10.0; bottom 10% score below 2.0"
+        },
+        "last_updated": {
+          "type": "date",
+          "description": "The date the template was last updated or refreshed",
+          "diversity_guidance": "Range from 2021-06-01 to 2024-12-01; weight 70% of templates updated in last 24 months; cluster some updates around seasonal campaign periods (Oct-Dec for holiday, Mar-May for spring)"
+        }
+      }
+    },
+    "visual_asset_embeddings": {
+      "fields": {
+        "embedding_id": {
+          "type": "keyword",
+          "cardinality": 450,
+          "examples": [
+            "EMB-10042",
+            "EMB-10187",
+            "EMB-10456",
+            "EMB-10789",
+            "EMB-11023",
+            "EMB-11234",
+            "EMB-11567",
+            "EMB-11890",
+            "EMB-12034",
+            "EMB-12456"
+          ],
+          "description": "Unique identifier for each visual embedding record",
+          "diversity_guidance": "Generate sequential alphanumeric IDs with prefix 'EMB-' followed by 5-digit number"
+        },
+        "asset_ref_title": {
+          "type": "text",
+          "content_pattern": "[Visual Subject/Scene] - [Style/Mood Descriptor] [Asset Type Reference]",
+          "diversity_guidance": "Vary visual subjects (espresso bar setup, pasta dish plated, summer sale window display, modern kitchen interior, fitness class action shot, spring fashion flatlay, customer smiling testimonial, holiday gift display), style descriptors (vibrant, minimal, rustic, editorial, lifestyle, product-focused, candid, branded), and asset type references (photo, graphic, illustration, video still, logo lockup). Keep titles descriptive but concise (4-10 words).",
+          "query_alignment": "Include terms like 'logo variations', 'menu board', 'Italian food', 'pasta', 'coffee shop', 'summer promotion', 'holiday sale', 'modern kitchen', 'customer testimonial', 'spring collection', 'loyalty program', 'brand identity', 'Instagram story', 'promotional banner', 'class schedule', 'fashion photo', 'product photo', 'discount badge', 'signage', 'menu layout'"
+        },
+        "visual_caption": {
+          "type": "semantic_text",
+          "content_pattern": "2-4 sentences describing what is visually depicted in the asset, the photographic or design style, the emotional tone, the marketing context it serves, and any notable brand or compositional elements. Reference the modality, source asset context, and intended discovery use case.",
+          "diversity_guidance": "Vary caption length (60-200 words), perspective (objective visual description vs. marketing-oriented caption vs. AI-generated alt-text style), vocabulary (depicts, showcases, features, captures, highlights, presents), and specificity (some captions are highly specific with food/design details, others are broader scene descriptions). Ensure each caption reads as a unique visual description.",
+          "query_alignment": "Include searchable terms: 'logo variations', 'menu board', 'brand identity', 'coffee shop signage', 'Italian food', 'pasta dish', 'restaurant dining', 'food photography', 'summer promotion', 'promotional graphic', 'holiday sale', 'seasonal campaign', 'modern kitchen', 'property photo', 'virtual tour', 'customer testimonial', 'quote graphic', 'social proof', 'spring collection', 'fashion photo', 'color palette', 'loyalty program graphic', 'loyalty card design', 'Instagram story template', 'class schedule', 'fitness studio', 'workout video still', 'promotional banner', 'discount badge', 'product photo', 'e-commerce imagery', 'email header graphic', 'case study visual', 'menu layout', 'coffee cup', 'espresso', 'pasta', 'salad', 'boutique', 'apparel'",
+          "tiering_guidance": "Tier 1 (20%): Rich, specific visual descriptions directly matching demo search queries \u2014 e.g., 'This image depicts three logo variations for a coffee shop brand, featuring the primary wordmark, a circular badge version, and a simplified icon lockup, all rendered in warm earth tones suitable for menu boards and loyalty cards.' Tier 2 (40%): Related visual content described with synonymous vocabulary \u2014 food photography described as 'culinary imagery', menu boards described as 'point-of-sale signage', seasonal promotions described as 'campaign visual content', brand assets described as 'visual identity collateral'. Tier 3 (40%): Loosely related or unrelated visual content \u2014 abstract design patterns, stock photo descriptions of generic business settings, non-marketing visual content like architectural diagrams, or assets from unrelated domains.",
+          "coherence_rules": {
+            "must_reference": [
+              "modality",
+              "asset_ref_title"
+            ],
+            "uniqueness": "each row unique"
+          }
+        },
+        "source_asset_id": {
+          "type": "keyword",
+          "cardinality": 400,
+          "examples": [
+            "BA-001042",
+            "BA-002187",
+            "BA-003456",
+            "BA-004891",
+            "BA-005234",
+            "BA-006677",
+            "BA-007123",
+            "BA-008945"
+          ],
+          "description": "Reference to the source asset in brand_asset_catalog that this embedding was generated from",
+          "diversity_guidance": "Match the BA- ID format from brand_asset_catalog; most source assets have 1 embedding, some popular assets may have 2-3 embeddings (different crop/region embeddings)"
+        },
+        "embedding_model_version": {
+          "type": "keyword",
+          "cardinality": 5,
+          "examples": [
+            "clip-vit-large-patch14-v1",
+            "clip-vit-base-patch32-v2",
+            "openai-ada-002-multimodal",
+            "google-multimodal-embed-v1",
+            "elastic-elser-v2-visual"
+          ],
+          "description": "The embedding model version used to generate the vector representation of the visual asset",
+          "diversity_guidance": "clip-vit-large-patch14-v1 (40%), clip-vit-base-patch32-v2 (30%), openai-ada-002-multimodal (15%), google-multimodal-embed-v1 (10%), elastic-elser-v2-visual (5%) \u2014 reflecting adoption curve of newer models"
+        },
+        "modality": {
+          "type": "keyword",
+          "cardinality": 5,
+          "examples": [
+            "image",
+            "video-frame",
+            "graphic-design",
+            "logo-vector",
+            "document-visual"
+          ],
+          "description": "The modality type of the visual content being embedded, used to filter by content type in multimodal search",
+          "diversity_guidance": "image (40%), graphic-design (30%), logo-vector (12%), video-frame (10%), document-visual (8%)"
+        },
+        "owner_account_id": {
+          "type": "keyword",
+          "cardinality": 50,
+          "examples": [
+            "ACC-1001",
+            "ACC-1042",
+            "ACC-1187",
+            "ACC-1256",
+            "ACC-1334",
+            "ACC-1412",
+            "ACC-1578",
+            "ACC-1690",
+            "ACC-1723",
+            "ACC-1899"
+          ],
+          "description": "The account ID of the business or user who owns the source asset for this embedding",
+          "diversity_guidance": "Use the same 50 account IDs as brand_asset_catalog; maintain consistent ownership \u2014 embeddings should map to the same owner as their source asset"
+        },
+        "capture_date": {
+          "type": "date",
+          "description": "The date the embedding was generated or the visual content was captured/created",
+          "diversity_guidance": "Range from 2022-01-01 to 2024-12-15; should generally match or be close to the upload_date of the corresponding source asset in brand_asset_catalog; weight 65% of dates in last 18 months"
+        }
+      }
+    }
+  }
+}

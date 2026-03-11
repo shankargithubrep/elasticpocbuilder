@@ -35,7 +35,7 @@ def render_queries_tab(loader):
             query_tabs = st.tabs([
                 f"📝 Scripted ({len(queries_dict['scripted'])})",
                 f"🔧 Parameterized ({len(queries_dict['parameterized'])})",
-                f"🤖 RAG ({len(queries_dict['rag'])})"
+                f"🤖 Completion ({len(queries_dict['rag'])})"
             ])
 
             # Initialize QueryResultsDisplay for clean rendering
@@ -602,7 +602,7 @@ def render_queries_tab(loader):
                 render_query_list(queries_dict['parameterized'], 'parameterized', can_execute=True)
 
             with query_tabs[2]:
-                st.markdown("### RAG Queries")
+                st.markdown("### Completion Queries")
                 st.caption("Semantic search queries using MATCH → RERANK → COMPLETION pipeline for open-ended Q&A.")
                 render_query_list(queries_dict['rag'], 'rag', can_execute=True)
 

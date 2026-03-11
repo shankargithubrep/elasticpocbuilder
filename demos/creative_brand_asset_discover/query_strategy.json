@@ -1,0 +1,815 @@
+{
+  "datasets": [
+    {
+      "name": "brand_asset_catalog",
+      "type": "documents",
+      "index_mode": "lookup",
+      "row_count": "500-1000",
+      "required_fields": {
+        "asset_id": "keyword",
+        "asset_title": "text",
+        "asset_description": "semantic_text",
+        "asset_type": "keyword",
+        "content_category": "keyword",
+        "business_vertical": "keyword",
+        "campaign_theme": "keyword",
+        "color_palette_tags": "keyword",
+        "file_format": "keyword",
+        "owner_account_id": "keyword",
+        "is_active": "boolean",
+        "upload_date": "date",
+        "reuse_count": "integer",
+        "aspect_ratio": "keyword"
+      },
+      "relationships": [],
+      "semantic_fields": [
+        "asset_description"
+      ],
+      "text_fields": [
+        "asset_title"
+      ],
+      "cardinality_notes": "Distributed across 7 asset_type values (image, video, template, banner, logo, social_graphic, email_template), 15 content_category values, 10 business_vertical values, and 12 campaign_theme values. Roughly 20% of assets are Tier 1 highly relevant (exact keyword matches in titles, dense topic coverage), 40% Tier 2 moderately relevant (related terminology, partial coverage), 40% Tier 3 low relevance (different verticals, unrelated themes). Ensure meaningful clusters per owner_account_id so tenant-scoped searches return 15-40 results."
+    },
+    {
+      "name": "template_library",
+      "type": "documents",
+      "index_mode": "lookup",
+      "row_count": "500-1000",
+      "required_fields": {
+        "template_id": "keyword",
+        "template_name": "text",
+        "template_description": "semantic_text",
+        "template_category": "keyword",
+        "industry_tag": "keyword",
+        "campaign_type": "keyword",
+        "platform_target": "keyword",
+        "customization_complexity": "keyword",
+        "is_premium": "boolean",
+        "popularity_score": "float",
+        "last_updated": "date"
+      },
+      "relationships": [],
+      "semantic_fields": [
+        "template_description"
+      ],
+      "text_fields": [
+        "template_name"
+      ],
+      "cardinality_notes": "Distributed across 10 template_category values (instagram_story, email_template, promotional_banner, class_schedule, listing_description, menu_board, loyalty_graphic, quote_graphic, case_study, social_post), 10 industry_tag values, 12 campaign_type values, 7 platform_target values (Instagram, Email, Facebook, LinkedIn, Web Banner, TikTok, Pinterest), and 4 customization_complexity tiers. Approximately 60% is_premium: false to support cost-conscious small business filtering. popularity_score ranges from 0.1 to 9.9 with realistic distribution. Tier 1 docs have exact keyword matches in template_name (e.g., 'holiday sale email template', 'Italian restaurant Instagram story'); Tier 2 use synonyms and related terms; Tier 3 are unrelated verticals."
+    },
+    {
+      "name": "visual_asset_embeddings",
+      "type": "documents",
+      "index_mode": "lookup",
+      "row_count": "500-1000",
+      "required_fields": {
+        "embedding_id": "keyword",
+        "asset_ref_title": "text",
+        "visual_caption": "semantic_text",
+        "source_asset_id": "keyword",
+        "embedding_model_version": "keyword",
+        "modality": "keyword",
+        "owner_account_id": "keyword",
+        "capture_date": "date"
+      },
+      "relationships": [
+        "brand_asset_catalog"
+      ],
+      "semantic_fields": [
+        "visual_caption"
+      ],
+      "text_fields": [
+        "asset_ref_title"
+      ],
+      "cardinality_notes": "Modality has 3 values: image, video_keyframe, video_thumbnail. embedding_model_version has 3 values simulating model lifecycle (elser-v1, elser-v2, clip-v1). source_asset_id links back to brand_asset_catalog. Tier 1 captions are highly descriptive and specific (e.g., 'modern white kitchen with marble countertops and stainless steel appliances'); Tier 2 are moderately descriptive; Tier 3 are generic or unrelated visual content. Multiple embedding records per video asset to simulate keyframe coverage."
+    }
+  ],
+  "queries": [
+    {
+      "name": "asset_title_search_fuzzy",
+      "pain_point": "Coffee shop managers and small business owners search for brand assets using misspelled terms like 'loggo variatons' or 'menue boards', getting zero results and being forced to browse their entire library manually",
+      "search_type": "fuzzy",
+      "required_datasets": [
+        "brand_asset_catalog"
+      ],
+      "required_fields": {
+        "brand_asset_catalog": [
+          "asset_id",
+          "asset_title",
+          "asset_description",
+          "asset_type",
+          "content_category",
+          "owner_account_id",
+          "reuse_count"
+        ]
+      },
+      "description": "Typo-tolerant BM25 fuzzy search on asset_title with AUTO edit-distance, scoped to a specific business account. Eliminates zero-result failures caused by minor spelling errors so asset discovery succeeds on the first attempt regardless of input quality.",
+      "complexity": "medium",
+      "variant_group": "asset_title_search",
+      "example_esql": "FROM brand_asset_catalog METADATA _score | WHERE MATCH(asset_title, \"loggo variatons menue boards\", {\"fuzziness\": \"AUTO\"}) AND owner_account_id == \"acct-coffee-001\" AND is_active == true | KEEP asset_id, _score, asset_title, asset_description, asset_type, content_category | SORT _score DESC | LIMIT 20"
+    },
+    {
+      "name": "asset_title_search_hybrid",
+      "pain_point": "Coffee shop managers need to find logo variations and menu boards by title across their own content library, combining exact keyword precision with semantic understanding of what those assets represent",
+      "search_type": "hybrid",
+      "required_datasets": [
+        "brand_asset_catalog"
+      ],
+      "required_fields": {
+        "brand_asset_catalog": [
+          "asset_id",
+          "asset_title",
+          "asset_description",
+          "asset_type",
+          "owner_account_id",
+          "search_type"
+        ]
+      },
+      "description": "True hybrid FORK+FUSE combining BM25 on asset_title (text field) with semantic search on asset_description (semantic_text field), merged via RRF. Scoped to the querying business account. Demonstrates that title keyword precision and description meaning-awareness together outperform either alone.",
+      "complexity": "advanced",
+      "variant_group": "asset_title_search",
+      "example_esql": "FROM brand_asset_catalog METADATA _id, _index, _score | FORK (WHERE MATCH(asset_title, \"logo variations menu boards\", {\"fuzziness\": \"AUTO\"}) AND owner_account_id == \"acct-coffee-001\" AND is_active == true | EVAL search_type = \"bm25\" | SORT _score DESC | LIMIT 50) (WHERE MATCH(asset_description, \"logo brand identity menu board coffee shop signage\") AND owner_account_id == \"acct-coffee-001\" AND is_active == true | EVAL search_type = \"semantic\" | SORT _score DESC | LIMIT 50) | FUSE | SORT _score DESC | LIMIT 15 | KEEP asset_id, _score, asset_title, asset_type, content_category, search_type"
+    },
+    {
+      "name": "asset_title_search_sophisticated",
+      "pain_point": "Coffee shop managers need the most precise asset discovery experience \u2014 weighting semantic understanding of brand identity assets more heavily than exact title keyword matching for nuanced content library exploration",
+      "search_type": "hybrid_weighted",
+      "required_datasets": [
+        "brand_asset_catalog"
+      ],
+      "required_fields": {
+        "brand_asset_catalog": [
+          "asset_id",
+          "asset_title",
+          "asset_description",
+          "asset_type",
+          "owner_account_id",
+          "reuse_count",
+          "search_type"
+        ]
+      },
+      "description": "Sophisticated FORK+FUSE LINEAR with explicit weights \u2014 30% BM25 title matching, 70% semantic description understanding \u2014 using minmax normalization to handle different score scales. Demonstrates tunable hybrid weighting for brand asset discovery where meaning matters more than exact title text.",
+      "complexity": "expert",
+      "variant_group": "asset_title_search",
+      "example_esql": "FROM brand_asset_catalog METADATA _id, _index, _score | FORK (WHERE MATCH(asset_title, \"logo menu board\", {\"fuzziness\": \"AUTO\"}) AND owner_account_id == \"acct-coffee-001\" AND is_active == true | EVAL search_type = \"bm25\" | SORT _score DESC | LIMIT 50) (WHERE MATCH(asset_description, \"logo brand identity menu board coffee shop visual collateral\") AND owner_account_id == \"acct-coffee-001\" AND is_active == true | EVAL search_type = \"semantic\" | SORT _score DESC | LIMIT 50) | FUSE LINEAR WITH { \"weights\": { \"fork1\": 0.3, \"fork2\": 0.7 }, \"normalizer\": \"minmax\" } | SORT _score DESC | LIMIT 15 | KEEP asset_id, _score, asset_title, asset_type, content_category, search_type"
+    },
+    {
+      "name": "italian_food_semantic_search",
+      "pain_point": "Restaurant marketing managers search for 'Italian food' but the keyword system only returns assets literally tagged with that phrase, missing pasta photos tagged as 'cuisine photography', menu layouts labeled 'restaurant collateral', and food-themed Instagram story templates",
+      "search_type": "semantic",
+      "required_datasets": [
+        "brand_asset_catalog"
+      ],
+      "required_fields": {
+        "brand_asset_catalog": [
+          "asset_id",
+          "asset_title",
+          "asset_description",
+          "asset_type",
+          "business_vertical",
+          "owner_account_id"
+        ]
+      },
+      "description": "Semantic search on asset_description (semantic_text field) for 'Italian food' filtered to Instagram story templates within a restaurant business account. Surfaces pasta photos, menu layouts, and food-themed graphics even when those exact words do not appear in any metadata field \u2014 the core pain point this platform solves.",
+      "complexity": "medium",
+      "variant_group": "thematic_asset_discovery",
+      "example_esql": "FROM brand_asset_catalog METADATA _score | WHERE MATCH(asset_description, \"Italian food cuisine pasta restaurant dining\") AND asset_type == \"instagram_story\" AND business_vertical == \"restaurant\" AND owner_account_id == \"acct-restaurant-001\" AND is_active == true | KEEP asset_id, _score, asset_title, asset_description, asset_type, content_category | SORT _score DESC | LIMIT 10"
+    },
+    {
+      "name": "thematic_asset_discovery_hybrid",
+      "pain_point": "Restaurant marketing managers need both keyword precision ('Italian food' must be contextually relevant) and semantic breadth (surface cuisine photography, restaurant collateral, food and beverage templates) \u2014 neither pure search mode alone achieves the right balance",
+      "search_type": "hybrid",
+      "required_datasets": [
+        "brand_asset_catalog"
+      ],
+      "required_fields": {
+        "brand_asset_catalog": [
+          "asset_id",
+          "asset_title",
+          "asset_description",
+          "asset_type",
+          "business_vertical",
+          "owner_account_id",
+          "search_type"
+        ]
+      },
+      "description": "True hybrid FORK+FUSE (RRF) combining BM25 on asset_title with semantic on asset_description, filtered to restaurant vertical and specific account. Demonstrates that hybrid ranking surfaces assets tagged as 'cuisine photography' and 'restaurant collateral' that pure keyword search misses entirely.",
+      "complexity": "advanced",
+      "variant_group": "thematic_asset_discovery",
+      "example_esql": "FROM brand_asset_catalog METADATA _id, _index, _score | FORK (WHERE MATCH(asset_title, \"Italian food restaurant\") AND business_vertical == \"restaurant\" AND owner_account_id == \"acct-restaurant-001\" AND is_active == true | EVAL search_type = \"bm25\" | SORT _score DESC | LIMIT 50) (WHERE MATCH(asset_description, \"Italian food cuisine pasta restaurant dining collateral food and beverage\") AND business_vertical == \"restaurant\" AND owner_account_id == \"acct-restaurant-001\" AND is_active == true | EVAL search_type = \"semantic\" | SORT _score DESC | LIMIT 50) | FUSE | SORT _score DESC | LIMIT 15 | KEEP asset_id, _score, asset_title, asset_type, content_category, search_type"
+    },
+    {
+      "name": "holiday_sale_campaign_hybrid",
+      "pain_point": "E-commerce retailers searching for 'holiday sale' assets need results that are keyword-precise AND semantically broad enough to surface product images, discount badges, and seasonal email campaign templates that use varied terminology \u2014 neither pure keyword nor pure semantic search alone achieves this",
+      "search_type": "hybrid",
+      "required_datasets": [
+        "brand_asset_catalog",
+        "template_library"
+      ],
+      "required_fields": {
+        "brand_asset_catalog": [
+          "asset_id",
+          "asset_title",
+          "asset_description",
+          "asset_type",
+          "campaign_theme",
+          "is_active",
+          "reuse_count",
+          "search_type"
+        ],
+        "template_library": [
+          "template_id",
+          "template_name",
+          "template_description",
+          "template_category",
+          "campaign_type",
+          "is_premium",
+          "search_type"
+        ]
+      },
+      "description": "Hybrid FORK+FUSE (RRF) across the brand asset catalog combining BM25 on asset_title with semantic on asset_description, filtered by campaign_theme and is_active. Demonstrates complete campaign asset assembly \u2014 product images, promotional banners, and seasonal email templates \u2014 from a single hybrid search query.",
+      "complexity": "advanced",
+      "variant_group": "holiday_campaign_assembly",
+      "example_esql": "FROM brand_asset_catalog METADATA _id, _index, _score | FORK (WHERE MATCH(asset_title, \"holiday sale\") AND campaign_theme == \"holiday_sale\" AND is_active == true | EVAL search_type = \"bm25\" | SORT _score DESC | LIMIT 50) (WHERE MATCH(asset_description, \"holiday sale seasonal promotion discount festive campaign\") AND campaign_theme == \"holiday_sale\" AND is_active == true | EVAL search_type = \"semantic\" | SORT _score DESC | LIMIT 50) | FUSE | SORT _score DESC | LIMIT 20 | KEEP asset_id, _score, asset_title, asset_type, campaign_theme, search_type"
+    },
+    {
+      "name": "holiday_campaign_template_rerank",
+      "pain_point": "After retrieving holiday sale template candidates, the ranked list needs further ML-based refinement to ensure the most campaign-ready seasonal email templates and promotional banners appear at the top \u2014 not just assets that happen to mention 'holiday' in their description",
+      "search_type": "rerank",
+      "required_datasets": [
+        "template_library"
+      ],
+      "required_fields": {
+        "template_id": "keyword",
+        "template_name": "text",
+        "template_description": "semantic_text",
+        "template_category": "keyword",
+        "campaign_type": "keyword",
+        "is_premium": "boolean",
+        "popularity_score": "float"
+      },
+      "required_fields_map": {
+        "template_library": [
+          "template_id",
+          "template_name",
+          "template_description",
+          "template_category",
+          "campaign_type",
+          "is_premium"
+        ]
+      },
+      "description": "Two-phase retrieval: semantic search on template_description for broad recall of holiday sale templates, followed by ML RERANK to promote the most contextually relevant promotional banners and seasonal email campaign templates to top positions. Demonstrates measurable precision improvement over initial semantic retrieval order.",
+      "complexity": "expert",
+      "variant_group": "holiday_campaign_assembly",
+      "example_esql": "FROM template_library METADATA _score | WHERE MATCH(template_description, \"holiday sale seasonal promotion discount festive\") AND is_premium == false AND is_active == true | SORT _score DESC | LIMIT 50 | RERANK \"holiday sale promotional banner and seasonal email campaign template\" ON template_description, template_name WITH { \"inference_id\": \".rerank-v1-elasticsearch\" } | LIMIT 10 | KEEP template_id, _score, template_name, template_description, template_category, campaign_type"
+    },
+    {
+      "name": "modern_kitchen_faceted_semantic",
+      "pain_point": "Real estate agents searching for 'modern kitchen' assets receive results diluted with fitness, restaurant, and retail content from other business verticals \u2014 without multi-dimensional faceted filtering, the result set is too noisy to be actionable",
+      "search_type": "semantic",
+      "required_datasets": [
+        "visual_asset_embeddings",
+        "template_library"
+      ],
+      "required_fields": {
+        "visual_asset_embeddings": [
+          "embedding_id",
+          "asset_ref_title",
+          "visual_caption",
+          "source_asset_id",
+          "modality",
+          "owner_account_id"
+        ],
+        "template_library": [
+          "template_id",
+          "template_name",
+          "template_description",
+          "template_category",
+          "industry_tag",
+          "platform_target"
+        ]
+      },
+      "description": "Semantic search on visual_caption (semantic_text field) for 'modern kitchen' with simultaneous faceted filtering on modality and owner_account_id. Demonstrates that all top results belong to the real estate context \u2014 no fitness, restaurant, or retail assets appear \u2014 validating the precision requirement for vertical-specific asset discovery.",
+      "complexity": "medium",
+      "variant_group": "real_estate_asset_discovery",
+      "example_esql": "FROM visual_asset_embeddings METADATA _score | WHERE MATCH(visual_caption, \"modern kitchen contemporary interior design property real estate\") AND modality == \"image\" AND owner_account_id == \"acct-realestate-001\" | KEEP embedding_id, _score, asset_ref_title, visual_caption, source_asset_id, modality | SORT _score DESC | LIMIT 15"
+    },
+    {
+      "name": "customer_testimonial_rag_completion",
+      "pain_point": "A small SaaS company searching for 'customer testimonial' assets needs not just a list of relevant video clips, quote graphics, and case study templates \u2014 but an intelligent summary of which assets are most campaign-ready for a B2B marketing context, saving hours of manual review",
+      "search_type": "rag_completion",
+      "required_datasets": [
+        "brand_asset_catalog",
+        "template_library"
+      ],
+      "required_fields": {
+        "brand_asset_catalog": [
+          "asset_title",
+          "asset_description",
+          "asset_type",
+          "business_vertical",
+          "reuse_count"
+        ],
+        "template_library": [
+          "template_name",
+          "template_description",
+          "template_category",
+          "industry_tag",
+          "popularity_score"
+        ]
+      },
+      "description": "Full RAG pipeline: semantic search on asset_description for 'customer testimonial' filtered to SaaS business vertical, retrieve top 5 most reused assets, then use COMPLETION to generate an intelligent campaign-ready asset summary. Demonstrates how Creative's platform can move beyond search results to AI-generated campaign guidance.",
+      "complexity": "expert",
+      "variant_group": "saas_testimonial_discovery",
+      "example_esql": "FROM brand_asset_catalog METADATA _score | WHERE MATCH(asset_description, \"customer testimonial success story social proof B2B case study quote\") AND business_vertical == \"saas\" AND is_active == true | SORT _score DESC | LIMIT 5 | EVAL prompt = CONCAT(\"You are a marketing assistant for a SaaS company. Review these brand assets and recommend which are most campaign-ready for a B2B customer testimonial campaign. Asset: \", asset_title, \" Type: \", asset_type, \" Description: \", asset_description, \" Used in campaigns: \", TO_STRING(reuse_count), \" times. Provide a concise recommendation.\") | COMPLETION recommendation = prompt WITH { \"inference_id\": \"completion-vulcan\" } | KEEP asset_title, _score, asset_type, recommendation, reuse_count"
+    },
+    {
+      "name": "fitness_template_discovery_sophisticated",
+      "pain_point": "Local fitness studio owners need class schedule templates and promotional banners that match their industry \u2014 but the platform must balance exact template name matching with semantic understanding of fitness content to surface the most professionally relevant and community-proven results",
+      "search_type": "hybrid_weighted",
+      "required_datasets": [
+        "template_library"
+      ],
+      "required_fields": {
+        "template_library": [
+          "template_id",
+          "template_name",
+          "template_description",
+          "template_category",
+          "industry_tag",
+          "popularity_score",
+          "customization_complexity",
+          "search_type"
+        ]
+      },
+      "description": "Sophisticated FORK+FUSE LINEAR with explicit weights \u2014 25% BM25 on template_name for exact format matching, 75% semantic on template_description for fitness thematic relevance \u2014 with minmax normalization. Filtered to fitness industry_tag and free templates, sorted by fused score to surface the most popular and relevant class schedule and promotional banner templates.",
+      "complexity": "expert",
+      "variant_group": "fitness_template_discovery",
+      "example_esql": "FROM template_library METADATA _id, _index, _score | FORK (WHERE MATCH(template_name, \"class schedule promotional banner fitness\") AND industry_tag == \"fitness\" AND is_premium == false | EVAL search_type = \"bm25\" | SORT _score DESC | LIMIT 50) (WHERE MATCH(template_description, \"fitness studio class schedule workout promotional banner gym exercise health wellness\") AND industry_tag == \"fitness\" AND is_premium == false | EVAL search_type = \"semantic\" | SORT _score DESC | LIMIT 50) | FUSE LINEAR WITH { \"weights\": { \"fork1\": 0.25, \"fork2\": 0.75 }, \"normalizer\": \"minmax\" } | SORT _score DESC | LIMIT 15 | KEEP template_id, _score, template_name, template_category, industry_tag, search_type"
+    },
+    {
+      "name": "spring_collection_template_search",
+      "pain_point": "Boutique owners searching for 'spring collection' assets must find fashion photos, color palette guides, and promotional copy templates based on thematic meaning \u2014 not just templates literally tagged 'spring collection' \u2014 while filtering to free templates only for cost-conscious small businesses",
+      "search_type": "semantic",
+      "required_datasets": [
+        "template_library"
+      ],
+      "required_fields": {
+        "template_library": [
+          "template_id",
+          "template_name",
+          "template_description",
+          "template_category",
+          "campaign_type",
+          "is_premium",
+          "platform_target",
+          "popularity_score"
+        ]
+      },
+      "description": "Semantic search on template_description for 'spring collection' filtered to free templates and retail/boutique industry, sorted by popularity_score. Demonstrates meaning-aware discovery \u2014 surfaces fashion photo templates, color palette guides, and promotional copy even when tagged as 'seasonal lookbook' or 'new arrivals campaign' rather than 'spring collection'.",
+      "complexity": "medium",
+      "variant_group": "seasonal_template_discovery",
+      "example_esql": "FROM template_library METADATA _score | WHERE MATCH(template_description, \"spring collection seasonal fashion new arrivals fresh colors boutique retail\") AND is_premium == false AND campaign_type == \"seasonal_promotion\" | KEEP template_id, _score, template_name, template_description, template_category, campaign_type | SORT _score DESC | LIMIT 12"
+    },
+    {
+      "name": "cross_modal_visual_similarity_search",
+      "pain_point": "Fitness studio owners upload a workout video and expect automatic suggestions for matching promotional banners and class schedule templates \u2014 but the platform has no mechanism to bridge modalities, forcing hours of manual curation for every campaign",
+      "search_type": "semantic",
+      "required_datasets": [
+        "visual_asset_embeddings"
+      ],
+      "required_fields": {
+        "visual_asset_embeddings": [
+          "embedding_id",
+          "asset_ref_title",
+          "visual_caption",
+          "source_asset_id",
+          "modality",
+          "owner_account_id",
+          "capture_date"
+        ]
+      },
+      "description": "Text-to-image semantic search on visual_caption (semantic_text field) using a natural language description of the uploaded workout video's visual content \u2014 simulating keyframe caption matching. Filtered to fitness-relevant modalities and scoped to the account. The source_asset_id enables downstream join to retrieve full asset metadata for cross-modal template suggestions.",
+      "complexity": "medium",
+      "variant_group": "cross_modal_discovery",
+      "example_esql": "FROM visual_asset_embeddings METADATA _score | WHERE MATCH(visual_caption, \"workout fitness exercise gym training class energetic athletic movement\") AND modality == \"video_keyframe\" AND owner_account_id == \"acct-fitness-001\" | KEEP embedding_id, _score, asset_ref_title, visual_caption, source_asset_id, modality | SORT _score DESC | LIMIT 10"
+    }
+  ],
+  "relationships": [
+    {
+      "from": "visual_asset_embeddings",
+      "to": "brand_asset_catalog",
+      "type": "many-to-one",
+      "join_field": "source_asset_id"
+    }
+  ],
+  "search_narrative": {
+    "search_scenarios": [
+      {
+        "scenario_id": "coffee_shop_brand_assets",
+        "description": "Coffee shop manager setting up a new location searches for existing brand assets including logo variations, menu boards, and loyalty program graphics to maintain visual consistency",
+        "domain": "food_beverage",
+        "exact_phrases": [
+          "coffee shop logo",
+          "menu board",
+          "loyalty program",
+          "brand assets",
+          "loyalty card",
+          "coffee branding"
+        ],
+        "semantic_phrases": [
+          "cafe identity",
+          "rewards program graphics",
+          "storefront signage",
+          "visual brand guidelines",
+          "customer retention design",
+          "beverage menu layout"
+        ],
+        "target_distribution": {
+          "exact_matches": 14,
+          "semantic_matches": 22,
+          "noise": 45
+        }
+      },
+      {
+        "scenario_id": "italian_restaurant_marketing",
+        "description": "Restaurant marketing manager searches for Italian food imagery and discovers pasta photos, menu layouts, and Instagram story templates to build a social media campaign",
+        "domain": "food_beverage",
+        "exact_phrases": [
+          "Italian food",
+          "pasta dishes",
+          "Italian restaurant",
+          "menu layout",
+          "Instagram story template",
+          "Italian cuisine"
+        ],
+        "semantic_phrases": [
+          "Mediterranean dining",
+          "European comfort food",
+          "rustic trattoria",
+          "handmade noodles",
+          "social media food content",
+          "authentic flavors"
+        ],
+        "target_distribution": {
+          "exact_matches": 15,
+          "semantic_matches": 24,
+          "noise": 42
+        }
+      },
+      {
+        "scenario_id": "summer_promotion_assets",
+        "description": "Small business owner searches for summer promotion content and finds relevant product photos, email templates, and social media graphics from their existing content library",
+        "domain": "retail",
+        "exact_phrases": [
+          "summer promotion",
+          "summer sale",
+          "email template",
+          "social media graphics",
+          "seasonal campaign",
+          "summer marketing"
+        ],
+        "semantic_phrases": [
+          "warm weather offers",
+          "mid-year discount",
+          "sunshine deals",
+          "outdoor lifestyle content",
+          "newsletter design",
+          "promotional banner"
+        ],
+        "target_distribution": {
+          "exact_matches": 13,
+          "semantic_matches": 20,
+          "noise": 48
+        }
+      },
+      {
+        "scenario_id": "holiday_sale_ecommerce",
+        "description": "E-commerce retailer searches for holiday sale assets and receives recommended product images, discount badges, and seasonal email campaign templates to accelerate campaign creation",
+        "domain": "retail",
+        "exact_phrases": [
+          "holiday sale",
+          "discount badge",
+          "seasonal campaign",
+          "holiday email template",
+          "product images",
+          "holiday promotion"
+        ],
+        "semantic_phrases": [
+          "festive offers",
+          "end-of-year deals",
+          "gift season marketing",
+          "winter shopping event",
+          "limited time discount",
+          "Black Friday assets"
+        ],
+        "target_distribution": {
+          "exact_matches": 16,
+          "semantic_matches": 23,
+          "noise": 44
+        }
+      },
+      {
+        "scenario_id": "modern_kitchen_real_estate",
+        "description": "Real estate agent searches for modern kitchen property photos, virtual tour assets, and matching listing description templates to create compelling property listings",
+        "domain": "real_estate",
+        "exact_phrases": [
+          "modern kitchen",
+          "virtual tour",
+          "property listing",
+          "listing description",
+          "kitchen renovation",
+          "real estate photography"
+        ],
+        "semantic_phrases": [
+          "contemporary home interior",
+          "open-plan cooking space",
+          "luxury appliances",
+          "property showcase",
+          "home staging content",
+          "residential interior design"
+        ],
+        "target_distribution": {
+          "exact_matches": 12,
+          "semantic_matches": 19,
+          "noise": 40
+        }
+      },
+      {
+        "scenario_id": "customer_testimonial_saas",
+        "description": "Small SaaS company marketing team searches for customer testimonial assets including video clips, quote graphics, and case study templates to build social proof content",
+        "domain": "technology",
+        "exact_phrases": [
+          "customer testimonial",
+          "case study template",
+          "quote graphic",
+          "client success story",
+          "testimonial video",
+          "social proof"
+        ],
+        "semantic_phrases": [
+          "user review content",
+          "brand advocacy assets",
+          "customer feedback design",
+          "trust-building marketing",
+          "client spotlight",
+          "product endorsement"
+        ],
+        "target_distribution": {
+          "exact_matches": 11,
+          "semantic_matches": 18,
+          "noise": 38
+        }
+      },
+      {
+        "scenario_id": "fitness_studio_promotion",
+        "description": "Local fitness studio owner uploads a workout video and the system automatically suggests matching promotional banners, class schedule templates, and social media content to streamline marketing",
+        "domain": "fitness",
+        "exact_phrases": [
+          "workout video",
+          "class schedule",
+          "promotional banner",
+          "fitness studio",
+          "gym promotion",
+          "fitness class"
+        ],
+        "semantic_phrases": [
+          "exercise session content",
+          "training timetable",
+          "wellness marketing",
+          "active lifestyle graphics",
+          "membership campaign",
+          "personal training assets"
+        ],
+        "target_distribution": {
+          "exact_matches": 13,
+          "semantic_matches": 21,
+          "noise": 41
+        }
+      },
+      {
+        "scenario_id": "spring_fashion_collection",
+        "description": "Boutique owner creating a social media campaign searches for spring collection assets and discovers fashion photos, color palettes, and promotional copy to coordinate their seasonal launch",
+        "domain": "fashion",
+        "exact_phrases": [
+          "spring collection",
+          "fashion photography",
+          "color palette",
+          "promotional copy",
+          "spring lookbook",
+          "boutique fashion"
+        ],
+        "semantic_phrases": [
+          "seasonal wardrobe launch",
+          "pastel tones",
+          "new arrivals campaign",
+          "style inspiration content",
+          "apparel editorial",
+          "trend-forward design"
+        ],
+        "target_distribution": {
+          "exact_matches": 14,
+          "semantic_matches": 22,
+          "noise": 43
+        }
+      },
+      {
+        "scenario_id": "hospitality_brand_refresh",
+        "description": "Hotel marketing coordinator searches for brand refresh assets to update guest-facing materials including welcome signage, room service menus, and social media templates across multiple properties",
+        "domain": "hospitality",
+        "exact_phrases": [
+          "hotel branding",
+          "welcome signage",
+          "room service menu",
+          "guest experience",
+          "hospitality marketing",
+          "hotel social media"
+        ],
+        "semantic_phrases": [
+          "lodging visual identity",
+          "accommodation promotional content",
+          "resort brand guidelines",
+          "concierge service graphics",
+          "property marketing materials",
+          "travel lifestyle imagery"
+        ],
+        "target_distribution": {
+          "exact_matches": 12,
+          "semantic_matches": 20,
+          "noise": 40
+        }
+      },
+      {
+        "scenario_id": "education_course_launch",
+        "description": "Online education startup searches for course launch marketing assets including instructor headshots, course preview graphics, and email drip campaign templates to promote a new learning program",
+        "domain": "education",
+        "exact_phrases": [
+          "course launch",
+          "email drip campaign",
+          "instructor headshot",
+          "online learning",
+          "course preview",
+          "educational marketing"
+        ],
+        "semantic_phrases": [
+          "e-learning promotion",
+          "student enrollment campaign",
+          "training program graphics",
+          "knowledge platform branding",
+          "webinar promotional assets",
+          "curriculum announcement"
+        ],
+        "target_distribution": {
+          "exact_matches": 11,
+          "semantic_matches": 18,
+          "noise": 37
+        }
+      }
+    ]
+  },
+  "custom_domain_library": {
+    "brand_asset_types": [
+      "coffee shop logo",
+      "menu board",
+      "loyalty program graphics",
+      "discount badge",
+      "quote graphic",
+      "promotional banner",
+      "welcome signage",
+      "room service menu",
+      "instructor headshot",
+      "course preview graphic",
+      "loyalty card",
+      "class schedule template",
+      "Instagram story template",
+      "email drip campaign template",
+      "case study template",
+      "listing description template",
+      "color palette",
+      "brand guidelines"
+    ],
+    "content_categories": [
+      "Italian food imagery",
+      "pasta dishes",
+      "fashion photography",
+      "workout video",
+      "testimonial video",
+      "product images",
+      "modern kitchen photography",
+      "virtual tour assets",
+      "spring collection assets",
+      "customer testimonial",
+      "client success story",
+      "apparel editorial",
+      "social media food content",
+      "property showcase"
+    ],
+    "campaign_contexts": [
+      "summer promotion",
+      "holiday sale",
+      "spring collection launch",
+      "course launch",
+      "brand refresh",
+      "social media campaign",
+      "email campaign",
+      "seasonal campaign",
+      "new arrivals campaign",
+      "gym promotion",
+      "hotel social media",
+      "boutique fashion campaign",
+      "student enrollment campaign",
+      "fitness studio marketing"
+    ],
+    "industry_verticals": [
+      "coffee shop",
+      "Italian restaurant",
+      "e-commerce retail",
+      "real estate",
+      "SaaS marketing",
+      "fitness studio",
+      "boutique fashion",
+      "hotel hospitality",
+      "online education",
+      "food and beverage",
+      "wellness marketing",
+      "educational marketing",
+      "hospitality marketing"
+    ],
+    "design_descriptors": [
+      "trend-forward",
+      "contemporary",
+      "seasonal",
+      "pastel tones",
+      "luxury",
+      "open-plan",
+      "visual consistency",
+      "brand-aligned",
+      "guest-facing",
+      "promotional",
+      "editorial",
+      "lifestyle-driven",
+      "modern",
+      "boutique aesthetic",
+      "resort-inspired"
+    ],
+    "marketing_processes": [
+      "brand asset discovery",
+      "campaign creation",
+      "social proof building",
+      "visual consistency maintenance",
+      "content library search",
+      "asset recommendation",
+      "campaign acceleration",
+      "seasonal launch coordination",
+      "multi-property brand management",
+      "promotional copy development",
+      "marketing collateral production",
+      "brand identity refresh"
+    ],
+    "asset_functions": [
+      "customer retention design",
+      "trust-building marketing",
+      "brand advocacy",
+      "product endorsement",
+      "membership campaign",
+      "rewards program",
+      "client spotlight",
+      "user review content",
+      "guest experience design",
+      "e-learning promotion",
+      "gift season marketing",
+      "winter shopping event",
+      "Mediterranean dining promotion",
+      "style inspiration content"
+    ],
+    "related_concepts": [
+      "cafe identity",
+      "resort brand guidelines",
+      "beverage menu layout",
+      "luxury appliances",
+      "contemporary home interior",
+      "training program graphics",
+      "training timetable",
+      "wellness marketing",
+      "social media templates",
+      "promotional copy",
+      "email template",
+      "digital asset management",
+      "content discovery",
+      "visual branding"
+    ]
+  },
+  "text_fields": {
+    "brand_asset_catalog": [
+      "asset_title",
+      "asset_description"
+    ],
+    "template_library": [
+      "template_description",
+      "template_name"
+    ],
+    "visual_asset_embeddings": [
+      "visual_caption"
+    ]
+  }
+}

@@ -62,8 +62,10 @@ credentials.json
 *.pem
 *.key
 
-# Generated demos (local only)
+# Generated demos (local only) - sample demos are force-added as exceptions
 demos/*
+!demos/creative_brand_asset_discover/
+!demos/telco_network_operations/
 
 # Completed demos (local only)
 completed-demos/

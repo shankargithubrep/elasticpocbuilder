@@ -1,0 +1,65 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-03-10T17:40:18.704879",
+  "data_indexed": true,
+  "data_indexed_at": "2026-03-10T17:40:18.704873",
+  "indexed_datasets": {
+    "cell_tower_reference": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.697248",
+      "error": null
+    },
+    "ran_site_reference": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.698829",
+      "error": null
+    },
+    "network_element_registry": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.699781",
+      "error": null
+    },
+    "mme_bug_signature_lookup": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.700731",
+      "error": null
+    },
+    "mme_bug_signatures": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.701480",
+      "error": null
+    },
+    "mme_system_logs": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.701942",
+      "error": null
+    },
+    "signaling_logs": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.702361",
+      "error": null
+    },
+    "ran_performance_metrics": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.702893",
+      "error": null
+    },
+    "call_detail_records": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.703407",
+      "error": null
+    },
+    "data_session_logs": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.703914",
+      "error": null
+    },
+    "core_network_events": {
+      "success": true,
+      "indexed_at": "2026-03-10T17:40:18.704483",
+      "error": null
+    }
+  },
+  "agent_deployed": false,
+  "agent_deployed_at": null
+}
