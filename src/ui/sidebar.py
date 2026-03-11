@@ -359,7 +359,10 @@ def render_sidebar():
     if st.session_state.view_mode == "create":
 
         # Initialize state
-        st.session_state.dataset_size_preference = "medium"
+        # TODO: Expose size control in sidebar UI (see GitHub issue).
+        # Analytics defaults to "large" for realistic distributions (5K-20K rows/dataset).
+        # Search path ignores this setting — hardcoded at 500-1000 docs in search_strategy_generator.py.
+        st.session_state.dataset_size_preference = "large"
         st.session_state.use_enhanced_generation = True
 
         # Demo Context Section

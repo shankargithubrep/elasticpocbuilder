@@ -159,10 +159,12 @@ Parameters are ALWAYS required when used. If optional behavior is needed:
 - DO NOT attempt conditional parameter logic
 
 ### 5. RERANK Syntax - Pipe Operation ⚠️
-✅ CORRECT: `| RERANK "query" ON field`
-✅ CORRECT: `| RERANK ?question ON content`
+✅ CORRECT: `| RERANK rerank_score = "query" ON field WITH { "inference_id": "endpoint" }`
+✅ CORRECT: `| RERANK rerank_score = ?question ON content WITH { "inference_id": "endpoint" }`
+✅ FOLLOWED BY: `| EVAL original_score = _score, _score = rerank_score + original_score`
+✅ FOLLOWED BY: `| SORT _score DESC` then `| LIMIT N`
+❌ WRONG: `| RERANK "query" ON field` - Must use named score column (rerank_score)
 ❌ WRONG: `| RERANK semantic_text WITH ?query` - Wrong syntax
-❌ WRONG: `| RERANK field WITH query` - Wrong syntax
 ❌ WRONG: `WHERE RERANK(...)` - RERANK is a pipe operation
 
 ### 6. COUNT_DISTINCT Syntax ⚠️⚠️ VERY COMMON ERROR
@@ -708,7 +710,7 @@ COMMON_ERROR_FIXES = """
 | "Division by zero" | Integer division | Use TO_DOUBLE() or multiply by 1.0 |
 | "Field not found" after STATS | Field not in GROUP BY | Only grouped/aggregated fields available |
 | "Unknown column [agents_lookup]" | Auto-fix adding suffix | Remove the _lookup suffix |
-| "RERANK" errors | Wrong syntax | Use RERANK query ON field |
+| "RERANK" errors | Wrong syntax | Use RERANK rerank_score = query ON field WITH {...}, then EVAL to combine scores |
 | "MATCH WITH" syntax error | Invalid MATCH syntax | Use WHERE MATCH(field, query) |
 | "token recognition error" with CONCAT string | Newline (\\n) in string literal | Break into separate CONCAT args: `CONCAT("Part one. ", "Part two. ")` — no \\n |
 | "COMPLETION requires inference_id" | Missing WITH clause | Add `WITH { "inference_id" : "endpoint" }` |
@@ -824,8 +826,9 @@ When fixing queries, apply these transformations IN ORDER:
    - `a / b` → `a * 1.0 / b` (alternative)
 
 11. **Fix RERANK syntax**:
-   - `RERANK field WITH query` → `RERANK query ON field`
-   - `RERANK semantic_text WITH ?q` → `RERANK ?q ON semantic_text`
+   - Always use named score column: `RERANK rerank_score = query ON field WITH { "inference_id": "endpoint" }`
+   - Follow with score combination: `EVAL original_score = _score, _score = rerank_score + original_score`
+   - Then sort and limit: `SORT _score DESC | LIMIT N`
 
 12. **Fix CONCAT string literals with newlines (RAG/COMPLETION queries)**:
    - ES|QL does NOT support \\n, \\\\n, or literal newlines in string literals

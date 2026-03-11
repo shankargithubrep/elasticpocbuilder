@@ -87,7 +87,9 @@ FROM call_center_interactions METADATA _score
   AND first_call_resolution == true
 | SORT _score DESC
 | LIMIT 100
-| RERANK ?issue_description ON notes WITH { "inference_id" : "cohere_rerank" }
+| RERANK rerank_score = ?issue_description ON notes WITH { "inference_id" : "cohere_rerank" }
+| EVAL original_score = _score, _score = rerank_score + original_score
+| SORT _score DESC
 | LIMIT 10
 | LOOKUP JOIN agents ON agent_id
 | KEEP interaction_id, call_type, issue_category, notes, call_duration_seconds, agent_name, specialization, _score
@@ -118,7 +120,9 @@ FROM call_center_interactions METADATA _score
   AND first_call_resolution == true
 | SORT _score DESC
 | LIMIT 50
-| RERANK ?issue_description ON notes WITH { "inference_id" : "cohere_rerank" }
+| RERANK rerank_score = ?issue_description ON notes WITH { "inference_id" : "cohere_rerank" }
+| EVAL original_score = _score, _score = rerank_score + original_score
+| SORT _score DESC
 | LIMIT 3
 | LOOKUP JOIN agents ON agent_id
 | EVAL prompt = CONCAT(

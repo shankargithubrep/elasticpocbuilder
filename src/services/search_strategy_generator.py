@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 # Fixed dataset sizes for search/RAG demos
 # Search demos need smaller datasets (500-1000) vs analytics (5000-50000)
 # because they only display top 10-20 results by relevance score
+# TODO: Honor dataset_size_preference from config instead of fixed ranges.
+# Analytics path (module_generator.py) supports small/medium/large tiers;
+# search path should too. See GitHub issue for size control work.
 SIZE_RANGES = {
     'documents': '500-1000',
     'reference': '200-500'
@@ -232,9 +235,11 @@ While addressing the customer's pain points, ALWAYS include sophisticated querie
 
 2. **RERANK** - ML-based relevance reranking for precision
    ```esql
-   | RERANK "query text" ON content_field WITH {{ "inference_id": ".rerank-v1-elasticsearch" }}
+   | RERANK rerank_score = "query text" ON content_field WITH {{ "inference_id": ".rerank-v1-elasticsearch" }}
+   | EVAL original_score = _score, _score = rerank_score + original_score
+   | SORT _score DESC
    ```
-   Add RERANK after initial retrieval to improve result quality with ML models.
+   Always use a named score column (rerank_score), then combine with original _score via EVAL.
 
 3. **COMPLETION** - LLM text generation for RAG answers/summaries
    ```esql
@@ -592,7 +597,7 @@ You MUST use these EXACT row_count ranges in your output:
       }},
       "description": "Retrieve candidates with semantic search, then use ML reranking for precision",
       "complexity": "expert",
-      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'configure SSO single sign-on') | SORT _score DESC | LIMIT 50 | RERANK \\"how to configure SSO\\" ON content, title WITH {{ \\"inference_id\\": \\".rerank-v1-elasticsearch\\" }} | LIMIT 10 | KEEP article_id, _score, title, content, category"
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'configure SSO single sign-on') | SORT _score DESC | LIMIT 50 | RERANK rerank_score = \\"how to configure SSO\\" ON content, title WITH {{ \\"inference_id\\": \\".rerank-v1-elasticsearch\\" }} | EVAL original_score = _score, _score = rerank_score + original_score | SORT _score DESC | LIMIT 10 | KEEP article_id, _score, title, content, category"
     }},
     {{
       "name": "RAG Answer Generation with COMPLETION",

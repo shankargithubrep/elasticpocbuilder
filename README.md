@@ -69,11 +69,37 @@ Two pre-built demos are included in `demos/` so you can explore the Browse view 
 
 1. Open the app and describe your customer scenario in the chat input:
 
+   <details>
+   <summary><strong>Example prompt (Telco Network Operations)</strong></summary>
+
    ```
-   T-Mobile network operations team needs to monitor MME node health,
-   detect authentication failures, and correlate cell site issues with
-   HSS database sync problems. 500K signaling events per day.
+   Company: Telco
+   Department: Network Operations
+   Industry: Telecommunications
+
+   Pain Points:
+   - Radio equipment failure and cell tower handoff failures
+   - HSS database corruption or synchronization issues affecting subscriber authentication
+   - Need to detect network issues before help desk is overwhelmed
+   - MME software bugs and resource exhaustion
+   - Rogue network attempts and SS7 security attacks
+   - Core network split-brain and signaling storms
+   - Dropped calls during mobility and interrupted data sessions
+   - Service downtime leading to revenue loss and SLA violations
+
+   Use Cases:
+   - Detect mass authentication failure events (HSS issues)
+   - Identify cell tower handoff cascade failures
+   - Detect core network split-brain or signaling storms
+   - Track unique IMSI and cell ID cardinality changes over time
+   - Alert on sustained spike patterns across multiple lag periods
+   - Detect security attacks or roaming misconfigurations
+   - Monitor 4G and 5G network for issues and proactively take action
+   - Analyze UE Initiated Service Request procedure failures
+   - Identify MME software bugs or resource exhaustion
    ```
+
+   </details>
 
 2. The system extracts company, department, pain points, metrics, and auto-detects the demo type (Search vs Analytics).
 

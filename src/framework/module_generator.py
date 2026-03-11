@@ -859,10 +859,12 @@ queries.append({{
    ✅ CORRECT: `WHERE MATCH(field, ?param, {{"fuzziness": "AUTO"}})`
    ❌ WRONG: `| MATCH field ?parameter` (MATCH is NOT a pipe operation)
 
-2. **RERANK (pipe operation with ON and WITH)**:
-   ✅ CORRECT: `| RERANK ?query ON field WITH {{ "inference_id": """ + f'"{rerank_endpoint}"' + """ }}`
-   ✅ CORRECT: `| RERANK ?query ON field1, field2 WITH {{ "inference_id": """ + f'"{rerank_endpoint}"' + """ }}`
-   ❌ WRONG: `| RERANK field ?query` (missing ON keyword)
+2. **RERANK (pipe operation with named score, ON, and WITH)**:
+   ✅ CORRECT: `| RERANK rerank_score = ?query ON field WITH {{ "inference_id": """ + f'"{rerank_endpoint}"' + """ }}`
+   ✅ CORRECT: `| RERANK rerank_score = ?query ON field1, field2 WITH {{ "inference_id": """ + f'"{rerank_endpoint}"' + """ }}`
+   ✅ FOLLOWED BY: `| EVAL original_score = _score, _score = rerank_score + original_score`
+   ✅ FOLLOWED BY: `| SORT _score DESC` then `| LIMIT N`
+   ❌ WRONG: `| RERANK ?query ON field` (must use named score column: rerank_score =)
    ❌ WRONG: `| RERANK ?query ON field MODEL "model"` (use WITH, not MODEL)
 
 3. **COMPLETION (pipe operation with WITH - optional for RAG)**:
@@ -891,7 +893,9 @@ queries.append({{
    | WHERE MATCH(semantic_field, ?user_question)
    | SORT _score DESC
    | LIMIT 100
-   | RERANK ?user_question ON field WITH {{ "inference_id": """ + f'"{rerank_endpoint}"' + """ }}
+   | RERANK rerank_score = ?user_question ON field WITH {{ "inference_id": """ + f'"{rerank_endpoint}"' + """ }}
+   | EVAL original_score = _score, _score = rerank_score + original_score
+   | SORT _score DESC
    | LIMIT 10
    | KEEP fields...
    ```
