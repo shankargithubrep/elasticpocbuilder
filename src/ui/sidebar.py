@@ -426,11 +426,12 @@ def render_sidebar():
             st.session_state.selected_sub_category = selected
 
         elif st.session_state.selected_pillar == "observability":
-            sub_options = ["apm", "infrastructure", "slo"]
+            sub_options = ["apm", "infrastructure", "slo", "motlp"]
             sub_labels = {
                 "apm": "APM / Tracing",
                 "infrastructure": "Infrastructure",
                 "slo": "SLO Management",
+                "motlp": "MOTLP (Managed OTLP)",
             }
             current_sub = st.session_state.selected_sub_category or "apm"
             current_idx = sub_options.index(current_sub) if current_sub in sub_options else 0

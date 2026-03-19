@@ -20,6 +20,8 @@ from src.services.security_ecs_schema import (
     ECS_HOST_FIELDS,
     ECS_CLOUD_FIELDS,
     ECS_HTTP_FIELDS,
+    MOTLP_REQUIRED_FIELDS,
+    MOTLP_INDEX_PATTERNS,
     get_index_patterns,
     get_ilm_policy,
 )
@@ -31,6 +33,7 @@ OBS_SIZE_RANGES = {
     "apm":            {"timeseries": "10000-30000", "reference": "50-200"},
     "infrastructure": {"timeseries": "5000-20000",  "reference": "100-500"},
     "slo":            {"timeseries": "10000-20000",  "reference": "50-100"},
+    "motlp":          {"timeseries": "10000-30000", "reference": "50-200"},
 }
 
 # Core APM fields every APM dataset must have
@@ -146,8 +149,12 @@ class ObservabilityStrategyGenerator:
 
         tech_stack = context.get("tech_stack", {})
         env_scale = context.get("environment_scale", {})
-        index_patterns = get_index_patterns("observability")
         subcategory_guidance = self._get_subcategory_guidance(sub_category)
+
+        if sub_category == "motlp":
+            return self._build_motlp_prompt(context, esql_skill, obs_skill, num_queries, subcategory_guidance)
+
+        index_patterns = get_index_patterns("observability")
 
         return f"""You are an Elastic Observability expert designing an APM/Tracing demo for Elastic Agent Builder.
 
@@ -301,6 +308,180 @@ IMPORTANT:
 - All datasets should have @timestamp with realistic distribution over the last 30 days
 """
 
+    def _build_motlp_prompt(
+        self,
+        context: Dict,
+        esql_skill: str,
+        obs_skill: str,
+        num_queries: int,
+        subcategory_guidance: str,
+    ) -> str:
+        """Prompt specifically for MOTLP (Managed OTLP) demos — native OTLP field conventions."""
+        return f"""You are an Elastic Observability expert designing a MOTLP (Managed OTLP) demo for Elastic POC Builder.
+
+MOTLP is Elastic's cloud-native ingestion layer that accepts OpenTelemetry data directly via OTLP.
+Unlike the classic APM Agent, MOTLP preserves native OTLP field names — NO ECS translation.
+
+**Customer Context:**
+- Company: {context.get('company_name')}
+- Department: {context.get('department')}
+- Industry: {context.get('industry')}
+- Pain Points: {json.dumps(context.get('pain_points', []))}
+- Use Cases: {json.dumps(context.get('use_cases', []))}
+- Scale: {context.get('scale', 'Unknown')}
+- Key Metrics: {json.dumps(context.get('metrics', []))}
+- Tech Stack: {json.dumps(context.get('tech_stack', {}))}
+
+**Sub-Category Guidance:**
+{subcategory_guidance}
+
+**MOTLP Native OTLP Field Names — Use EXACTLY These (NOT ECS equivalents):**
+{json.dumps(MOTLP_REQUIRED_FIELDS, indent=2)}
+
+**Key MOTLP Field Conventions:**
+- TraceId (NOT trace.id) — 32-char hex string, shared across related spans
+- SpanId (NOT span.id) — 16-char hex string, unique per span
+- ParentSpanId — links child to parent span
+- Duration (NOT event.duration) — in NANOSECONDS
+- StatusCode: "STATUS_CODE_OK" | "STATUS_CODE_ERROR" | "STATUS_CODE_UNSET"
+- Kind: "SPAN_KIND_SERVER" | "SPAN_KIND_CLIENT" | "SPAN_KIND_INTERNAL" | "SPAN_KIND_PRODUCER" | "SPAN_KIND_CONSUMER"
+- resource.attributes.service.name (NOT service.name) — identifies the service
+- resource.attributes.deployment.environment — "production" | "staging" | "development"
+- data_stream.dataset — set via OTEL_RESOURCE_ATTRIBUTES for routing to named datasets
+
+**MOTLP Index Patterns (generic.otel, NOT apm):**
+- traces-generic.otel-default (span/trace documents)
+- metrics-generic.otel-default (metric documents)
+- logs-generic.otel-default (log documents with trace correlation)
+
+**SDK Configuration for MOTLP (include in demo guide):**
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://<motlp-endpoint>"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=ApiKey <api-key>"
+export OTEL_RESOURCE_ATTRIBUTES="service.name=<svc>,deployment.environment=production,data_stream.dataset=<dataset>"
+```
+
+**ES|QL Reference:**
+{esql_skill}
+
+**Observability Reference:**
+{obs_skill}
+
+**✅ MOTLP ES|QL PATTERNS TO USE:**
+1. P99 latency by service (MOTLP fields):
+   ```
+   FROM traces-generic.otel-default
+   | WHERE Kind == "SPAN_KIND_SERVER"
+   | STATS p99 = PERCENTILE(Duration, 99), req_count = COUNT()
+     BY `resource.attributes.service.name`, DATE_TRUNC(1 hour, @timestamp)
+   | EVAL p99_ms = p99 / 1000000 | SORT @timestamp ASC
+   ```
+2. Error rate by service:
+   ```
+   FROM traces-generic.otel-default
+   | WHERE Kind == "SPAN_KIND_SERVER"
+   | STATS total = COUNT(), errors = COUNT(CASE WHEN StatusCode == "STATUS_CODE_ERROR" THEN 1 END)
+     BY `resource.attributes.service.name`
+   | EVAL error_rate = errors / total * 100 | SORT error_rate DESC
+   ```
+3. Slow database spans:
+   ```
+   FROM traces-generic.otel-default
+   | WHERE Kind == "SPAN_KIND_CLIENT" AND `attributes.db.system` IS NOT NULL AND Duration > 100000000
+   | STATS avg_dur = AVG(Duration), count = COUNT()
+     BY `attributes.db.statement`, `resource.attributes.service.name`
+   | EVAL avg_ms = avg_dur / 1000000 | SORT avg_ms DESC | LIMIT 10
+   ```
+4. Cross-service trace fan-out:
+   ```
+   FROM traces-generic.otel-default
+   | STATS span_count = COUNT(), services = COUNT_DISTINCT(`resource.attributes.service.name`)
+     BY TraceId
+   | WHERE services > 3
+   | SORT span_count DESC | LIMIT 20
+   ```
+
+**Your Task:**
+Generate EXACTLY {num_queries} ES|QL queries + 2-3 SLO definitions + a service dependency map.
+All queries MUST target traces-generic.otel-default (or metrics/logs-generic.otel-default).
+All field names MUST use native OTLP convention (TraceId, Duration, StatusCode, resource.attributes.*).
+
+**Return ONLY valid JSON:**
+```json
+{{
+  "sub_category": "motlp",
+  "datasets": [
+    {{
+      "name": "otel_traces",
+      "type": "timeseries",
+      "row_count": "10000-30000",
+      "required_fields": {{
+        "@timestamp": "date",
+        "TraceId": "keyword",
+        "SpanId": "keyword",
+        "ParentSpanId": "keyword",
+        "Name": "keyword",
+        "Kind": "keyword",
+        "Duration": "long",
+        "StatusCode": "keyword",
+        "resource.attributes.service.name": "keyword",
+        "resource.attributes.service.version": "keyword",
+        "resource.attributes.deployment.environment": "keyword",
+        "resource.attributes.telemetry.sdk.language": "keyword",
+        "attributes.http.request.method": "keyword",
+        "attributes.http.response.status_code": "long",
+        "attributes.url.path": "keyword",
+        "data_stream.dataset": "keyword",
+        "data_stream.type": "keyword"
+      }},
+      "relationships": [],
+      "semantic_fields": []
+    }}
+  ],
+  "queries": [
+    {{
+      "name": "P99 Latency by Service",
+      "pain_point": "High latency impacting user experience",
+      "esql_features": ["STATS", "PERCENTILE", "DATE_TRUNC", "EVAL"],
+      "required_datasets": ["otel_traces"],
+      "required_fields": {{"otel_traces": ["Duration", "resource.attributes.service.name", "@timestamp"]}},
+      "description": "P99 latency from native OTLP traces via MOTLP ingestion",
+      "complexity": "medium"
+    }}
+  ],
+  "slo_queries": [
+    {{
+      "slo_name": "API Availability SLO",
+      "service": "api-gateway",
+      "sli_query": "FROM traces-generic.otel-default | WHERE Kind == \\"SPAN_KIND_SERVER\\" AND `resource.attributes.service.name` == \\"api-gateway\\" | STATS good = COUNT(CASE WHEN StatusCode == \\"STATUS_CODE_OK\\" THEN 1 END), total = COUNT() | EVAL sli = ROUND(good / total * 100, 3)",
+      "target_percentage": 99.9,
+      "window_days": 30,
+      "burn_rate_query": "FROM traces-generic.otel-default | WHERE Kind == \\"SPAN_KIND_SERVER\\" | STATS errors = COUNT(CASE WHEN StatusCode == \\"STATUS_CODE_ERROR\\" THEN 1 END), total = COUNT() BY DATE_TRUNC(1 hour, @timestamp) | EVAL error_rate = errors / total",
+      "error_budget_query": "FROM traces-generic.otel-default | STATS errors = COUNT(CASE WHEN StatusCode == \\"STATUS_CODE_ERROR\\" THEN 1 END), total = COUNT() | EVAL budget = (0.001 * total - errors) / (0.001 * total) * 100"
+    }}
+  ],
+  "service_map": {{
+    "services": [
+      {{"name": "api-gateway", "language": "go", "version": "1.0.0"}},
+      {{"name": "checkout-service", "language": "python", "version": "2.0.0"}}
+    ],
+    "dependencies": [["api-gateway", "checkout-service"]],
+    "entry_points": ["api-gateway"]
+  }},
+  "text_fields": {{}},
+  "index_patterns": ["traces-generic.otel-default", "metrics-generic.otel-default", "logs-generic.otel-default"],
+  "ilm_policy": "apm_traces"
+}}
+```
+
+IMPORTANT:
+- Duration in datasets must be NANOSECONDS (1ms = 1,000,000 ns)
+- TraceId must be consistent across related spans (same request = same TraceId)
+- StatusCode must be one of: STATUS_CODE_OK, STATUS_CODE_ERROR, STATUS_CODE_UNSET
+- resource.attributes.deployment.environment: production | staging | development
+- data_stream.dataset should match the service or use-case name (e.g. "ecommerce.orders")
+"""
+
     def _get_subcategory_guidance(self, sub_category: str) -> str:
         guidance = {
             "apm": """Focus on: distributed tracing, latency analysis, error rate tracking.
@@ -320,6 +501,14 @@ IMPORTANT:
 - Generate burn rate queries to detect SLO violations early
 - Key metrics: error budget remaining, burn rate, SLI trend
 - Compliance with SLA commitments""",
+
+            "motlp": """Focus on: native OpenTelemetry data ingested via Elastic's Managed OTLP (MOTLP) endpoint.
+- MOTLP preserves native OTLP field names — use TraceId, SpanId, Duration, StatusCode (NOT ECS equivalents)
+- Show distributed tracing across polyglot microservices using OTEL SDKs
+- Demonstrate dataset routing via data_stream.dataset resource attribute
+- Key pain points: no unified trace view, manual OTel SDK wiring, missing SLO visibility
+- Highlight OTEL_EXPORTER_OTLP_ENDPOINT configuration simplicity vs APM Agent setup
+- Include SDK snippets for Python, Go, Java, Node.js sending to MOTLP""",
         }
         return guidance.get(sub_category, guidance["apm"])
 
@@ -328,23 +517,33 @@ IMPORTANT:
     # -------------------------------------------------------------------------
 
     def _enrich_and_validate(self, strategy: Dict, sub_category: str) -> Dict:
-        """Enforce APM fields, set defaults for missing keys."""
+        """Enforce required fields and defaults per sub-category."""
 
         strategy.setdefault("sub_category", sub_category)
         strategy.setdefault("slo_queries", [])
         strategy.setdefault("service_map", {"services": [], "dependencies": [], "entry_points": []})
         strategy.setdefault("text_fields", {})
-        strategy.setdefault("index_patterns", get_index_patterns("observability"))
         strategy.setdefault("ilm_policy", "apm_traces")
 
-        # Ensure every APM dataset has the core trace fields
-        for dataset in strategy.get("datasets", []):
-            fields = dataset.get("required_fields", {})
-            if "trace.id" in fields or "event.duration" in fields:
-                # This is an APM dataset — enforce required APM fields
-                for field, ftype in APM_REQUIRED_FIELDS.items():
-                    if field not in fields:
-                        fields[field] = ftype
+        if sub_category == "motlp":
+            # MOTLP: native OTLP index patterns and field enforcement
+            strategy.setdefault("index_patterns", MOTLP_INDEX_PATTERNS[:])
+            for dataset in strategy.get("datasets", []):
+                fields = dataset.get("required_fields", {})
+                # Detect MOTLP datasets by presence of native OTLP fields
+                if "TraceId" in fields or "resource.attributes.service.name" in fields:
+                    for field, ftype in MOTLP_REQUIRED_FIELDS.items():
+                        if field not in fields:
+                            fields[field] = ftype
+        else:
+            strategy.setdefault("index_patterns", get_index_patterns("observability"))
+            # Ensure every APM dataset has the core ECS trace fields
+            for dataset in strategy.get("datasets", []):
+                fields = dataset.get("required_fields", {})
+                if "trace.id" in fields or "event.duration" in fields:
+                    for field, ftype in APM_REQUIRED_FIELDS.items():
+                        if field not in fields:
+                            fields[field] = ftype
 
         return strategy
 

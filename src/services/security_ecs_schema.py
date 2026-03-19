@@ -528,6 +528,65 @@ COMPLIANCE_FRAMEWORKS: Dict[str, Dict[str, Any]] = {
 
 
 # =============================================================================
+# MOTLP (Managed OTLP) — Native OpenTelemetry Field Conventions
+# =============================================================================
+
+# Native OTLP span/trace fields as stored by Elastic's MOTLP ingestion layer.
+# These differ from ECS-translated APM fields (trace.id → TraceId, etc.)
+MOTLP_REQUIRED_FIELDS: Dict[str, str] = {
+    # Timing
+    "@timestamp":                                   "date",
+    "StartTime":                                    "date",
+    "EndTime":                                      "date",
+    "Duration":                                     "long",       # nanoseconds
+    # Trace identifiers (hex strings, not ECS trace.id)
+    "TraceId":                                      "keyword",
+    "SpanId":                                       "keyword",
+    "ParentSpanId":                                 "keyword",
+    # Span metadata
+    "Name":                                         "keyword",    # span / operation name
+    "Kind":                                         "keyword",    # SPAN_KIND_SERVER|CLIENT|INTERNAL|PRODUCER|CONSUMER
+    "StatusCode":                                   "keyword",    # STATUS_CODE_OK|ERROR|UNSET
+    "StatusMessage":                                "keyword",
+    # Resource attributes — preserved as-is by MOTLP
+    "resource.attributes.service.name":             "keyword",
+    "resource.attributes.service.version":          "keyword",
+    "resource.attributes.service.instance.id":      "keyword",
+    "resource.attributes.deployment.environment":   "keyword",
+    "resource.attributes.telemetry.sdk.name":       "keyword",
+    "resource.attributes.telemetry.sdk.version":    "keyword",
+    "resource.attributes.telemetry.sdk.language":   "keyword",
+    "resource.attributes.host.name":                "keyword",
+    "resource.attributes.cloud.provider":           "keyword",
+    "resource.attributes.cloud.region":             "keyword",
+    # Instrumentation scope
+    "scope.name":                                   "keyword",
+    "scope.version":                                "keyword",
+    # Span attributes — semantic conventions
+    "attributes.http.request.method":               "keyword",
+    "attributes.http.response.status_code":         "long",
+    "attributes.url.path":                          "keyword",
+    "attributes.url.full":                          "keyword",
+    "attributes.db.system":                         "keyword",
+    "attributes.db.statement":                      "keyword",
+    "attributes.net.peer.name":                     "keyword",
+    "attributes.rpc.service":                       "keyword",
+    "attributes.rpc.method":                        "keyword",
+    # Dataset routing (OTEL_RESOURCE_ATTRIBUTES=data_stream.dataset=<value>)
+    "data_stream.dataset":                          "keyword",
+    "data_stream.namespace":                        "keyword",
+    "data_stream.type":                             "keyword",
+}
+
+# MOTLP default data streams (Elastic Cloud generic OTLP ingestion)
+MOTLP_INDEX_PATTERNS: List[str] = [
+    "traces-generic.otel-default",
+    "metrics-generic.otel-default",
+    "logs-generic.otel-default",
+]
+
+
+# =============================================================================
 # Security Index Patterns per Sub-Category
 # =============================================================================
 
@@ -573,6 +632,11 @@ SECURITY_INDEX_PATTERNS: Dict[str, List[str]] = {
         "traces-apm-*",
         "metrics-apm.*",
         "logs-apm.*",
+    ],
+    "motlp": [
+        "traces-generic.otel-default",
+        "metrics-generic.otel-default",
+        "logs-generic.otel-default",
     ],
 }
 
