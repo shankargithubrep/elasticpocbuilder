@@ -304,15 +304,38 @@ class ModularDemoOrchestrator:
         use_two_phase = config.get('use_two_phase', False)
         num_pain_points = len(config.get('pain_points', []))
 
-        # Auto-enable two-phase for complex demos (>= 5 pain points or explicit flag)
-        if num_pain_points >= 5 or use_two_phase:
+        # Three-pillar routing: pillar takes precedence over demo_type
+        pillar = config.get('pillar', '')
+        sub_category = config.get('sub_category', '')
+
+        # Normalize: map pillar → demo_type for backward compat, and vice versa
+        if pillar == 'security':
+            demo_type = 'security'
+        elif pillar == 'observability' or sub_category in ('apm', 'infrastructure', 'slo'):
+            demo_type = 'observability'
+        elif pillar == 'search':
+            demo_type = 'search'
+
+        logger.info(f"Routing: pillar={pillar or 'legacy'}, demo_type={demo_type}, sub_category={sub_category or 'default'}")
+
+        # Auto-enable two-phase for complex analytics demos (>= 5 pain points or explicit flag)
+        # Not applied to security or APM (they have their own dedicated generators)
+        if demo_type not in ('security',) and (num_pain_points >= 5 or use_two_phase):
             logger.info(f"Using two-phase strategy generator (pain_points={num_pain_points}, flag={use_two_phase})")
             from src.services.two_phase_query_strategy import TwoPhaseQueryStrategyGenerator
             strategy_generator = TwoPhaseQueryStrategyGenerator(self.llm_client)
+        elif demo_type == 'security':
+            from src.services.security_strategy_generator import SecurityQueryStrategyGenerator
+            strategy_generator = SecurityQueryStrategyGenerator(self.llm_client)
+            logger.info(f"Using SecurityQueryStrategyGenerator (sub_category={sub_category or 'siem'})")
         elif demo_type == 'search':
             from src.services.search_strategy_generator import SearchQueryStrategyGenerator
             strategy_generator = SearchQueryStrategyGenerator(self.llm_client)
-        else:  # observability (default)
+        elif demo_type == 'observability' and sub_category in ('apm', 'slo', 'infrastructure'):
+            from src.services.observability_strategy_generator import ObservabilityStrategyGenerator
+            strategy_generator = ObservabilityStrategyGenerator(self.llm_client)
+            logger.info(f"Using ObservabilityStrategyGenerator (sub_category={sub_category})")
+        else:  # legacy analytics / default observability
             from src.services.query_strategy_generator import QueryStrategyGenerator
             strategy_generator = QueryStrategyGenerator(self.llm_client)
 

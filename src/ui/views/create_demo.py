@@ -25,9 +25,9 @@ def render_create_demo_view():
 
     # Display messages
     if not st.session_state.messages:
-        st.markdown("### 🌋 Generate a Custom Demo")
+        st.markdown("### ⚡ Generate a Custom Demo")
 
-        st.info("Vulcan will automatically create a **Search/RAG** or **Analytics** demo module "
+        st.info("Elastic POC Builder will automatically create a **Search/RAG** or **Analytics** demo module "
                 "based on your prompt. To see examples of each type, click **Browse** in the sidebar.")
 
         st.markdown("""
@@ -39,7 +39,7 @@ def render_create_demo_view():
         - **Use Cases** — what do they want to accomplish?
         - **Key Metrics** — what do they measure?
 
-        Don't worry if you're missing some details — just say so in your prompt and Vulcan will fill in the gaps. The more context you provide, the better the output.
+        Don't worry if you're missing some details — just say so in your prompt and Elastic POC Builder will fill in the gaps. The more context you provide, the better the output.
         """)
         st.caption("Module generation is LLM-assisted — some variance is expected. "
                    "If generation fails, try again or use a smarter model.")
@@ -183,6 +183,20 @@ def render_create_demo_view():
                     try:
                         # Create config from context
                         context = st.session_state.demo_context
+
+                        # Resolve pillar + demo_type from sidebar pillar selector
+                        selected_pillar = st.session_state.get("selected_pillar", "search")
+                        selected_sub = st.session_state.get("selected_sub_category", "")
+                        pillar_to_demo_type = {
+                            "search": "search",
+                            "observability": "observability",
+                            "security": "security",
+                        }
+                        resolved_demo_type = pillar_to_demo_type.get(
+                            selected_pillar,
+                            context.get("demo_type", "analytics")
+                        )
+
                         config = {
                             "company_name": context.get("company_name", "Demo Company"),
                             "department": context.get("department", "Operations"),
@@ -190,10 +204,19 @@ def render_create_demo_view():
                             "pain_points": context.get("pain_points", []),
                             "use_cases": context.get("use_cases", []),
                             "metrics": context.get("metrics", []),
-                            "demo_type": context.get("demo_type", "analytics"),
+                            "demo_type": resolved_demo_type,
+                            # Three-pillar fields
+                            "pillar": selected_pillar,
+                            "sub_category": selected_sub,
+                            "compliance_frameworks": context.get("compliance_frameworks", []),
+                            "mitre_tactics": context.get("mitre_tactics", []),
+                            "data_sources": context.get("data_sources", []),
+                            "tech_stack": context.get("tech_stack", {}),
+                            "environment_scale": context.get("environment_scale", {}),
+                            # Generation settings
                             "dataset_size_preference": st.session_state.get("dataset_size_preference", "medium"),
-                            "use_enhanced_generation": True,  # Always use enhanced generation
-                            "full_technical_context": context.get("full_technical_context"),  # Pass rich context for high-fidelity generation
+                            "use_enhanced_generation": True,
+                            "full_technical_context": context.get("full_technical_context"),
                             "llm_model": st.session_state.get("llm_model")
                         }
 

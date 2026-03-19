@@ -8,6 +8,7 @@ Handles indexing of demo datasets into Elasticsearch with support for:
 """
 
 import os
+import re
 import time
 import logging
 from typing import Dict, List, Optional, Tuple, Any
@@ -102,6 +103,11 @@ class FieldMapper:
                 }
                 continue
 
+            # Auto-detect IP address fields by ECS field name convention or value sampling
+            if pd.api.types.is_string_dtype(df[col]) and FieldMapper._is_ip_field(col, df[col]):
+                mappings["properties"][col] = {"type": "ip"}
+                continue
+
             # Auto-detect semantic text (text fields with avg length > 50)
             if pd.api.types.is_string_dtype(df[col]):
                 avg_length = df[col].astype(str).str.len().mean()
@@ -142,6 +148,36 @@ class FieldMapper:
                 return True
 
         return False
+
+    # ECS field names that are always IP type
+    _ECS_IP_FIELD_SUFFIXES = (
+        ".ip", ".forwarded_ip", ".resolved_ip",
+    )
+    _ECS_IP_FIELD_EXACT = {
+        "ip", "source.ip", "destination.ip", "host.ip", "client.ip",
+        "server.ip", "observer.ip", "network.forwarded_ip",
+        "dns.resolved_ip", "related.ip",
+    }
+    _IP_RE = re.compile(
+        r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)"   # IPv4
+        r"|(?:[0-9a-fA-F]{1,4}:){1,7}[0-9a-fA-F]{0,4}$"                                # IPv6 (simplified)
+    )
+
+    @staticmethod
+    def _is_ip_field(col: str, series: pd.Series) -> bool:
+        """Return True if this column should be mapped as Elasticsearch `ip` type."""
+        # Check ECS field name conventions
+        if col in FieldMapper._ECS_IP_FIELD_EXACT:
+            return True
+        for suffix in FieldMapper._ECS_IP_FIELD_SUFFIXES:
+            if col.endswith(suffix):
+                return True
+        # Fall back to value sampling: if ≥80% of non-null values look like IPs
+        sample = series.dropna().astype(str).head(20)
+        if len(sample) == 0:
+            return False
+        ip_matches = sample.apply(lambda v: bool(FieldMapper._IP_RE.match(v.strip()))).sum()
+        return (ip_matches / len(sample)) >= 0.8
 
     @staticmethod
     def _map_column(series: pd.Series) -> Dict[str, str]:
@@ -262,7 +298,8 @@ class ElasticsearchIndexer:
         index_mode: Optional[str] = None,
         progress_callback: Optional[callable] = None,
         stop_callback: Optional[callable] = None,
-        inference_id: Optional[str] = None
+        inference_id: Optional[str] = None,
+        ilm_policy: Optional[str] = None
     ) -> IndexingResult:
         """
         Index a dataset into Elasticsearch
@@ -288,6 +325,10 @@ class ElasticsearchIndexer:
             # Update progress
             if progress_callback:
                 progress_callback(0.05, "Checking ELSER deployment...")
+
+            # Ensure ILM policy exists if requested (security / observability pillars)
+            if ilm_policy:
+                self._ensure_ilm_policy(ilm_policy)
 
             # Analyze DataFrame with LLM-specified semantic and text fields
             mapping_info = FieldMapper.analyze_dataframe(df, semantic_fields, text_fields, inference_id)
@@ -798,6 +839,89 @@ class ElasticsearchIndexer:
                 return True, "ELSER deployment in progress"
 
         return False, "Timeout waiting for ELSER deployment to start"
+
+    def _ensure_ilm_policy(self, policy_name: str) -> Tuple[bool, str]:
+        """
+        Create or update an ILM policy in Elasticsearch.
+
+        The policy definition is loaded from ILM_POLICIES in security_ecs_schema.
+        If the policy already exists in Elasticsearch it is left unchanged (idempotent).
+
+        Returns (success, message).
+        """
+        try:
+            # Check whether the policy already exists
+            try:
+                self.client.ilm.get_lifecycle(name=policy_name)
+                logger.debug(f"ILM policy '{policy_name}' already exists — skipping creation")
+                return True, f"ILM policy '{policy_name}' already exists"
+            except Exception as check_err:
+                if "resource_not_found_exception" not in str(check_err).lower():
+                    raise
+
+            # Load policy spec from schema
+            try:
+                from src.services.security_ecs_schema import ILM_POLICIES
+                spec = ILM_POLICIES.get(policy_name)
+            except ImportError:
+                spec = None
+
+            if not spec:
+                logger.warning(f"ILM policy '{policy_name}' not found in schema — skipping")
+                return False, f"ILM policy spec for '{policy_name}' not found"
+
+            # Build ES ILM policy body from spec
+            phases: Dict[str, Any] = {}
+
+            # Hot phase
+            hot_phase: Dict[str, Any] = {
+                "actions": {
+                    "rollover": {
+                        "max_age": f"{spec['hot_phase_days']}d",
+                        "max_primary_shard_size": f"{spec['hot_max_size_gb']}gb",
+                    }
+                }
+            }
+            phases["hot"] = hot_phase
+
+            # Warm phase
+            if spec.get("warm_phase_days"):
+                phases["warm"] = {
+                    "min_age": f"{spec['warm_phase_days']}d",
+                    "actions": {"shrink": {"number_of_shards": 1}, "forcemerge": {"max_num_segments": 1}},
+                }
+
+            # Cold phase
+            if spec.get("cold_phase_days"):
+                phases["cold"] = {
+                    "min_age": f"{spec['cold_phase_days']}d",
+                    "actions": {"freeze": {}},
+                }
+
+            # Frozen phase (compliance_audit only)
+            if spec.get("frozen_phase_days"):
+                phases["frozen"] = {
+                    "min_age": f"{spec['frozen_phase_days']}d",
+                    "actions": {},
+                }
+
+            # Delete phase
+            if spec.get("delete_phase_days"):
+                phases["delete"] = {
+                    "min_age": f"{spec['delete_phase_days']}d",
+                    "actions": {"delete": {}},
+                }
+
+            self.client.ilm.put_lifecycle(
+                name=policy_name,
+                policy={"phases": phases},
+            )
+            logger.info(f"ILM policy '{policy_name}' created successfully")
+            return True, f"ILM policy '{policy_name}' created"
+
+        except Exception as e:
+            logger.warning(f"ILM policy creation failed for '{policy_name}': {e}")
+            return False, str(e)
 
     def delete_index(self, index_name: str) -> Tuple[bool, str]:
         """Delete an index or data stream"""

@@ -131,7 +131,7 @@ def get_elasticsearch_status() -> ComponentStatus:
         return ComponentStatus(
             is_ok=False,
             label="Elasticsearch",
-            detail=f"Error: {str(e)[:25]}"
+            detail=f"Error: {str(e)[:60]}"
         )
 
 
@@ -174,7 +174,7 @@ def get_ai_assistant_status() -> ComponentStatus:
         return ComponentStatus(
             is_ok=False,
             label="AI Assistant",
-            detail=f"Error: {str(e)[:25]}"
+            detail=f"Error: {str(e)[:60]}"
         )
 
 

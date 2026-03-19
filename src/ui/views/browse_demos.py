@@ -17,7 +17,9 @@ from .tabs import (
     render_queries_tab,
     render_guide_tab,
     render_tools_tab,
-    render_agents_tab
+    render_agents_tab,
+    render_detection_rules_tab,
+    render_service_map_tab,
 )
 from ..components.progress_tracker import render_progress_header
 
@@ -53,20 +55,26 @@ def render_browse_demos_view():
         loader = manager.get_module(st.session_state.current_demo_module)
 
         if loader:
-            # Tab labels and icons — use a session-state-backed selector so
-            # the active tab survives Streamlit reruns (st.tabs resets on every
-            # rerun because it's a layout element, not a stateful widget).
-            TAB_OPTIONS = [
-                "📋 Config",
-                "🗂️ Data",
-                "🔍 Queries",
-                "🔧 Tools",
-                "🤖 Agents",
-                "📝 Guide",
-            ]
+            # Detect pillar from config.json for pillar-specific tab injection
+            demo_pillar = loader.config.get("pillar", loader.config.get("demo_type", "search"))
 
-            if "browse_active_tab" not in st.session_state:
+            # Build tab list — inject pillar-specific tabs in the right position
+            TAB_OPTIONS = ["📋 Config", "🗂️ Data", "🔍 Queries", "🔧 Tools", "🤖 Agents"]
+
+            if demo_pillar == "security":
+                TAB_OPTIONS.insert(3, "🛡️ Detection Rules")   # after Queries, before Tools
+            elif demo_pillar == "observability":
+                TAB_OPTIONS.insert(3, "📡 Service Map")        # after Queries, before Tools
+
+            TAB_OPTIONS.append("📝 Guide")
+
+            # Session-state-backed tab selector so active tab survives reruns
+            # Reset tab when switching demos
+            tab_state_key = f"browse_active_tab_{st.session_state.current_demo_module}"
+            if "browse_active_tab" not in st.session_state or \
+               st.session_state.get("_last_demo_module") != st.session_state.current_demo_module:
                 st.session_state["browse_active_tab"] = TAB_OPTIONS[0]
+                st.session_state["_last_demo_module"] = st.session_state.current_demo_module
 
             active_tab = st.segmented_control(
                 "Tab",
@@ -101,6 +109,12 @@ def render_browse_demos_view():
 
             elif active_tab == "🔍 Queries":
                 render_queries_tab(loader)
+
+            elif active_tab == "🛡️ Detection Rules":
+                render_detection_rules_tab(loader)
+
+            elif active_tab == "📡 Service Map":
+                render_service_map_tab(loader)
 
             elif active_tab == "🔧 Tools":
                 render_tools_tab(loader)

@@ -1,6 +1,6 @@
-# Vulcan: AI-Powered Demo Generator for Elastic Agent Builder
+# Elastic POC Builder: AI-Powered POC Generator for Elastic
 
-Generate complete Elastic Agent Builder demos from a single prompt. Vulcan uses LLM code generation to create custom data, ES|QL queries, and demo narratives tailored to any industry or use case. Each demo is a standalone Python module you can version control, share, and refine.
+Generate complete Elastic Agent Builder demos from a single prompt. Elastic POC Builder uses LLM code generation to create custom data, ES|QL queries, and demo narratives tailored to any industry or use case. Each demo is a standalone Python module you can version control, share, and refine.
 
 ---
 
@@ -187,7 +187,7 @@ Modules are self-contained — you can copy a `demos/` folder to share a complet
 
 ### LLM Providers
 
-Vulcan checks for LLM credentials in this order:
+Elastic POC Builder checks for LLM credentials in this order:
 
 | Priority | Provider | Env Vars |
 |----------|----------|----------|

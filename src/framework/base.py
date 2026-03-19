@@ -6,7 +6,7 @@ Provides interfaces that demo modules must implement
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 import pandas as pd
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -19,6 +19,36 @@ class DemoConfig:
     use_cases: List[str]
     scale: str
     metrics: List[str]
+
+    # --- Three-Pillar Extension Fields ---
+    # All optional with safe defaults for backward compatibility with existing demos
+
+    # Top-level pillar: "search" | "observability" | "security"
+    pillar: str = "search"
+
+    # Sub-category within the pillar:
+    #   search:        "rag" | "semantic" | "analytics"
+    #   observability: "infrastructure" | "apm" | "slo"
+    #   security:      "siem" | "xdr" | "edr" | "threat_hunting" | "compliance"
+    sub_category: str = ""
+
+    # Compliance frameworks in scope (e.g. ["SOC2", "PCI-DSS", "HIPAA"])
+    compliance_frameworks: List[str] = field(default_factory=list)
+
+    # MITRE ATT&CK tactic IDs relevant to this demo (e.g. ["TA0001", "TA0006"])
+    mitre_tactics: List[str] = field(default_factory=list)
+
+    # Data source types for security/observability demos
+    # e.g. ["windows_events", "syslog", "firewall", "dns", "cloud_trail"]
+    data_sources: List[str] = field(default_factory=list)
+
+    # Environment scale details for observability/security context
+    # e.g. {"hosts": 500, "services": 30, "events_per_day": 1_000_000}
+    environment_scale: Dict[str, Any] = field(default_factory=dict)
+
+    # Technology stack (cloud provider, language, framework)
+    # e.g. {"cloud": "aws", "language": "python", "framework": "django"}
+    tech_stack: Dict[str, str] = field(default_factory=dict)
 
 
 class DataGeneratorModule(ABC):
@@ -165,6 +195,88 @@ class QueryGeneratorModule(ABC):
                       self.generate_parameterized_queries() +
                       self.generate_rag_queries())
         return [q.get('name', f'Query {i+1}') for i, q in enumerate(all_queries)]
+
+    # -------------------------------------------------------------------------
+    # Security Pillar — optional methods (default to empty list)
+    # -------------------------------------------------------------------------
+
+    def generate_detection_rules(self) -> List[Dict[str, Any]]:
+        """Generate Kibana Detection Engine rules for the Security pillar.
+
+        These are NOT ES|QL investigative queries — they are rule definitions
+        that can be imported into Kibana's Security > Detection Rules page.
+
+        IMPORTANT: Detection rules use EQL (Event Query Language) for
+        sequence-based detection, NOT ES|QL. ES|QL is used for investigation
+        queries only. Do not mix the two syntaxes.
+
+        Returns:
+            List of detection rule definitions, each containing:
+            - rule_id: Unique stable identifier (UUID recommended)
+            - name: Human-readable rule name
+            - description: What threat this rule detects
+            - language: "eql" | "esql" | "kuery" | "lucene"
+            - query: The detection query in the specified language
+            - severity: "low" | "medium" | "high" | "critical"
+            - risk_score: Integer 0-100 (use get_severity_risk_score())
+            - mitre_tactic_id: MITRE tactic ID (e.g. "TA0006")
+            - mitre_tactic_name: MITRE tactic name (e.g. "Credential Access")
+            - mitre_technique_id: MITRE technique ID (e.g. "T1110")
+            - mitre_technique_name: MITRE technique name
+            - index_patterns: List of index patterns to query
+            - tags: List of string tags
+            - interval: Rule run interval (e.g. "5m")
+            - from: Lookback window (e.g. "now-6m")
+        """
+        return []
+
+    def generate_timeline_queries(self) -> List[Dict[str, Any]]:
+        """Generate attack timeline / investigation queries for the Security pillar.
+
+        These ES|QL queries trace an attack path in chronological order,
+        enabling SOC analysts to investigate an incident step by step.
+
+        Returns:
+            List of timeline query definitions in kill-chain order, each with:
+            - step: Integer step number (1-based)
+            - phase: Kill chain phase name (e.g. "Initial Access")
+            - name: Query name
+            - description: What this step investigates
+            - esql: ES|QL investigative query
+            - expected_finding: What a positive finding looks like
+            - mitre_technique_id: Related MITRE technique
+        """
+        return []
+
+    # -------------------------------------------------------------------------
+    # Observability Pillar — optional methods (default to empty list)
+    # -------------------------------------------------------------------------
+
+    def generate_slo_queries(self) -> List[Dict[str, Any]]:
+        """Generate SLO/SLI calculation queries for the Observability pillar.
+
+        Returns:
+            List of SLO query definitions, each containing:
+            - slo_name: Service level objective name (e.g. "API Availability")
+            - service: Service name this SLO applies to
+            - sli_query: ES|QL query to calculate the service level indicator
+            - target_percentage: Target SLO (e.g. 99.9)
+            - window_days: Rolling window in days (e.g. 30)
+            - burn_rate_query: ES|QL query for burn rate alerting
+            - error_budget_query: ES|QL query to show remaining error budget
+        """
+        return []
+
+    def generate_service_map(self) -> Dict[str, Any]:
+        """Generate service dependency map for the Observability pillar.
+
+        Returns:
+            Dict describing the service topology:
+            - services: List of service dicts with name, language, version
+            - dependencies: List of (upstream, downstream) service name tuples
+            - entry_points: List of external-facing service names
+        """
+        return {}
 
 
 class AhaMomentModule(ABC):

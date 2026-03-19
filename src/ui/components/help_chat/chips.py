@@ -12,7 +12,7 @@ CONTEXT_CHIPS: Dict[str, List[str]] = {
     # New user chips (no demos created yet)
     "new_user": [
         "How do I use this app?",
-        "What is Vulcan?",
+        "What is Elastic POC Builder?",
         "Search vs Analytics demos?",
         "Show me an example prompt",
     ],
@@ -85,7 +85,7 @@ CONTEXT_CHIPS: Dict[str, List[str]] = {
     # Fallback for unknown context
     "default": [
         "How do I use this app?",
-        "What is Vulcan?",
+        "What is Elastic POC Builder?",
         "What can I build with this?",
     ],
 }

@@ -51,7 +51,7 @@ class DocChunk:
 
 class DocIndexerService:
     """
-    Service for indexing Vulcan documentation to Elasticsearch.
+    Service for indexing Elastic POC Builder documentation to Elasticsearch.
 
     Uses semantic_text field type with ELSER for embeddings.
     Chunks documents by markdown headings for semantic coherence.

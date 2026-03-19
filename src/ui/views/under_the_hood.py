@@ -1,8 +1,8 @@
 """
-Under the Hood - Technical deep dive into Vulcan architecture.
+Under the Hood - Technical deep dive into Elastic POC Builder architecture.
 
 This view showcases the sophisticated query generation, data profiling,
-and modular architecture that powers Vulcan.
+and modular architecture that powers Elastic POC Builder.
 """
 
 import streamlit as st
@@ -11,8 +11,8 @@ import streamlit as st
 def render_under_the_hood():
     """Render the Under the Hood technical documentation page."""
 
-    st.title("💡 About Vulcan")
-    st.caption("What Vulcan is, how it works, and what it generates")
+    st.title("💡 About Elastic POC Builder")
+    st.caption("What Elastic POC Builder is, how it works, and what it generates")
 
     # Create tabs for each major component
     tabs = st.tabs([
@@ -63,14 +63,14 @@ def render_overview_tab():
     """Render the Overview tab — story-driven narrative aid for demos."""
 
     # ── Hero ──────────────────────────────────────────────────────────────────
-    st.markdown("## What is Vulcan?")
+    st.markdown("## What is Elastic POC Builder?")
     st.markdown("""
 The best demos feel like they live in the customer's world — their industry, their KPIs,
 their terminology. But building that from scratch for every prospect takes hours you don't
 have, and generic demos just don't land the same way.
 
-**Vulcan solves that.** Describe the customer in plain language — their company, department,
-and pain points — and Vulcan generates a complete, custom Elastic Agent Builder demo
+**Elastic POC Builder solves that.** Describe the customer in plain language — their company, department,
+and pain points — and Elastic POC Builder generates a complete, custom Elastic Agent Builder demo
 end-to-end: synthetic datasets shaped to the domain, sophisticated ES|QL queries grounded
 in real indexed data, Agent Builder tool definitions, and a full talk track with a demo guide.
 
@@ -108,7 +108,7 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
         st.caption("No industry vocabulary. No realistic patterns. Hard to relate to.")
 
     with col_good:
-        st.success("#### ✅ Vulcan-generated (Telco Network Ops)")
+        st.success("#### ✅ Elastic POC Builder–generated (Telco Network Ops)")
         st.markdown("**Data fields**")
         st.code(
             "tower_id, network_segment, error_code,\nimsi, mme_host, affected_subscribers,\nevent_type, cascade_severity",
@@ -154,7 +154,7 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
     # ── Section 2: The pipeline ───────────────────────────────────────────────
     st.markdown("## How It Works — The Pipeline")
     st.markdown(
-        "Vulcan doesn't fill in a template. It runs a multi-stage pipeline where each "
+        "Elastic POC Builder doesn't fill in a template. It runs a multi-stage pipeline where each "
         "phase informs the next — and critically, **queries are planned before data is generated**, "
         "so the data is shaped to make the queries compelling."
     )
@@ -192,7 +192,7 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
                 "on MME nodes and cell tower failure pattern analysis across datacenters.\"_"
             )
         with col_b:
-            st.markdown("**Vulcan extracts:**")
+            st.markdown("**Elastic POC Builder extracts:**")
             st.code(
                 'company:      "Telco"\n'
                 'department:   "Network Operations"\n'
@@ -210,7 +210,7 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
 
     with st.expander("**Stage 2 — Plan the Query Strategy** (queries first, data second)"):
         st.markdown(
-            "Before a single row of data is generated, Vulcan plans the query strategy — "
+            "Before a single row of data is generated, Elastic POC Builder plans the query strategy — "
             "deciding what business questions the demo will answer and what fields and "
             "distributions the data must have to make those queries return interesting results."
         )
@@ -232,9 +232,9 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
                 "- `@timestamp` must span 30 days for trend analysis"
             )
 
-        with st.expander("📋 See the prompts Vulcan uses to expand your brief input"):
+        with st.expander("📋 See the prompts Elastic POC Builder uses to expand your brief input"):
             st.markdown(
-                "When 'Prompt expansion' is enabled in Settings, Vulcan feeds your brief "
+                "When 'Prompt expansion' is enabled in Settings, Elastic POC Builder feeds your brief "
                 "description through one of two templates before generation begins — one for "
                 "**Observability & Analytics** demos, one for **Search & Retrieval** demos. "
                 "The result is a rich, domain-specific context document that drives all "
@@ -277,7 +277,7 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
 
     with st.expander("**Stage 4 — Profile & Write Queries** (grounded in real data)"):
         st.markdown(
-            "After indexing, Vulcan profiles the actual data — inspecting field cardinality, "
+            "After indexing, Elastic POC Builder profiles the actual data — inspecting field cardinality, "
             "value distributions, and date ranges. **Queries are then written against what's "
             "actually in Elasticsearch**, not against assumptions. This is what makes them work."
         )
@@ -305,7 +305,7 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
         with col_rules:
             st.markdown("**Query generation is governed by strict rules:**")
             st.markdown(
-                "Vulcan's LLM is constrained by a detailed ES|QL ruleset covering "
+                "Elastic POC Builder's LLM is constrained by a detailed ES|QL ruleset covering "
                 "correct syntax, proven patterns, and explicit anti-patterns. "
                 "Key rules enforced:"
             )
@@ -359,7 +359,7 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
 
     with st.expander("**Stage 5 — You take control** (validate, deploy, deliver)"):
         st.markdown(
-            "Generation produces the raw materials. **This stage is yours** — Vulcan gives you "
+            "Generation produces the raw materials. **This stage is yours** — Elastic POC Builder gives you "
             "a structured workflow to validate, deploy, and then deliver the demo."
         )
 
@@ -415,7 +415,7 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
     # ── Section 3: Search vs Analytics ───────────────────────────────────────
     st.markdown("## Two Demo Paths, One Pipeline")
     st.markdown(
-        "Vulcan auto-detects whether a use case calls for a **search & retrieval** demo "
+        "Elastic POC Builder auto-detects whether a use case calls for a **search & retrieval** demo "
         "or an **observability & analytics** demo. The pipeline is the same — the query "
         "strategies, data shapes, and output artifacts are different."
     )
@@ -610,7 +610,7 @@ def render_data_generation_tab():
     st.markdown("## Data Generation")
 
     st.markdown("""
-    Vulcan uses a **query-first approach**: the query strategy is planned first, then data is generated
+    Elastic POC Builder uses a **query-first approach**: the query strategy is planned first, then data is generated
     to satisfy those query requirements. This ensures generated data exhibits the patterns that make
     queries produce meaningful, realistic results.
     """)
@@ -654,7 +654,7 @@ def render_data_generation_tab():
     st.markdown("## Data Generation")
 
     st.markdown("""
-    Vulcan uses a **query-first approach**: the query strategy is planned first, then data is generated
+    Elastic POC Builder uses a **query-first approach**: the query strategy is planned first, then data is generated
     to satisfy those query requirements. This ensures generated data exhibits the patterns that make
     queries produce meaningful, realistic results.
     """)
@@ -798,7 +798,7 @@ def render_query_generation_tab():
     st.markdown("## Query Generation")
 
     st.markdown("""
-    Vulcan generates three types of ES|QL queries, routed by demo type (analytics vs search).
+    Elastic POC Builder generates three types of ES|QL queries, routed by demo type (analytics vs search).
     Each query is tested against real indexed data and iteratively refined until it returns results.
     """)
 
@@ -923,7 +923,7 @@ def render_data_indexing_tab():
     st.markdown("## Data Indexing")
 
     st.markdown("""
-    Data indexing happens **automatically during generation** — Vulcan creates indices,
+    Data indexing happens **automatically during generation** — Elastic POC Builder creates indices,
     applies mappings, bulk-indexes documents, and profiles the results without manual intervention.
     """)
 
@@ -976,7 +976,7 @@ def render_data_indexing_tab():
 
     with st.expander("**ELSER readiness check**"):
         st.markdown("""
-        Before indexing with semantic_text fields, Vulcan verifies the ELSER model is
+        Before indexing with semantic_text fields, Elastic POC Builder verifies the ELSER model is
         deployed and ready:
 
         1. Check inference endpoint (`.elser-2-elasticsearch`)
@@ -989,7 +989,7 @@ def render_data_indexing_tab():
     st.markdown("### Data Profiling")
 
     st.markdown("""
-    After indexing, Vulcan profiles each index using ES|QL queries. The profile is fed
+    After indexing, Elastic POC Builder profiles each index using ES|QL queries. The profile is fed
     directly into the query generation prompt so field names, filter values, and JOIN keys
     are always grounded in real data.
     """)
@@ -1149,7 +1149,7 @@ def render_agents_tab():
 
     st.markdown("""
     An **agent** is an AI assistant in Elastic Agent Builder that uses tools to answer
-    user questions. Vulcan generates a complete agent configuration for each demo.
+    user questions. Elastic POC Builder generates a complete agent configuration for each demo.
     """)
 
     st.markdown("### Agent Components")
@@ -1254,7 +1254,7 @@ def render_guide_tab():
     st.markdown("### Claude Code Skills")
 
     st.markdown("""
-    Beyond the generated guide, Vulcan includes **Claude Code skills** — specialized
+    Beyond the generated guide, Elastic POC Builder includes **Claude Code skills** — specialized
     slash commands that extend the demo workflow:
     """)
 

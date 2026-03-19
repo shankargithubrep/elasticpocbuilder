@@ -46,8 +46,8 @@ def _render_settings_expander():
 
     status = st.session_state.app_status
 
-    with st.expander("🌋 Vulcan · Settings", expanded=False):
-        st.caption("Vulcan helps create custom demo modules containing sample data, queries, and agentic tools.")
+    with st.expander("⚡ Elastic POC Builder · Settings", expanded=False):
+        st.caption("Elastic POC Builder helps create custom demo modules containing sample data, queries, and agentic tools.")
 
         # ES test buttons
         col1, col2, col3 = st.columns(3)
@@ -98,7 +98,7 @@ def _render_settings_expander():
 
         expansion_enabled = st.checkbox(
             "Prompt expansion", key="expansion_toggle",
-            help="When enabled, Vulcan uses an LLM to expand your brief prompt into a detailed "
+            help="When enabled, Elastic POC Builder uses an LLM to expand your brief prompt into a detailed "
                  "technical context before generating the demo. Produces higher-quality modules. "
                  "Disable for direct processing of already-detailed prompts."
         )
@@ -359,11 +359,98 @@ def render_sidebar():
     if st.session_state.view_mode == "create":
 
         # Initialize state
-        # TODO: Expose size control in sidebar UI (see GitHub issue).
-        # Analytics defaults to "large" for realistic distributions (5K-20K rows/dataset).
-        # Search path ignores this setting — hardcoded at 500-1000 docs in search_strategy_generator.py.
         st.session_state.dataset_size_preference = "large"
         st.session_state.use_enhanced_generation = True
+
+        # --- Three-Pillar Selector ---
+        st.markdown("**Pillar**")
+
+        # Initialize pillar state
+        if "selected_pillar" not in st.session_state:
+            st.session_state.selected_pillar = "search"
+        if "selected_sub_category" not in st.session_state:
+            st.session_state.selected_sub_category = ""
+
+        pillar_col1, pillar_col2, pillar_col3 = st.columns(3)
+        with pillar_col1:
+            if st.button(
+                "Search",
+                key="pillar_search_btn",
+                use_container_width=True,
+                type="primary" if st.session_state.selected_pillar == "search" else "secondary",
+            ):
+                st.session_state.selected_pillar = "search"
+                st.session_state.selected_sub_category = ""
+                st.rerun()
+        with pillar_col2:
+            if st.button(
+                "Observability",
+                key="pillar_obs_btn",
+                use_container_width=True,
+                type="primary" if st.session_state.selected_pillar == "observability" else "secondary",
+            ):
+                st.session_state.selected_pillar = "observability"
+                st.session_state.selected_sub_category = "apm"
+                st.rerun()
+        with pillar_col3:
+            if st.button(
+                "Security",
+                key="pillar_sec_btn",
+                use_container_width=True,
+                type="primary" if st.session_state.selected_pillar == "security" else "secondary",
+            ):
+                st.session_state.selected_pillar = "security"
+                st.session_state.selected_sub_category = "siem"
+                st.rerun()
+
+        # Sub-category selector (shown when Observability or Security selected)
+        if st.session_state.selected_pillar == "security":
+            sub_options = ["siem", "xdr", "edr", "threat_hunting", "compliance"]
+            sub_labels = {
+                "siem": "SIEM",
+                "xdr": "XDR",
+                "edr": "EDR",
+                "threat_hunting": "Threat Hunting",
+                "compliance": "Compliance",
+            }
+            current_sub = st.session_state.selected_sub_category or "siem"
+            current_idx = sub_options.index(current_sub) if current_sub in sub_options else 0
+            selected = st.selectbox(
+                "Sub-category",
+                options=sub_options,
+                index=current_idx,
+                format_func=lambda x: sub_labels.get(x, x),
+                key="security_subcategory_select",
+                label_visibility="collapsed",
+            )
+            st.session_state.selected_sub_category = selected
+
+        elif st.session_state.selected_pillar == "observability":
+            sub_options = ["apm", "infrastructure", "slo"]
+            sub_labels = {
+                "apm": "APM / Tracing",
+                "infrastructure": "Infrastructure",
+                "slo": "SLO Management",
+            }
+            current_sub = st.session_state.selected_sub_category or "apm"
+            current_idx = sub_options.index(current_sub) if current_sub in sub_options else 0
+            selected = st.selectbox(
+                "Sub-category",
+                options=sub_options,
+                index=current_idx,
+                format_func=lambda x: sub_labels.get(x, x),
+                key="obs_subcategory_select",
+                label_visibility="collapsed",
+            )
+            st.session_state.selected_sub_category = selected
+
+        # Show active pillar as compact caption
+        pillar_display = {
+            "search": "Search / RAG",
+            "observability": f"Observability · {st.session_state.selected_sub_category.upper() if st.session_state.selected_sub_category else 'APM'}",
+            "security": f"Security · {st.session_state.selected_sub_category.upper() if st.session_state.selected_sub_category else 'SIEM'}",
+        }
+        st.caption(f"**Active:** `{pillar_display.get(st.session_state.selected_pillar, 'Search')}`")
 
         # Demo Context Section
         display_context_summary()
@@ -382,8 +469,8 @@ def render_sidebar():
             st.session_state.ai_expansion_used = False  # Re-enable expansion
             st.rerun()
 
-        # About Vulcan button
-        if st.button("💡 About Vulcan", use_container_width=True, key="under_the_hood_btn"):
+        # About button
+        if st.button("💡 About Elastic POC Builder", use_container_width=True, key="under_the_hood_btn"):
             st.session_state.show_under_the_hood = True
             st.rerun()
 
@@ -456,9 +543,17 @@ def render_sidebar():
                     except (ValueError, TypeError):
                         date_label = raw_date[:10] if len(raw_date) >= 10 else raw_date
 
-                # Type emoji + label
+                # Pillar emoji + label
                 demo_type = demo.get('demo_type', 'analytics')
-                type_label = "🔍 Search" if demo_type == "search" else "📊 Analytics"
+                pillar = demo.get('pillar', demo_type)
+                if pillar == 'security' or demo_type == 'security':
+                    type_label = "🛡️ Security"
+                elif pillar == 'observability' or demo_type == 'observability':
+                    type_label = "📡 Observability"
+                elif demo_type == 'search':
+                    type_label = "🔍 Search"
+                else:
+                    type_label = "📊 Analytics"
 
                 with st.container(border=True):
                     # Highlight selected card

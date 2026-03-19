@@ -394,6 +394,13 @@ When using string templates with .format(), ensure placeholder names EXACTLY mat
 - CORRECT: template = "{{username}}" with .format(username="value")  ← Names match exactly
 Check ALL template placeholders match their .format() keyword arguments EXACTLY (case and plurality matter!)
 
+CRITICAL - LITERAL BRACES IN .format() TEMPLATES:
+If a template string used with .format() must contain a LITERAL {{ or }} (e.g. JSON, API paths like {{id}}),
+you MUST escape them as {{{{ and }}}} in the Python source — NOT as {{'{id}'}} or any other expression trick.
+- WRONG: "GET /api/{{path}}/{{'{id}'}}"  ← ValueError: unexpected '{{' in field name
+- CORRECT: "GET /api/{{path}}/{{{{id}}}}"  ← produces literal {{id}} in .format() output
+- ALTERNATIVE: Use string concatenation instead of .format() when content has many literal braces
+
 CRITICAL - AVOID EMPTY LIST ERRORS:
 List comprehensions with filters can produce empty lists causing "'a' cannot be empty" errors in np.random.choice().
 ALWAYS provide a fallback when filtering lists:
@@ -2439,6 +2446,13 @@ When using string templates with .format(), ensure placeholder names EXACTLY mat
 - CORRECT: template = "{{username}}" with .format(username="value")  ← Names match exactly
 Check ALL template placeholders match their .format() keyword arguments EXACTLY (case and plurality matter!)
 
+CRITICAL - LITERAL BRACES IN .format() TEMPLATES:
+If a template string used with .format() must contain a LITERAL {{ or }} (e.g. JSON, API paths like {{id}}),
+you MUST escape them as {{{{ and }}}} in the Python source — NOT as {{'{id}'}} or any other expression trick.
+- WRONG: "GET /api/{{path}}/{{'{id}'}}"  ← ValueError: unexpected '{{' in field name
+- CORRECT: "GET /api/{{path}}/{{{{id}}}}"  ← produces literal {{id}} in .format() output
+- ALTERNATIVE: Use string concatenation instead of .format() when content has many literal braces
+
 CRITICAL - AVOID EMPTY LIST ERRORS:
 List comprehensions with filters can produce empty lists causing "'a' cannot be empty" errors in np.random.choice().
 ALWAYS provide a fallback when filtering lists:
@@ -2990,7 +3004,27 @@ Fix the error and regenerate the COMPLETE data_generator.py from scratch:"""
         all_queries_file.write_text(json.dumps(all_queries_data, indent=2))
         logger.info(f"  Saved all_queries.json")
 
-        # Generate JSON loader as fallback (will be overwritten by LLM-generated module on success)
+        # Save pillar-specific JSON files from query_strategy
+        pillar = config.get('pillar', config.get('demo_type', 'search'))
+
+        # Security: save detection_rules.json and timeline_queries.json
+        if pillar == 'security' or config.get('demo_type') == 'security':
+            detection_rules = query_strategy.get('detection_rules', [])
+            timeline_queries = query_strategy.get('timeline_queries', [])
+            (module_path / 'detection_rules.json').write_text(json.dumps(detection_rules, indent=2))
+            (module_path / 'timeline_queries.json').write_text(json.dumps(timeline_queries, indent=2))
+            logger.info(f"  Saved detection_rules.json ({len(detection_rules)} rules), "
+                        f"timeline_queries.json ({len(timeline_queries)} steps)")
+
+        # Observability: save slo_queries.json and service_map.json
+        elif pillar == 'observability' or config.get('demo_type') == 'observability':
+            slo_queries = query_strategy.get('slo_queries', [])
+            service_map = query_strategy.get('service_map', {})
+            (module_path / 'slo_queries.json').write_text(json.dumps(slo_queries, indent=2))
+            (module_path / 'service_map.json').write_text(json.dumps(service_map, indent=2))
+            logger.info(f"  Saved slo_queries.json ({len(slo_queries)} SLOs), service_map.json")
+
+        # Generate JSON loader (includes pillar-specific methods)
         self._generate_json_loader_query_module(config, module_path)
 
         # Format data profile for prompt if available
@@ -3363,16 +3397,77 @@ This may result in field name mismatches or typos. Use extreme care with field n
         logger.info("Generated query_generator.py with strategy")
 
     def _generate_json_loader_query_module(self, config: Dict[str, Any], module_path: Path):
-        """Generate simple query_generator.py that loads from all_queries.json
+        """Generate simple query_generator.py that loads from JSON files.
 
-        This replaces the complex LLM-generated code with a simple loader template.
-        The queries are already in all_queries.json, so we just need methods to read them.
+        Core queries come from all_queries.json.
+        Pillar-specific data comes from detection_rules.json / timeline_queries.json
+        (security) or slo_queries.json / service_map.json (observability).
         """
         logger.info("Generating JSON loader query module...")
 
         company_class_name = config['company_name'].replace(" ", "").replace("-", "")
         company_name = config['company_name']
         department = config['department']
+        pillar = config.get('pillar', config.get('demo_type', 'search'))
+        sub_category = config.get('sub_category', '')
+
+        # Build pillar-specific extra methods
+        pillar_methods = ""
+
+        if pillar == 'security' or config.get('demo_type') == 'security':
+            pillar_methods = f'''
+    def generate_detection_rules(self) -> List[Dict[str, Any]]:
+        """Load Kibana Detection Engine rules (EQL format).
+
+        These rules can be exported and imported into Kibana Security > Rules.
+        Sub-category: {sub_category.upper() or 'SIEM'}
+        """
+        rules_file = Path(__file__).parent / 'detection_rules.json'
+        if rules_file.exists():
+            with open(rules_file, 'r') as f:
+                return json.load(f)
+        return []
+
+    def generate_timeline_queries(self) -> List[Dict[str, Any]]:
+        """Load attack timeline investigation queries (ES|QL format).
+
+        Each step maps to a MITRE ATT&CK technique and guides a SOC analyst
+        through the kill chain in sequence.
+        """
+        timeline_file = Path(__file__).parent / 'timeline_queries.json'
+        if timeline_file.exists():
+            with open(timeline_file, 'r') as f:
+                return json.load(f)
+        return []
+'''
+
+        elif pillar == 'observability' or config.get('demo_type') == 'observability':
+            pillar_methods = f'''
+    def generate_slo_queries(self) -> List[Dict[str, Any]]:
+        """Load SLO/SLI calculation queries.
+
+        Returns SLO definitions with SLI queries, burn rate queries,
+        and error budget calculations for each service.
+        Sub-category: {sub_category.upper() or 'APM'}
+        """
+        slo_file = Path(__file__).parent / 'slo_queries.json'
+        if slo_file.exists():
+            with open(slo_file, 'r') as f:
+                return json.load(f)
+        return []
+
+    def generate_service_map(self) -> Dict[str, Any]:
+        """Load service dependency topology map.
+
+        Returns service names, languages, versions, and dependency edges
+        for APM service map visualization.
+        """
+        map_file = Path(__file__).parent / 'service_map.json'
+        if map_file.exists():
+            with open(map_file, 'r') as f:
+                return json.load(f)
+        return {{"services": [], "dependencies": [], "entry_points": []}}
+'''
 
         code = f'''
 from src.framework.base import QueryGeneratorModule, DemoConfig
@@ -3383,8 +3478,14 @@ from pathlib import Path
 class {company_class_name}QueryGenerator(QueryGeneratorModule):
     """Query generator for {company_name} - {department}
 
-    Loads queries from all_queries.json instead of hardcoding them.
-    This makes queries easier to edit and maintain.
+    Pillar: {pillar.upper()}  Sub-category: {sub_category.upper() or 'default'}
+
+    Loads queries from JSON files for easy editing and maintenance:
+    - all_queries.json       → scripted, parameterized, RAG queries
+    - detection_rules.json  → Kibana Detection Engine rules (security)
+    - timeline_queries.json → kill-chain investigation steps (security)
+    - slo_queries.json      → SLO/SLI calculations (observability)
+    - service_map.json      → service topology (observability)
     """
 
     def __init__(self, config: DemoConfig, datasets: Dict[str, Any]):
@@ -3400,33 +3501,23 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
         return self._queries_cache
 
     def generate_queries(self) -> List[Dict[str, Any]]:
-        """Generate scripted queries (no user parameters)
-
-        Returns queries that can be run immediately without customization.
-        """
+        """Scripted ES|QL queries — run immediately, no user input needed."""
         return self._load_queries().get('scripted', [])
 
     def generate_parameterized_queries(self) -> List[Dict[str, Any]]:
-        """Generate parameterized queries that accept user input
-
-        Returns queries with parameters that users can customize.
-        These become Agent Builder tools that accept input.
-        """
+        """Parameterized queries with ?parameter syntax for Agent Builder tools."""
         return self._load_queries().get('parameterized', [])
 
     def generate_rag_queries(self) -> List[Dict[str, Any]]:
-        """Generate RAG queries using COMPLETION command
-
-        Returns queries that use the MATCH -> RERANK -> COMPLETION pipeline
-        for semantic search and generative AI responses.
-        """
+        """RAG queries using MATCH -> RERANK -> COMPLETION pipeline."""
         return self._load_queries().get('rag', [])
-'''
+{pillar_methods}'''
 
         # Write the generated code
         module_file = module_path / 'query_generator.py'
         module_file.write_text(code)
-        logger.info(f"  Generated query_generator.py ({len(code)} bytes) - JSON loader approach")
+        logger.info(f"  Generated query_generator.py ({len(code)} bytes) - "
+                    f"JSON loader [{pillar.upper()}]")
 
     def _generate_config_file(self, config: Dict[str, Any], module_path: Path):
         """Generate module configuration file"""
@@ -3434,8 +3525,12 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
         demo_type = config.get('demo_type', 'analytics')
 
         config_data = {
-            "_comment": "demo_type: 'search' (document retrieval/RAG) or 'analytics' (metrics/trends)",
+            "_comment": "demo_type: 'search' | 'analytics' | 'security' | 'observability'  pillar: 'search' | 'observability' | 'security'",
             "demo_type": demo_type,
+            "pillar": config.get('pillar', demo_type if demo_type in ('search', 'security', 'observability') else 'search'),
+            "sub_category": config.get('sub_category', ''),
+            "compliance_frameworks": config.get('compliance_frameworks', []),
+            "mitre_tactics": config.get('mitre_tactics', []),
             "module_version": "1.0.0",
             "generated_at": datetime.now().isoformat(),
             "customer_context": config,
