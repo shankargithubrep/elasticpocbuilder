@@ -1,8 +1,8 @@
-# Elastic POC Builder Expansion Prompts
+# Elastic Demo Builder Expansion Prompts
 
-When **Prompt Expansion** is enabled (the default), Elastic POC Builder feeds your brief customer description through one of these prompts before generation begins. The result is a rich, domain-specific technical context document that drives all downstream pipeline stages — query strategy, data generation, and the demo guide.
+When **Prompt Expansion** is enabled (the default), Elastic Demo Builder feeds your brief customer description through one of these prompts before generation begins. The result is a rich, domain-specific technical context document that drives all downstream pipeline stages — query strategy, data generation, and the demo guide.
 
-Elastic POC Builder auto-detects which template to use based on keywords in your input:
+Elastic Demo Builder auto-detects which template to use based on keywords in your input:
 - **Observability/Analytics** — triggered by: monitor, metrics, APM, logs, infrastructure, aggregate, trend, analytics, etc.
 - **Search & Retrieval** — triggered by: search, find, retrieve, lookup, knowledge base, RAG, semantic, documents, etc.
 

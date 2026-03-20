@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 # Page configuration
 st.set_page_config(
-    page_title="Elastic POC Builder",
+    page_title="Elastic Demo Builder",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",

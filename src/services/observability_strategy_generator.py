@@ -317,7 +317,7 @@ IMPORTANT:
         subcategory_guidance: str,
     ) -> str:
         """Prompt specifically for MOTLP (Managed OTLP) demos — native OTLP field conventions."""
-        return f"""You are an Elastic Observability expert designing a MOTLP (Managed OTLP) demo for Elastic POC Builder.
+        return f"""You are an Elastic Observability expert designing a MOTLP (Managed OTLP) demo for Elastic Demo Builder.
 
 MOTLP is Elastic's cloud-native ingestion layer that accepts OpenTelemetry data directly via OTLP.
 Unlike the classic APM Agent, MOTLP preserves native OTLP field names — NO ECS translation.

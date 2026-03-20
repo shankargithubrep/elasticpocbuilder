@@ -46,8 +46,8 @@ def _render_settings_expander():
 
     status = st.session_state.app_status
 
-    with st.expander("⚡ Elastic POC Builder · Settings", expanded=False):
-        st.caption("Elastic POC Builder helps create custom demo modules containing sample data, queries, and agentic tools.")
+    with st.expander("⚡ Elastic Demo Builder · Settings", expanded=False):
+        st.caption("Elastic Demo Builder helps create custom demo modules containing sample data, queries, and agentic tools.")
 
         # ES test buttons
         col1, col2, col3 = st.columns(3)
@@ -98,7 +98,7 @@ def _render_settings_expander():
 
         expansion_enabled = st.checkbox(
             "Prompt expansion", key="expansion_toggle",
-            help="When enabled, Elastic POC Builder uses an LLM to expand your brief prompt into a detailed "
+            help="When enabled, Elastic Demo Builder uses an LLM to expand your brief prompt into a detailed "
                  "technical context before generating the demo. Produces higher-quality modules. "
                  "Disable for direct processing of already-detailed prompts."
         )
@@ -471,7 +471,7 @@ def render_sidebar():
             st.rerun()
 
         # About button
-        if st.button("💡 About Elastic POC Builder", use_container_width=True, key="under_the_hood_btn"):
+        if st.button("💡 About Elastic Demo Builder", use_container_width=True, key="under_the_hood_btn"):
             st.session_state.show_under_the_hood = True
             st.rerun()
 

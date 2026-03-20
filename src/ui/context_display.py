@@ -21,7 +21,7 @@ def display_context_summary():
 
     st.caption(
         "**Extracted Context**",
-        help="Context extracted from your prompt. Elastic POC Builder uses this to generate realistic data, queries, and demo guides tailored to your customer scenario. All fields should be filled before generation — it will prompt you for any missing details."
+        help="Context extracted from your prompt. Elastic Demo Builder uses this to generate realistic data, queries, and demo guides tailored to your customer scenario. All fields should be filled before generation — it will prompt you for any missing details."
     )
 
     # Show demo type if detected

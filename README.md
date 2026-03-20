@@ -1,6 +1,6 @@
-# Elastic POC Builder: AI-Powered POC Generator for Elastic
+# Elastic Demo Builder: AI-Powered POC Generator for Elastic
 
-Generate complete Elastic Agent Builder demos from a single prompt. Elastic POC Builder uses LLM code generation to create custom data, ES|QL queries, and demo narratives tailored to any industry or use case. Each demo is a standalone Python module you can version control, share, and refine.
+Generate complete Elastic Agent Builder demos from a single prompt. Elastic Demo Builder uses LLM code generation to create custom data, ES|QL queries, and demo narratives tailored to any industry or use case. Each demo is a standalone Python module you can version control, share, and refine.
 
 ---
 
@@ -187,7 +187,7 @@ Modules are self-contained — you can copy a `demos/` folder to share a complet
 
 ### LLM Providers
 
-Elastic POC Builder checks for LLM credentials in this order:
+Elastic Demo Builder checks for LLM credentials in this order:
 
 | Priority | Provider | Env Vars |
 |----------|----------|----------|

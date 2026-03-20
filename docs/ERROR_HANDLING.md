@@ -1,6 +1,6 @@
 # Error Handling System
 
-This document describes the comprehensive error handling system implemented in Elastic POC Builder to provide user-friendly error messages and actionable guidance when things go wrong.
+This document describes the comprehensive error handling system implemented in Elastic Demo Builder to provide user-friendly error messages and actionable guidance when things go wrong.
 
 ## Overview
 

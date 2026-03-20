@@ -1,5 +1,5 @@
 """
-Help Chat Service - LLM-powered contextual assistance for Elastic POC Builder.
+Help Chat Service - LLM-powered contextual assistance for Elastic Demo Builder.
 
 Provides:
 - Contextual help responses based on current UI state
@@ -32,7 +32,7 @@ except ImportError:
 FAQ_RESPONSES = {
     # Universal FAQ - appears in all contexts
     "How do I use this app?": """
-**Getting Started with Elastic POC Builder**
+**Getting Started with Elastic Demo Builder**
 
 **1. Check Your Setup** (expand Status in sidebar)
 - Verify LLM and Elasticsearch are connected
@@ -345,7 +345,7 @@ The guide is generated Python code, so you can also add conditional logic for di
 
 class HelpChatService:
     """
-    LLM-powered contextual help service for Elastic POC Builder.
+    LLM-powered contextual help service for Elastic Demo Builder.
 
     Provides intelligent responses about using the demo-builder,
     with awareness of current UI context (mode, tab, loaded module).
@@ -439,9 +439,9 @@ class HelpChatService:
 
     def _build_system_prompt(self) -> str:
         """Build system prompt with CLAUDE.md documentation."""
-        base_prompt = """You are the Elastic POC Builder Help Assistant, an expert guide for the Elastic POC Builder demo-builder platform.
+        base_prompt = """You are the Elastic Demo Builder Help Assistant, an expert guide for the Elastic Demo Builder demo-builder platform.
 
-Your role is to help users understand and effectively use Elastic POC Builder to create Elastic Agent Builder demonstrations.
+Your role is to help users understand and effectively use Elastic Demo Builder to create Elastic Agent Builder demonstrations.
 
 Key responsibilities:
 - Explain features and workflows clearly
@@ -460,7 +460,7 @@ Communication style:
         claude_md_content = self._load_claude_md()
         if claude_md_content:
             base_prompt += f"""
-Here is comprehensive documentation about Elastic POC Builder:
+Here is comprehensive documentation about Elastic Demo Builder:
 
 {claude_md_content}
 

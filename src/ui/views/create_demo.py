@@ -27,7 +27,7 @@ def render_create_demo_view():
     if not st.session_state.messages:
         st.markdown("### ⚡ Generate a Custom Demo")
 
-        st.info("Elastic POC Builder will automatically create a **Search/RAG** or **Analytics** demo module "
+        st.info("Elastic Demo Builder will automatically create a **Search/RAG** or **Analytics** demo module "
                 "based on your prompt. To see examples of each type, click **Browse** in the sidebar.")
 
         st.markdown("""
@@ -39,7 +39,7 @@ def render_create_demo_view():
         - **Use Cases** — what do they want to accomplish?
         - **Key Metrics** — what do they measure?
 
-        Don't worry if you're missing some details — just say so in your prompt and Elastic POC Builder will fill in the gaps. The more context you provide, the better the output.
+        Don't worry if you're missing some details — just say so in your prompt and Elastic Demo Builder will fill in the gaps. The more context you provide, the better the output.
         """)
         st.caption("Module generation is LLM-assisted — some variance is expected. "
                    "If generation fails, try again or use a smarter model.")
