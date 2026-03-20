@@ -892,7 +892,11 @@ ES|QL Key Features:
                 formatted += f"  Semantic Fields: {', '.join(reqs['semantic_fields'])}\n"
 
             if reqs.get('relationships'):
-                formatted += f"  Relationships: {', '.join(reqs['relationships'])}\n"
+                # Relationships may be strings or dicts — normalise to strings
+                rels = []
+                for r in reqs['relationships']:
+                    rels.append(str(r) if not isinstance(r, str) else r)
+                formatted += f"  Relationships: {', '.join(rels)}\n"
 
             formatted += "\n"
 

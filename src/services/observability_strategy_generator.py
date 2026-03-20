@@ -86,7 +86,7 @@ class ObservabilityStrategyGenerator:
         esql_skill = self._read_esql_skill()
         obs_skill = self._read_observability_skill()
 
-        num_queries = 5
+        num_queries = 3
         max_retries = 4
 
         for attempt in range(max_retries):

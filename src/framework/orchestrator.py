@@ -713,7 +713,9 @@ class ModularDemoOrchestrator:
             progress_callback(0.83, "📝 Generating demo guide with tested queries...")
 
         try:
-            self.module_generator._generate_guide_module(config, Path(module_path))
+            # Ensure top-level keys exist even if stored under customer_context
+            guide_config = {**config.get('customer_context', {}), **config}
+            self.module_generator._generate_guide_module(guide_config, Path(module_path))
             results['phases']['guide_generation'] = {'status': 'completed'}
             logger.info("Guide generation completed with access to tested queries and data profile")
         except Exception as e:
