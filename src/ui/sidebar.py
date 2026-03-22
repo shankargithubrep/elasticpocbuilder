@@ -291,6 +291,172 @@ def _render_settings_expander():
 
             st.caption("Overrides apply to this session only and are not saved to disk.")
 
+        # ── Multi-Region Setup ────────────────────────────────────────────────
+        st.divider()
+        _render_multi_region_settings()
+
+
+def _render_multi_region_settings():
+    """Multi-Region Elastic cluster management inside the Settings expander."""
+    from src.services.region_config_service import RegionConfig, RegionConfigService, REGION_META
+
+    st.markdown("**🌍 Multi-Region Elastic Setup**")
+    st.caption(
+        "Configure multiple Elastic clusters for data residency scenarios "
+        "(e.g. US data stays in AWS us-east-1, EU data stays in AWS eu-west-1)."
+    )
+
+    svc = RegionConfigService()
+
+    # Init session state for region editor
+    if "mr_regions" not in st.session_state:
+        st.session_state.mr_regions = svc.load_all()
+    if "mr_adding" not in st.session_state:
+        st.session_state.mr_adding = False
+    if "mr_testing" not in st.session_state:
+        st.session_state.mr_testing = {}
+
+    regions = st.session_state.mr_regions
+
+    # ── Existing regions list ─────────────────────────────────────────────
+    if regions:
+        for i, r in enumerate(regions):
+            configured = r.is_configured()
+            status_icon = "🟢" if configured else "🔴"
+            with st.container(border=True):
+                h_col, del_col = st.columns([5, 1])
+                with h_col:
+                    st.markdown(f"{status_icon} **{r.display_name}**")
+                    st.caption(r.cloud_label or r.region_code)
+                with del_col:
+                    if st.button("✕", key=f"mr_del_{i}", help="Remove this region"):
+                        regions.pop(i)
+                        svc.save(regions)
+                        st.session_state.mr_regions = regions
+                        st.rerun()
+
+                # Inline credential fields
+                new_url = st.text_input(
+                    "Elasticsearch URL",
+                    value=r.es_url,
+                    key=f"mr_url_{i}",
+                    label_visibility="collapsed",
+                    placeholder="https://xxx.es.io:9243",
+                )
+                new_key = st.text_input(
+                    "API Key",
+                    value=r.api_key,
+                    key=f"mr_key_{i}",
+                    label_visibility="collapsed",
+                    placeholder="Elasticsearch API Key",
+                    type="password",
+                )
+                new_kb = st.text_input(
+                    "Kibana URL (optional)",
+                    value=r.kibana_url,
+                    key=f"mr_kb_{i}",
+                    label_visibility="collapsed",
+                    placeholder="https://xxx.kb.io:5601 (optional)",
+                )
+
+                save_col, test_col = st.columns(2)
+                with save_col:
+                    if st.button("💾 Save", key=f"mr_save_{i}", use_container_width=True):
+                        regions[i].es_url = new_url
+                        regions[i].api_key = new_key
+                        regions[i].kibana_url = new_kb
+                        svc.save(regions)
+                        st.session_state.mr_regions = regions
+                        st.success(f"Saved {r.name}")
+                        st.rerun()
+                with test_col:
+                    if st.button("🔌 Test", key=f"mr_test_{i}", use_container_width=True):
+                        from src.services.multi_region_elastic_client import RegionClient
+                        test_cfg = RegionConfig(
+                            name=r.name, region_code=r.region_code,
+                            es_url=new_url, api_key=new_key, kibana_url=new_kb,
+                        )
+                        ok, msg = RegionClient(test_cfg).ping()
+                        st.session_state.mr_testing[i] = (ok, msg)
+                        st.rerun()
+
+                if i in st.session_state.mr_testing:
+                    ok, msg = st.session_state.mr_testing[i]
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+    else:
+        st.info("No regions configured yet. Add your first region below.")
+
+    # ── Add new region form ───────────────────────────────────────────────
+    if st.button("➕ Add Region", key="mr_add_btn", use_container_width=True):
+        st.session_state.mr_adding = True
+
+    if st.session_state.mr_adding:
+        with st.container(border=True):
+            st.markdown("**New Region**")
+
+            region_options = ["custom"] + list(REGION_META.keys())
+            region_labels  = {k: f"{REGION_META[k]['flag']} {REGION_META[k]['label']}" for k in REGION_META}
+            region_labels["custom"] = "Custom / Self-hosted"
+
+            chosen_code = st.selectbox(
+                "Region",
+                options=region_options,
+                format_func=lambda x: region_labels.get(x, x),
+                key="mr_new_code",
+                label_visibility="collapsed",
+            )
+
+            default_name = REGION_META.get(chosen_code, {}).get("label", "").split("(")[0].strip() or "Primary"
+            new_name = st.text_input("Display name", value=default_name, key="mr_new_name",
+                                     placeholder="e.g. US East, EU West")
+            new_url  = st.text_input("Elasticsearch URL", key="mr_new_url",
+                                     placeholder="https://xxx.es.io:9243",
+                                     label_visibility="collapsed")
+            new_key  = st.text_input("API Key", key="mr_new_key", type="password",
+                                     placeholder="Elasticsearch API Key",
+                                     label_visibility="collapsed")
+            new_kb   = st.text_input("Kibana URL (optional)", key="mr_new_kb",
+                                     placeholder="https://xxx.kb.io:5601",
+                                     label_visibility="collapsed")
+            is_primary = st.checkbox("Set as primary region", value=len(regions) == 0,
+                                     key="mr_new_primary")
+
+            add_col, cancel_col = st.columns(2)
+            with add_col:
+                if st.button("✅ Add", key="mr_confirm_add", use_container_width=True, type="primary"):
+                    if new_name and new_url:
+                        if is_primary:
+                            for r in regions:
+                                r.is_primary = False
+                        new_region = RegionConfig(
+                            name=new_name,
+                            region_code=chosen_code if chosen_code != "custom" else new_name.lower().replace(" ", "-"),
+                            es_url=new_url,
+                            api_key=new_key,
+                            kibana_url=new_kb,
+                            is_primary=is_primary,
+                        )
+                        regions.append(new_region)
+                        svc.save(regions)
+                        st.session_state.mr_regions = regions
+                        st.session_state.mr_adding = False
+                        st.rerun()
+                    else:
+                        st.error("Name and Elasticsearch URL are required.")
+            with cancel_col:
+                if st.button("Cancel", key="mr_cancel_add", use_container_width=True):
+                    st.session_state.mr_adding = False
+                    st.rerun()
+
+    # ── .env template ─────────────────────────────────────────────────────
+    if regions:
+        with st.expander("📋 .env snippet for these regions", expanded=False):
+            env_text = svc.get_env_template(regions)
+            st.code(env_text, language="bash")
+
 
 def _render_prompt_history():
     """Render the collapsible Prompt History expander in Create mode."""
