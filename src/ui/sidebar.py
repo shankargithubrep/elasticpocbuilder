@@ -78,6 +78,27 @@ def _render_settings_expander():
                 except Exception as e:
                     st.error(f"❌ {e}")
 
+        # Embedding model status check (context-aware)
+        selected_embedding = st.session_state.inference_endpoints.get("embedding_model_name", "ELSER")
+        if selected_embedding in ("E5 Multilingual", "Jina"):
+            btn_label = f"🌍 Check {selected_embedding} model"
+            if st.button(btn_label, key="test_embedding_model_btn", use_container_width=True):
+                from src.services.search_preflight_service import SearchPreflightService
+                try:
+                    svc = SearchPreflightService()
+                    if selected_embedding == "E5 Multilingual":
+                        check = svc._check_ml_model(SearchPreflightService.E5_MODEL_ID, "E5 Multilingual")
+                        hint = "Start it in Kibana → Machine Learning → Trained Models"
+                    else:
+                        check = svc._check_jina_endpoint()
+                        hint = "Check your JINA_API_KEY and internet connectivity"
+                    if check.passed:
+                        st.success(f"✅ {selected_embedding}: {check.message}")
+                    else:
+                        st.warning(f"⚠️ {selected_embedding}: {check.message} — {hint}")
+                except Exception as e:
+                    st.error(f"❌ Check failed: {e}")
+
         with col3:
             if st.button("Refresh", key="refresh_status_btn", use_container_width=True):
                 if "app_status" in st.session_state:
@@ -104,44 +125,59 @@ def _render_settings_expander():
         )
         st.session_state.ai_expansion_enabled = expansion_enabled
 
-        # Embedding Type
-        st.caption("**Embedding Type**")
-        embedding_options = ["sparse", "dense", "custom"]
-        current = st.session_state.inference_endpoints.get("embedding_type", "sparse")
-        current_index = embedding_options.index(current) if current in embedding_options else 0
+        # Embedding Model selector
+        st.caption("**Embedding Model**")
+        EMBEDDING_OPTIONS = {
+            "ELSER": {
+                "model_key": "elser",
+                "label": "ELSER  —  Sparse · English optimized",
+                "help": "`.elser-2-elasticsearch` — Sparse semantic search, keyword-aware, best for English demos.",
+            },
+            "E5 Multilingual": {
+                "model_key": "e5",
+                "label": "E5 Multilingual  —  Dense · 100+ languages",
+                "help": "`.multilingual-e5-small` — Dense embeddings (384 dims), multilingual support. Best for global demos (Genesys, international KB search).",
+            },
+            "Jina": {
+                "model_key": "jina",
+                "label": "Jina  —  Dense · Long-context multilingual",
+                "help": "`jina-embeddings-v3` via Elastic Inference Endpoint. Supports 8K token context, ideal for PDF / long-document demos. Requires `JINA_API_KEY` in `.env`.",
+            },
+        }
 
-        embedding_type = st.radio(
-            "Embedding Type",
-            options=embedding_options,
+        current_key = st.session_state.inference_endpoints.get("embedding_model_name", "ELSER")
+        if current_key not in EMBEDDING_OPTIONS:
+            current_key = "ELSER"
+        current_index = list(EMBEDDING_OPTIONS.keys()).index(current_key)
+
+        selected_model_name = st.radio(
+            "Embedding Model",
+            options=list(EMBEDDING_OPTIONS.keys()),
             index=current_index,
-            help="Sparse (ELSER) for English keyword-aware search; Dense (Jina) for multilingual semantic search; Custom for your own endpoint",
-            key="embedding_type_radio",
-            horizontal=True,
-            label_visibility="collapsed"
+            key="embedding_model_radio",
+            horizontal=False,
+            label_visibility="collapsed",
         )
-        st.session_state.inference_endpoints["embedding_type"] = embedding_type
+        cfg = EMBEDDING_OPTIONS[selected_model_name]
+        st.caption(f"ℹ️ {cfg['help']}")
 
-        if embedding_type == "custom":
-            custom_endpoint = st.text_input(
-                "Custom embedding endpoint",
-                value=st.session_state.inference_endpoints.get("custom_embedding", ""),
-                help="Your custom inference endpoint ID. You must also select the vector type below.",
-                key="custom_embedding_endpoint_input",
-                label_visibility="collapsed",
-                placeholder="my-custom-embedding-endpoint"
-            )
-            st.session_state.inference_endpoints["custom_embedding"] = custom_endpoint
+        st.session_state.inference_endpoints["embedding_model_name"] = selected_model_name
+        st.session_state.inference_endpoints["embedding_type"] = cfg["model_key"]
 
-            custom_vector_type = st.radio(
-                "Vector type",
-                options=["sparse", "dense"],
-                index=0,
-                help="Does your custom endpoint produce sparse or dense vectors?",
-                key="custom_vector_type_radio",
-                horizontal=True,
-                label_visibility="collapsed"
+        # Jina: show API key input
+        if selected_model_name == "Jina":
+            import os
+            jina_key = st.text_input(
+                "Jina API Key",
+                value=os.getenv("JINA_API_KEY", ""),
+                type="password",
+                key="jina_api_key_input",
+                help="Get your key at https://jina.ai — paste here or add `JINA_API_KEY=...` to `.env`",
+                placeholder="jina_...",
             )
-            st.session_state.inference_endpoints["custom_vector_type"] = custom_vector_type
+            if jina_key:
+                os.environ["JINA_API_KEY"] = jina_key
+                st.session_state.inference_endpoints["jina_api_key"] = jina_key
 
         # Custom LLM Model
         default_model = _get_default_llm_model()
@@ -300,14 +336,14 @@ def render_sidebar():
             st.rerun()
 
     with col3:
-        help_label = "Help ✓" if st.session_state.help_chat_visible else "Help"
+        help_selected = st.session_state.view_mode == "help"
         if st.button(
-            help_label,
+            "Help",
             use_container_width=True,
-            type="primary" if st.session_state.help_chat_visible else "secondary",
+            type="primary" if help_selected else "secondary",
             key="help_toggle_btn"
         ):
-            st.session_state.help_chat_visible = not st.session_state.help_chat_visible
+            st.session_state.view_mode = "help"
             st.rerun()
 
     # If help is visible, show chat at top of sidebar

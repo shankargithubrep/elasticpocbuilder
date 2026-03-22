@@ -137,6 +137,17 @@ def render_data_tab():
                         if all_success and len(batch_results) == len(datasets):
                             progress_service.mark_data_indexed()
                             st.success("🎉 Batch indexing complete!")
+                            # Auto-create Kibana Data Views so Discover works immediately
+                            try:
+                                from src.services.kibana_assets_service import KibanaAssetsService
+                                kibana_svc = KibanaAssetsService()
+                                successful_indices = [name for name, r in batch_results.items() if r["success"]]
+                                if successful_indices:
+                                    dv_ids = kibana_svc.ensure_data_views(successful_indices)
+                                    if dv_ids:
+                                        st.success(f"🔍 Kibana Data Views created for: {', '.join(successful_indices)}")
+                            except Exception as dv_err:
+                                logger.warning(f"Could not auto-create Data Views: {dv_err}")
                         else:
                             failed_count = sum(1 for r in batch_results.values() if not r["success"])
                             st.warning(f"⚠️ Batch indexing finished with {failed_count} failure(s)")

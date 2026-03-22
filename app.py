@@ -142,9 +142,12 @@ def main():
 
         render_under_the_hood()
     else:
-        # Render main content based on mode (Create or Browse only)
+        # Render main content based on mode
         if st.session_state.view_mode == "create":
             render_create_demo_view()
+        elif st.session_state.view_mode == "help":
+            from src.ui.views.help_docs import render_help_docs
+            render_help_docs()
         else:
             render_browse_demos_view()
 

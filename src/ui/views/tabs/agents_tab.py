@@ -46,6 +46,9 @@ def render_agents_tab(agent_builder):
         # Section 1: Deployed Agents
         st.markdown("#### 🤖 Deployed Agents")
 
+        # Initialize deployed_agents so it's always defined for the Deploy form below
+        deployed_agents = []
+
         # Check connection
         if not agent_builder.validate_connection()['success']:
             st.error("❌ Cannot connect to Elastic Agent Builder. Please check your environment variables.")

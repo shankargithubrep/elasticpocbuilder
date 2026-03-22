@@ -323,21 +323,21 @@ class ModuleGenerator:
         size_ranges = {
             'small': {
                 'total_max': 5000,
-                'per_dataset_max': 1000,
-                'per_dataset_typical': '200-500',
-                'timeseries_max': 3000,
-                'timeseries_typical': '1000-2000',
-                'reference_max': 500,
-                'reference_typical': '50-200'
+                'per_dataset_max': 300,
+                'per_dataset_typical': '100-200',
+                'timeseries_max': 500,
+                'timeseries_typical': '200-400',
+                'reference_max': 200,
+                'reference_typical': '50-100'
             },
             'medium': {
                 'total_max': 15000,
-                'per_dataset_max': 3000,
-                'per_dataset_typical': '500-1500',
-                'timeseries_max': 10000,
-                'timeseries_typical': '3000-6000',
-                'reference_max': 2000,
-                'reference_typical': '200-1000'
+                'per_dataset_max': 500,
+                'per_dataset_typical': '200-400',
+                'timeseries_max': 1000,
+                'timeseries_typical': '400-800',
+                'reference_max': 500,
+                'reference_typical': '100-300'
             },
             'large': {
                 'total_max': 50000,
@@ -1778,21 +1778,24 @@ Department: {config["department"]}
 Dataset size: {row_guidance} ({size_preference.upper()} preference)
 
 CRITICAL RULES:
+- Keep this method UNDER 120 LINES TOTAL (including blank lines) — be concise
+- Use n = 300 records MAX — do not exceed this regardless of dataset type
 - ALL arrays in pd.DataFrame() MUST have EXACTLY the same length
 - @timestamp columns MUST use datetime.now() as END date, go BACKWARDS max 120 days
 - NEVER hardcode dates like '2023-01-01'
 - For geo_point fields: use dict with 'lat' and 'lon' keys
 - For semantic_text fields: generate ONLY that field (no separate text duplicate)
-- NEVER generate random vector/embedding arrays (e.g. np.random.rand(384).tolist()). Vector search uses semantic_text fields — Elasticsearch generates embeddings automatically via ELSER. Do NOT create fields like "embedding", "vector", or any dense_vector columns.
+- NEVER generate random vector/embedding arrays. Do NOT create fields like "embedding", "vector", or any dense_vector columns.
 - Generate rows as COMPLETE ENTITIES - all fields logically consistent
 - Every text/semantic_text value MUST be unique across all rows
 - When using .format(), ensure placeholder names EXACTLY match keyword arguments
 - Avoid empty list errors: always provide fallback for filtered lists
 - F-strings CANNOT contain backslash escapes inside {{}} expression parts
 - ALL string literals MUST fit on a SINGLE LINE - never let a string wrap across lines
-- Keep description strings concise (under 200 chars) to avoid line-length issues
+- Keep description strings concise (under 150 chars) to avoid line-length issues
 - Use self.safe_choice() instead of np.random.choice() - NEVER call np.random.choice directly
 - Use self.random_timedelta() for timestamps - NEVER construct timestamps manually
+- Limit choice lists to 8-10 items MAX — avoid long inline arrays
 
 These helper methods are ALREADY DEFINED on the class. Use them exactly as shown:
 
@@ -1833,7 +1836,7 @@ ENHANCED DATA: Use skewed distributions (beta, lognormal, poisson) for numeric f
 Use weighted choices for categorical fields. Create realistic clustering patterns."""
 
         if self.llm_client:
-            code = self._call_llm_for_method(prompt, max_tokens=16000)
+            code = self._call_llm_for_method(prompt, max_tokens=8000)
 
             # Validate method syntax early (before combining with other methods)
             # Much cheaper to retry one method than fix a 900+ line combined module
@@ -1856,11 +1859,24 @@ Generate the corrected method:"""
 
                 code = self._call_llm_for_method(retry_prompt, max_tokens=16000)
 
-                # Check again - if still broken, try a quick fix
+                # Check again - if still broken, try structural fix first then string fix
                 syntax_error_2 = self._check_method_syntax(code, dataset_name)
                 if syntax_error_2:
-                    logger.warning(f"⚠️ Retry also has syntax error: {syntax_error_2}. Attempting quick fix...")
-                    code = self._fix_unterminated_strings(code)
+                    logger.warning(f"⚠️ Retry also has syntax error: {syntax_error_2}. Attempting structural fix...")
+                    try:
+                        import ast as _ast
+                        compile(code, dataset_name, 'exec')
+                    except SyntaxError as _se:
+                        structurally_fixed = self._structural_fix(code, _se)
+                        if structurally_fixed:
+                            remaining_err = self._check_method_syntax(structurally_fixed, dataset_name)
+                            if not remaining_err:
+                                logger.info(f"✅ Structural fix resolved syntax error in {dataset_name}")
+                                code = structurally_fixed
+                            else:
+                                code = self._fix_unterminated_strings(code)
+                        else:
+                            code = self._fix_unterminated_strings(code)
         else:
             # Mock fallback for testing
             code = f"""def _generate_{dataset_name}(self):
@@ -2289,21 +2305,21 @@ class {company_class}DataGenerator(DataGeneratorModule):
         size_ranges = {
             'small': {
                 'total_max': 5000,
-                'per_dataset_max': 1000,
-                'per_dataset_typical': '200-500',
-                'timeseries_max': 3000,
-                'timeseries_typical': '1000-2000',
-                'reference_max': 500,
-                'reference_typical': '50-200'
+                'per_dataset_max': 300,
+                'per_dataset_typical': '100-200',
+                'timeseries_max': 500,
+                'timeseries_typical': '200-400',
+                'reference_max': 200,
+                'reference_typical': '50-100'
             },
             'medium': {
                 'total_max': 15000,
-                'per_dataset_max': 3000,
-                'per_dataset_typical': '500-1500',
-                'timeseries_max': 10000,
-                'timeseries_typical': '3000-6000',
-                'reference_max': 2000,
-                'reference_typical': '200-1000'
+                'per_dataset_max': 500,
+                'per_dataset_typical': '200-400',
+                'timeseries_max': 1000,
+                'timeseries_typical': '400-800',
+                'reference_max': 500,
+                'reference_typical': '100-300'
             },
             'large': {
                 'total_max': 50000,
@@ -2320,7 +2336,13 @@ class {company_class}DataGenerator(DataGeneratorModule):
 
         # Determine if we should use per-dataset split approach
         # Split when: 2+ datasets AND data_specifications available (rich field specs per dataset)
+        MAX_DATASETS = 6  # Hard cap — more than 6 datasets creates files too large to reliably generate
         num_datasets = len(data_requirements)
+        if num_datasets > MAX_DATASETS:
+            logger.warning(f"Capping datasets from {num_datasets} to {MAX_DATASETS} to keep generated files manageable")
+            data_requirements = dict(list(data_requirements.items())[:MAX_DATASETS])
+            num_datasets = MAX_DATASETS
+
         use_split = num_datasets >= 2 and data_specifications is not None
         use_enhanced = config.get('use_enhanced_generation', False)
 
@@ -2330,6 +2352,9 @@ class {company_class}DataGenerator(DataGeneratorModule):
             logger.info(f"Using per-dataset split approach for {num_datasets} datasets")
 
             datasets_spec = data_specifications.get('datasets', {})
+            # Also cap datasets_spec to match the capped data_requirements
+            if len(datasets_spec) > MAX_DATASETS:
+                datasets_spec = dict(list(datasets_spec.items())[:MAX_DATASETS])
             dataset_methods = {}
 
             for i, (ds_name, ds_spec) in enumerate(datasets_spec.items(), 1):
@@ -2875,7 +2900,8 @@ Generate the complete implementation with ALL required fields:"""
         # (e.g. "All arrays must be of the same length") before they surface during demo run
         if self.llm_client:
             exec_error = self._test_execute_data_generator(module_path, config)
-            if exec_error:
+            if exec_error and not use_split:
+                # Single-call path: retry with the original prompt + error context
                 logger.warning(f"Data generator execution failed, retrying with error context:\n{exec_error[:400]}")
                 retry_prompt = prompt + f"""
 
@@ -2903,6 +2929,9 @@ Fix the error and regenerate the COMPLETE data_generator.py from scratch:"""
                         f"Data generator failed after one retry.\nError:\n{exec_error2}"
                     )
                 logger.info("Retried data_generator.py executed successfully")
+            elif exec_error:
+                # Split path: prompt is not available; log and continue
+                logger.warning(f"Data generator execution failed (split path, no retry): {exec_error[:400]}")
 
     def _test_execute_data_generator(self, module_path: Path, config: Dict[str, Any]) -> Optional[str]:
         """Test-execute generate_datasets() on a freshly generated data_generator.py.
@@ -3023,6 +3052,20 @@ Fix the error and regenerate the COMPLETE data_generator.py from scratch:"""
             (module_path / 'slo_queries.json').write_text(json.dumps(slo_queries, indent=2))
             (module_path / 'service_map.json').write_text(json.dumps(service_map, indent=2))
             logger.info(f"  Saved slo_queries.json ({len(slo_queries)} SLOs), service_map.json")
+
+        # Generate scenarios.json for Live Replay (all pillars)
+        scenarios_path = module_path / 'scenarios.json'
+        if not scenarios_path.exists():
+            try:
+                from src.services.scenario_generator import ScenarioGenerator
+                scenario_config = {**config.get('customer_context', {}), **config}
+                scenario_config['datasets'] = query_strategy.get('datasets', [])
+                gen = ScenarioGenerator(self.llm_client)
+                scenarios = gen.generate(scenario_config)
+                scenarios_path.write_text(json.dumps(scenarios, indent=2))
+                logger.info(f"  Saved scenarios.json ({len(scenarios)} scenarios)")
+            except Exception as e:
+                logger.warning(f"  Could not generate scenarios.json: {e}")
 
         # Generate JSON loader (includes pillar-specific methods)
         self._generate_json_loader_query_module(config, module_path)
@@ -4402,37 +4445,111 @@ FROM index METADATA _score
             if not auto_fix or not self.llm_client:
                 raise SyntaxError(f"Generated code has syntax error at line {e.lineno}: {e.msg}")
 
-            # Attempt LLM-assisted fix
-            logger.info(f"🔧 Attempting auto-fix of syntax error in {module_name}...")
-            error_context = self._get_error_context(code, e.lineno)
-            fix_prompt = f"""The following Python code has a syntax error at line {e.lineno}: {e.msg}
+            # Step 1: Try cheap structural fixes first (no LLM needed)
+            logger.info(f"🔧 Attempting structural auto-fix for {module_name}...")
+            structurally_fixed = self._structural_fix(code, e)
+            if structurally_fixed:
+                try:
+                    compile(structurally_fixed, module_name, 'exec')
+                    logger.info(f"✅ Structural fix succeeded for {module_name}")
+                    return structurally_fixed
+                except SyntaxError:
+                    pass  # Fall through to LLM fix
+
+            # Step 2: LLM fix — only send the broken section, not the whole file
+            logger.info(f"🔧 Attempting LLM auto-fix of syntax error in {module_name}...")
+            error_context = self._get_error_context(code, e.lineno, context_lines=15)
+            fix_prompt = f"""Fix this Python syntax error: {e.msg} at line {e.lineno}
 
 Error context (lines around the error):
-```
+```python
 {error_context}
 ```
 
-The problematic line text: {e.text}
+The problematic line: {e.text}
 
-Common causes of "unterminated string literal":
-- A string opened with a quote but not closed on the same line (use triple quotes for multi-line)
-- An apostrophe inside a single-quoted string (use double quotes or escape)
-- A backslash at the end of a string that escapes the closing quote
+Rules:
+- Keep ALL string values on a SINGLE LINE (no unescaped newlines in strings)
+- Close any unclosed dict/list/tuple/f-string bracket
+- Return ONLY the fixed version of the lines shown above (not the whole file)
+- Do not add explanations"""
+            try:
+                fixed_section = self._call_llm(fix_prompt)
+                # Splice the fixed section back into the full code
+                lines = code.split('\n')
+                start = max(0, e.lineno - 16)
+                end = min(len(lines), e.lineno + 15)
+                fixed_lines = fixed_section.strip().split('\n')
+                spliced = lines[:start] + fixed_lines + lines[end:]
+                spliced_code = '\n'.join(spliced)
+                compile(spliced_code, module_name, 'exec')
+                logger.info(f"✅ LLM section-fix succeeded for {module_name}")
+                return spliced_code
+            except SyntaxError as e2:
+                logger.error(f"❌ Section fix failed ({e2}), trying full-file LLM fix...")
 
-Return the COMPLETE fixed Python code. Do not omit any functions or classes.
-The full original code is below — fix ONLY the syntax error, do not change logic:
+            # Step 3: Full-file LLM fix as last resort
+            fix_prompt_full = f"""Fix this Python syntax error: {e.msg} at line {e.lineno}.
+Return the COMPLETE fixed Python code. Fix ONLY the syntax error, do not change logic.
 
 ```python
 {code}
 ```"""
             try:
-                fixed_code = self._call_llm(fix_prompt)
+                fixed_code = self._call_llm(fix_prompt_full)
                 compile(fixed_code, module_name, 'exec')
-                logger.info(f"✅ Auto-fix succeeded for {module_name}")
+                logger.info(f"✅ Full-file LLM fix succeeded for {module_name}")
                 return fixed_code
-            except SyntaxError as e2:
-                logger.error(f"❌ Auto-fix failed for {module_name}: {e2}")
+            except SyntaxError as e3:
+                logger.error(f"❌ All auto-fix attempts failed for {module_name}: {e3}")
                 raise SyntaxError(f"Generated code has syntax error at line {e.lineno}: {e.msg} (auto-fix also failed)")
+
+    @staticmethod
+    def _structural_fix(code: str, error: SyntaxError) -> str:
+        """
+        Attempt cheap structural fixes without LLM:
+        - Close unclosed brackets/braces/parens at end of file
+        - Fix truncated list/dict literals near the error line
+        Returns fixed code string, or empty string if no fix could be applied.
+        """
+        msg = error.msg.lower()
+        lines = code.split('\n')
+
+        # Fix: unclosed bracket/brace/paren — append closing chars at end
+        if "was never closed" in msg or "unexpected eof" in msg or "unexpected end" in msg:
+            # Count open vs close for each bracket type
+            openers = {'(': ')', '[': ']', '{': '}'}
+            closers = set(openers.values())
+            stack = []
+            in_string = None
+            for ch in code:
+                if in_string:
+                    if ch == in_string:
+                        in_string = None
+                elif ch in ('"', "'"):
+                    in_string = ch
+                elif ch in openers:
+                    stack.append(openers[ch])
+                elif ch in closers and stack and stack[-1] == ch:
+                    stack.pop()
+            if stack:
+                closing = ''.join(reversed(stack))
+                logger.info(f"Structural fix: appending closing chars: {repr(closing)}")
+                return code.rstrip() + '\n' + closing + '\n'
+
+        # Fix: truncated string on error line — close it
+        if "unterminated string" in msg or "EOL while scanning" in msg:
+            lineno = (error.lineno or 1) - 1
+            if 0 <= lineno < len(lines):
+                line = lines[lineno]
+                # Count quotes to determine what's open
+                for q in ('"""', "'''", '"', "'"):
+                    if line.count(q) % 2 == 1:
+                        lines[lineno] = line + q
+                        logger.info(f"Structural fix: closed unterminated string on line {lineno + 1}")
+                        return '\n'.join(lines)
+
+        return ""
 
     @staticmethod
     def _get_error_context(code: str, error_line: int, context_lines: int = 5) -> str:

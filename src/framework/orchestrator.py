@@ -722,32 +722,71 @@ class ModularDemoOrchestrator:
             logger.error(f"Guide generation failed: {e}", exc_info=True)
             results['phases']['guide_generation'] = {'status': 'failed', 'error': str(e)}
 
-        # Phase 7: Cleanup Test Indices
+        # Phase 7: Cleanup Test Indices (skipped for Search demos — indices stay live)
         timer.start("7_cleanup")
-        if indexing_results and progress_callback:
-            progress_callback(0.85, "🧹 Cleaning up test indices...")
 
-        try:
-            if indexing_results:
-                cleanup_count = 0
-                for dataset_name, result in indexing_results.items():
-                    if result.get('status') == 'success':
-                        index_name = result['index_name']
-                        try:
-                            indexer.delete_index(index_name)
-                            cleanup_count += 1
-                            logger.info(f"Deleted test index: {index_name}")
-                        except Exception as e:
-                            logger.warning(f"Failed to delete test index {index_name}: {e}")
+        if demo_type == 'search':
+            # Search demos keep their indices for live querying and provisioning
+            if progress_callback:
+                progress_callback(0.85, "🔍 Search demo — keeping indices live for provisioning...")
+            results['phases']['cleanup'] = {'status': 'skipped', 'reason': 'search_demo_keeps_indices'}
+            logger.info("Search demo: skipping index cleanup — indices kept for live stack provisioning")
+        else:
+            if indexing_results and progress_callback:
+                progress_callback(0.85, "🧹 Cleaning up test indices...")
 
-                logger.info(f"Cleaned up {cleanup_count}/{len(indexing_results)} test indices")
+            try:
+                if indexing_results:
+                    cleanup_count = 0
+                    for dataset_name, result in indexing_results.items():
+                        if result.get('status') == 'success':
+                            index_name = result['index_name']
+                            try:
+                                indexer.delete_index(index_name)
+                                cleanup_count += 1
+                                logger.info(f"Deleted test index: {index_name}")
+                            except Exception as e:
+                                logger.warning(f"Failed to delete test index {index_name}: {e}")
+
+                    logger.info(f"Cleaned up {cleanup_count}/{len(indexing_results)} test indices")
+                    if progress_callback:
+                        progress_callback(0.90, f"🧹 Cleaned up {cleanup_count}/{len(indexing_results)} test indices")
+                    results['phases']['cleanup'] = {'status': 'completed', 'indices_deleted': cleanup_count}
+            except Exception as e:
+                logger.error(f"Index cleanup failed: {e}", exc_info=True)
+                results['phases']['cleanup'] = {'status': 'failed', 'error': str(e)}
+
+        # Phase 7.5: Search Stack Provisioning (Search demos only)
+        if demo_type == 'search':
+            timer.start("7.5_search_provisioning")
+            if progress_callback:
+                progress_callback(0.87, "🔧 Provisioning Elastic Search stack...")
+            try:
+                from src.services.search_provisioner import SearchProvisioner
+                provisioner = SearchProvisioner()
+                elastic_assets = provisioner.provision_all(
+                    demo_slug=Path(module_path).name,
+                    query_strategy=query_strategy,
+                    datasets=datasets,
+                    module_path=module_path,
+                    progress_callback=progress_callback,
+                )
+                results['phases']['search_provisioning'] = {
+                    'status': 'completed',
+                    'assets_created': {
+                        k: v for k, v in elastic_assets.items()
+                        if k not in ('preflight_results', 'health_check', 'provisioning_errors')
+                    },
+                    'errors': elastic_assets.get('provisioning_errors', []),
+                }
                 if progress_callback:
-                    progress_callback(0.90, f"🧹 Cleaned up {cleanup_count}/{len(indexing_results)} test indices")
-                results['phases']['cleanup'] = {'status': 'completed', 'indices_deleted': cleanup_count}
-        except Exception as e:
-            logger.error(f"Index cleanup failed: {e}", exc_info=True)
-            results['phases']['cleanup'] = {'status': 'failed', 'error': str(e)}
-            # Don't fail the entire generation if cleanup fails
+                    error_count = len(elastic_assets.get('provisioning_errors', []))
+                    msg = "✅ Search stack provisioned" if not error_count else f"⚠️ Search stack provisioned ({error_count} warnings)"
+                    progress_callback(0.97, msg)
+            except Exception as e:
+                logger.error(f"Search provisioning failed: {e}", exc_info=True)
+                results['phases']['search_provisioning'] = {'status': 'failed', 'error': str(e)}
+                # Non-fatal — demo is still usable without the provisioned stack
 
         # Phase 8: Save conversation history if provided
         if conversation:

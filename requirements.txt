@@ -44,4 +44,5 @@ ruff>=0.0.280
 
 # Type hints
 types-requests>=2.31.0
-mypy>=1.4.0
+mypy>=1.4.0eland[pytorch]>=8.0.0
+

@@ -20,6 +20,9 @@ from .tabs import (
     render_agents_tab,
     render_detection_rules_tab,
     render_service_map_tab,
+    render_replay_tab,
+    render_search_stack_tab,
+    render_revenue_engine_tab,
 )
 from ..components.progress_tracker import render_progress_header
 
@@ -65,7 +68,11 @@ def render_browse_demos_view():
                 TAB_OPTIONS.insert(3, "🛡️ Detection Rules")   # after Queries, before Tools
             elif demo_pillar == "observability":
                 TAB_OPTIONS.insert(3, "📡 Service Map")        # after Queries, before Tools
+            elif demo_pillar in ("search", ""):
+                TAB_OPTIONS.insert(3, "🔍 Search Stack")       # after Queries, before Tools
+                TAB_OPTIONS.insert(4, "⚡ Revenue Engine")     # after Search Stack
 
+            TAB_OPTIONS.append("▶ Live Replay")
             TAB_OPTIONS.append("📝 Guide")
 
             # Session-state-backed tab selector so active tab survives reruns
@@ -116,6 +123,12 @@ def render_browse_demos_view():
             elif active_tab == "📡 Service Map":
                 render_service_map_tab(loader)
 
+            elif active_tab == "🔍 Search Stack":
+                render_search_stack_tab(loader)
+
+            elif active_tab == "⚡ Revenue Engine":
+                render_revenue_engine_tab(loader)
+
             elif active_tab == "🔧 Tools":
                 render_tools_tab(loader)
 
@@ -128,6 +141,9 @@ def render_browse_demos_view():
                 except Exception as e:
                     st.error(f"❌ Agent Builder Service not configured: {e}")
                     st.info("Please set ELASTICSEARCH_KIBANA_URL and ELASTICSEARCH_API_KEY in your .env file")
+
+            elif active_tab == "▶ Live Replay":
+                render_replay_tab(loader)
 
             elif active_tab == "📝 Guide":
                 render_guide_tab()
