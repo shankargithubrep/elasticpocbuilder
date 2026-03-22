@@ -16,6 +16,7 @@ from .service_map_tab import render_service_map_tab
 from .replay_tab import render_replay_tab
 from .search_stack_tab import render_search_stack_tab
 from .revenue_engine_tab import render_revenue_engine_tab
+from .obs_intelligence_tab import render_obs_intelligence_tab
 
 __all__ = [
     'render_config_tab',
@@ -30,4 +31,5 @@ __all__ = [
     'render_replay_tab',
     'render_search_stack_tab',
     'render_revenue_engine_tab',
+    'render_obs_intelligence_tab',
 ]

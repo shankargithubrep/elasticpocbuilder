@@ -23,6 +23,7 @@ from .tabs import (
     render_replay_tab,
     render_search_stack_tab,
     render_revenue_engine_tab,
+    render_obs_intelligence_tab,
 )
 from ..components.progress_tracker import render_progress_header
 
@@ -68,6 +69,7 @@ def render_browse_demos_view():
                 TAB_OPTIONS.insert(3, "🛡️ Detection Rules")   # after Queries, before Tools
             elif demo_pillar == "observability":
                 TAB_OPTIONS.insert(3, "📡 Service Map")        # after Queries, before Tools
+                TAB_OPTIONS.insert(4, "🔭 Reliability Engine") # after Service Map
             elif demo_pillar in ("search", ""):
                 TAB_OPTIONS.insert(3, "🔍 Search Stack")       # after Queries, before Tools
                 TAB_OPTIONS.insert(4, "⚡ Revenue Engine")     # after Search Stack
@@ -141,6 +143,9 @@ def render_browse_demos_view():
                 except Exception as e:
                     st.error(f"❌ Agent Builder Service not configured: {e}")
                     st.info("Please set ELASTICSEARCH_KIBANA_URL and ELASTICSEARCH_API_KEY in your .env file")
+
+            elif active_tab == "🔭 Reliability Engine":
+                render_obs_intelligence_tab(loader)
 
             elif active_tab == "▶ Live Replay":
                 render_replay_tab(loader)
