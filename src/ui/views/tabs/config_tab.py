@@ -358,6 +358,69 @@ def render_config_tab(loader, assets_key: str):
                 import traceback
                 st.code(traceback.format_exc())
 
+    # ── Export POC Script ────────────────────────────────────────────────────
+    st.divider()
+    st.markdown("### 📦 Export Standalone POC Script")
+    st.caption(
+        "Generate a self-contained Python script your customer can run against "
+        "their own Elastic environment (Cloud Hosted, Serverless, or self-hosted). "
+        "Zero Vulcan dependencies — just `pip install elasticsearch`."
+    )
+
+    poc_col1, poc_col2 = st.columns([2, 1])
+    with poc_col1:
+        include_agent = st.checkbox(
+            "Include Agent Builder setup",
+            value=False,
+            key="poc_include_agent",
+            help="Add agent tool registration code (requires Kibana Agent Builder API)",
+        )
+    with poc_col2:
+        export_btn = st.button("⬇️ Generate POC Script", use_container_width=True, key="export_poc_btn")
+
+    if export_btn:
+        with st.spinner("Building POC script…"):
+            try:
+                from src.services.poc_script_generator import POCScriptGenerator
+                gen = POCScriptGenerator()
+                script_path = gen.generate(
+                    loader,
+                    st.session_state.current_demo_module,
+                    options={"include_agent": include_agent},
+                )
+                script_text = script_path.read_text(encoding="utf-8")
+                st.success(f"✅ Script saved to `{script_path}`")
+
+                # Inline preview
+                with st.expander("👁️ Preview script", expanded=False):
+                    st.code(script_text[:3000] + ("\n…(truncated)" if len(script_text) > 3000 else ""), language="python")
+
+                # Download button
+                st.download_button(
+                    label="⬇️ Download poc_setup script",
+                    data=script_text,
+                    file_name=script_path.name,
+                    mime="text/x-python",
+                    use_container_width=True,
+                )
+
+                # Quick usage instructions
+                st.info(
+                    "**How to use:**\n"
+                    "```bash\n"
+                    "pip install elasticsearch python-dotenv pandas\n"
+                    "export ES_URL=https://your-deployment.es.io:9243\n"
+                    "export ES_API_KEY=your_api_key\n"
+                    "export KIBANA_URL=https://your-deployment.kb.io:5601  # optional\n"
+                    f"python {script_path.name}\n"
+                    "```"
+                )
+
+            except Exception as exc:
+                st.error(f"❌ Script generation failed: {exc}")
+                import traceback
+                st.code(traceback.format_exc())
+
     # Original Conversation Section
     st.divider()
     st.markdown("### Original Conversation")
