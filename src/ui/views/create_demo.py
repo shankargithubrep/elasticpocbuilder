@@ -2,7 +2,10 @@
 Create Demo view - conversational demo generation interface
 """
 
+import urllib.parse
+
 import streamlit as st
+import streamlit.components.v1 as _st_components
 import logging
 
 from src.framework import ModularDemoOrchestrator
@@ -10,6 +13,23 @@ from ..message_processor import process_smart_message, expand_brief_prompt
 from ..guided_expansion_flow import run_guided_expansion
 
 logger = logging.getLogger(__name__)
+
+
+def _copy_button(content: str, key: str):
+    """Render a lightweight copy-to-clipboard button using inline JS."""
+    encoded = urllib.parse.quote(content, safe="")
+    _st_components.html(
+        f"""<button
+            style="background:#0068C9;color:white;border:none;padding:5px 14px;
+                   border-radius:4px;cursor:pointer;font-size:12px;margin-top:4px;"
+            onclick="navigator.clipboard.writeText(decodeURIComponent('{encoded}'))
+                     .then(()=>{{this.innerHTML='✅ Copied!';
+                              setTimeout(()=>this.innerHTML='📋 Copy',2000)}})
+                     .catch(()=>this.innerHTML='❌ Failed')">
+            📋 Copy
+        </button>""",
+        height=44,
+    )
 
 
 def render_create_demo_view():
@@ -50,6 +70,7 @@ def render_create_demo_view():
             # Render expandable content (e.g., technical plan) if stored
             if "expanded_content" in message:
                 with st.expander("View comprehensive technical plan", expanded=False):
+                    _copy_button(message["expanded_content"], key=f"copy_plan_{id(message)}")
                     st.markdown(message["expanded_content"])
 
     # Show "View Demo Details" button if a demo was just generated in this conversation
@@ -111,6 +132,7 @@ def render_create_demo_view():
                 generate_instruction = "Type **generate** and press Enter to create your demo."
                 st.markdown(f"### 📝 Expanded Technical Context\n\n{generate_instruction}")
                 with st.expander("View comprehensive technical plan", expanded=False):
+                    _copy_button(expanded_content, key="copy_plan_live")
                     st.markdown(expanded_content)
                 st.markdown(f"\n{generate_instruction}")
 
@@ -144,6 +166,17 @@ def render_create_demo_view():
             # Don't process chat input, just let the UI persist
             st.stop()
 
+    # Pre-fill from prompt history "Use this prompt" action
+    if st.session_state.get("_prefill_prompt"):
+        prefilled = st.session_state.pop("_prefill_prompt")
+        st.info(f"**Prompt loaded from history.** Review it below, then submit when ready.")
+        st.code(prefilled, language=None)
+        if st.button("▶ Use this prompt now", type="primary", key="use_prefilled_btn"):
+            # Inject into messages as if user typed it
+            st.session_state.messages.append({"role": "user", "content": prefilled})
+            st.session_state.needs_processing = True
+            st.rerun()
+
     # Chat input
     if prompt := st.chat_input("Paste your customer description or type your response..."):
         # Handle AI expansion if enabled (only for first message)
@@ -151,6 +184,18 @@ def render_create_demo_view():
         if (st.session_state.ai_expansion_enabled and
             not st.session_state.ai_expansion_used and
             len(st.session_state.messages) == 0):  # First message only (before adding to messages)
+
+            # Save prompt to history before expansion
+            try:
+                from src.services.prompt_history_service import PromptHistoryService
+                _hist_svc = PromptHistoryService()
+                _hist_id = _hist_svc.save(
+                    prompt,
+                    pillar=st.session_state.get("selected_pillar", "search"),
+                )
+                st.session_state["_prompt_history_id"] = _hist_id
+            except Exception:
+                pass
 
             # Initialize guided expansion with original prompt
             st.session_state.guided_expansion = {
@@ -163,6 +208,21 @@ def render_create_demo_view():
 
             # Trigger rerun to start guided expansion flow
             st.rerun()
+
+        # Save prompt to history (for non-expansion path — expansion path saves above)
+        if not (st.session_state.ai_expansion_enabled and
+                not st.session_state.ai_expansion_used and
+                len(st.session_state.messages) == 0):
+            try:
+                from src.services.prompt_history_service import PromptHistoryService
+                _hist_id = PromptHistoryService().save(
+                    prompt,
+                    pillar=st.session_state.get("selected_pillar", "search"),
+                )
+                if "_prompt_history_id" not in st.session_state:
+                    st.session_state["_prompt_history_id"] = _hist_id
+            except Exception:
+                pass
 
         # Add user message (if not in guided expansion flow)
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -358,6 +418,21 @@ def render_create_demo_view():
                         st.session_state.generation_in_progress = False
                         st.session_state.current_demo_module = results['module_name']
                         st.session_state.demo_just_generated = True  # Set flag to show "View Demo Details" button
+
+                        # Update prompt history with generated demo name
+                        try:
+                            from src.services.prompt_history_service import PromptHistoryService
+                            _hist_svc = PromptHistoryService()
+                            _hist_id = st.session_state.get("_prompt_history_id")
+                            _hist_svc.save(
+                                prompt="",  # no new prompt — update only
+                                demo_name=results['module_name'],
+                                company=context.get("company_name"),
+                                pillar=selected_pillar,
+                                entry_id=_hist_id,
+                            )
+                        except Exception:
+                            pass
 
                         st.balloons()
 

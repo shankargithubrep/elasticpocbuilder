@@ -292,6 +292,71 @@ def _render_settings_expander():
             st.caption("Overrides apply to this session only and are not saved to disk.")
 
 
+def _render_prompt_history():
+    """Render the collapsible Prompt History expander in Create mode."""
+    try:
+        from src.services.prompt_history_service import PromptHistoryService
+        history = PromptHistoryService().get_history(limit=15)
+    except Exception:
+        return
+
+    if not history:
+        return
+
+    with st.expander(f"📜 Prompt History ({len(history)})", expanded=False):
+        st.caption("Click a prompt to load it into the chat input area.")
+
+        for entry in history:
+            prompt_text = entry.get("prompt", "")
+            if not prompt_text:
+                continue
+
+            company = entry.get("company") or ""
+            pillar = entry.get("pillar") or "search"
+            demo_name = entry.get("demo_name") or ""
+            ts = entry.get("timestamp", "")[:10]
+
+            # Label line
+            label_parts = []
+            if company:
+                label_parts.append(company)
+            label_parts.append(pillar.capitalize())
+            if ts:
+                label_parts.append(ts)
+            label = " · ".join(label_parts)
+
+            with st.container(border=True):
+                st.caption(label)
+                # Show first 120 chars of the prompt
+                preview = prompt_text[:120] + ("…" if len(prompt_text) > 120 else "")
+                st.markdown(f"_{preview}_")
+
+                if demo_name:
+                    st.caption(f"→ `{demo_name}`")
+
+                col_use, col_del = st.columns([3, 1])
+                with col_use:
+                    if st.button(
+                        "↩ Use this prompt",
+                        key=f"use_prompt_{entry['id']}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["_prefill_prompt"] = prompt_text
+                        st.rerun()
+                with col_del:
+                    if st.button(
+                        "🗑️",
+                        key=f"del_prompt_{entry['id']}",
+                        use_container_width=True,
+                        help="Remove from history",
+                    ):
+                        try:
+                            PromptHistoryService().delete(entry["id"])
+                        except Exception:
+                            pass
+                        st.rerun()
+
+
 def render_sidebar():
     """Render the sidebar with mode toggle and context display"""
 
@@ -505,6 +570,9 @@ def render_sidebar():
             st.session_state.conversation_phase = "initial"
             st.session_state.ai_expansion_used = False  # Re-enable expansion
             st.rerun()
+
+        # Prompt History
+        _render_prompt_history()
 
         # About button
         if st.button("💡 About Elastic Demo Builder", use_container_width=True, key="under_the_hood_btn"):
