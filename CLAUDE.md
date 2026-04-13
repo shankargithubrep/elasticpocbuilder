@@ -4,9 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Elastic Demo Builder** is a modular platform for generating custom Elastic Agent Builder demonstrations. It uses LLM-generated Python modules to create customer-specific demos with realistic data, ES|QL queries, and demo guides.
+**Elastic Demo Builder** is a full-stack Elastic demo generation platform. From a single customer description it generates realistic data, ES|QL queries, a demo guide, and automatically provisions the complete Elastic stack — ELSER pipelines, index templates, Search Applications, Kibana dashboards, alerting rules, Slack connectors, and AI Agents.
 
-**Architecture**: Streamlit UI + Modular Plugin Framework + LLM Code Generation
+**Architecture**: Streamlit UI + Modular Plugin Framework + LLM Code Generation + Elastic Stack Auto-Provisioning
+
+**Demo Philosophy**: Outcome-based. Every feature maps to a customer business outcome.
+See [docs/OUTCOME_BASED_DEMO_GUIDE.md](docs/OUTCOME_BASED_DEMO_GUIDE.md) for the full outcome map and Kibana navigation reference.
 
 **Key Innovation**: Unlike static templates, this system generates custom Python code for each demo that can be version controlled, shared, and refined.
 
