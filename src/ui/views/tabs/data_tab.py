@@ -80,6 +80,7 @@ def render_data_tab():
                     st.info(f"Starting batch indexing for {len(datasets)} datasets...")
 
                     indexer = ElasticsearchIndexer()
+                    demo_slug = st.session_state.current_demo_module
                     batch_results = {}  # Track success/failure per dataset
                     for idx, (name, df) in enumerate(datasets.items(), 1):
                         st.markdown(f"**[{idx}/{len(datasets)}] Indexing {name}...**")
@@ -107,15 +108,17 @@ def render_data_tab():
                                 semantic_fields=semantic_fields,
                                 text_fields=text_fields,
                                 index_mode=index_mode,
-                                progress_callback=progress_callback
+                                progress_callback=progress_callback,
+                                demo_slug=demo_slug,
                             )
 
                             if result.success:
                                 st.success(f"✅ {name}: {result.documents_indexed:,} docs indexed in {result.duration_seconds}s")
                                 batch_results[name] = {"success": True}
                             else:
-                                st.error(f"❌ {name}: Indexing failed")
-                                batch_results[name] = {"success": False, "error": "Indexing failed"}
+                                err_detail = result.errors[0] if result.errors else "unknown error"
+                                st.error(f"❌ {name}: Indexing failed — {err_detail}")
+                                batch_results[name] = {"success": False, "error": err_detail}
                         except Exception as e:
                             st.error(f"❌ {name}: {str(e)}")
                             batch_results[name] = {"success": False, "error": str(e)}
@@ -234,7 +237,8 @@ def render_data_tab():
                                     text_fields=text_fields,
                                     index_mode=index_mode,
                                     progress_callback=progress_callback,
-                                    stop_callback=stop_callback
+                                    stop_callback=stop_callback,
+                                    demo_slug=st.session_state.current_demo_module,
                                 )
 
                                 # Clear stop button

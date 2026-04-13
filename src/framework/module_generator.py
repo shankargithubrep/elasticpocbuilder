@@ -36,7 +36,7 @@ class ModuleGenerator:
         Args:
             llm_client: LLM client for code generation
             inference_endpoints: Dict with 'rerank' and 'completion' endpoint IDs
-                Default: {'rerank': '.rerank-v1-elasticsearch', 'completion': 'completion-vulcan'}
+                Default: {'rerank': '.jina-reranker-v3', 'completion': 'completion-vulcan'}
         """
         self.llm_client = llm_client
         self.base_path = Path("demos")  # Where demo modules are stored
@@ -44,7 +44,7 @@ class ModuleGenerator:
         # Set inference endpoint defaults
         if inference_endpoints is None:
             inference_endpoints = {
-                "rerank": ".rerank-v1-elasticsearch",
+                "rerank": ".jina-reranker-v3",
                 "completion": "completion-vulcan"
             }
         self.inference_endpoints = inference_endpoints
@@ -244,6 +244,16 @@ class ModuleGenerator:
                 'row_count': dataset.get('row_count', 'moderate')
             }
 
+        # Extract content seeds from query strategy (prevention layer for content alignment)
+        content_seeds = {}
+        try:
+            from src.services.content_alignment_validator import extract_content_seeds_for_prompt
+            content_seeds = extract_content_seeds_for_prompt(query_strategy)
+            if content_seeds:
+                logger.info(f"Extracted content seeds for {len(content_seeds)} datasets")
+        except Exception as e:
+            logger.warning(f"Content seed extraction failed (non-blocking): {e}")
+
         # Generate ONLY data module and config (NO QUERIES)
         # NOTE: Guide generation is handled separately by the orchestrator
         # so it can run in parallel with data execution + indexing
@@ -252,7 +262,8 @@ class ModuleGenerator:
             module_path,
             data_requirements,
             data_specifications=data_specifications,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            content_seeds=content_seeds
         )
         self._generate_config_file(config, module_path)
 
@@ -424,6 +435,7 @@ from src.framework.base import DataGeneratorModule, DemoConfig
 import pandas as pd
 import numpy as np
 import random
+import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List
 
@@ -474,6 +486,9 @@ Generate the complete implementation:"""
 
         # Validate syntax before saving (with auto-fix on failure)
         code = self._validate_python_syntax(code, 'data_generator.py')
+
+        # Inject missing standard imports that LLM may forget
+        code = self._inject_missing_imports(code)
 
         # Save the module
         module_file = module_path / 'data_generator.py'
@@ -619,6 +634,12 @@ queries.append({{
     # ... other fields ...
 }})
 ```
+
+**CRITICAL - BRANDING: Always say "Elasticsearch" or "Elastic", NEVER "OpenSearch".**
+This is an Elasticsearch demo. Any query name, description, or value that references a competing
+product (OpenSearch, Solr, Splunk, etc.) must instead use "Elasticsearch" or a neutral term.
+❌ WRONG: "OpenSearch ACL Audit", source_system = "OpenSearch-Security-Plugin"
+✅ CORRECT: "Elasticsearch ACL Audit", source_system = "Elasticsearch-Security-Plugin"
 
 {esql_rules}
 
@@ -917,7 +938,7 @@ queries.append({{
 **Inference Endpoints (ALWAYS use these exact IDs)**:
 - RERANK: `{rerank_endpoint}`
 - COMPLETION: `{completion_endpoint}`
-- SPARSE EMBEDDING: `.elser-2-elastic` (for semantic_text fields)
+- DENSE EMBEDDING: `.jina-embeddings-v5-text-small` (default for semantic_text fields — Jina EIS, 119 languages, 32K tokens, no ML nodes)
 
 8. **Semantic Text Fields**: Fields used in MATCH must be text or semantic_text type
 
@@ -1727,7 +1748,8 @@ class {company_class}DemoGuide(DemoGuideModule):
         data_requirements: Dict,
         size_preference: str,
         ranges: Dict[str, Any],
-        use_enhanced: bool = False
+        use_enhanced: bool = False,
+        content_seeds: Optional[Dict[str, str]] = None
     ) -> str:
         """Generate a single _generate_<dataset_name>() method via LLM
 
@@ -1765,8 +1787,15 @@ class {company_class}DemoGuide(DemoGuideModule):
         else:
             row_guidance = f"{ranges['per_dataset_typical']} rows (MAX {ranges['per_dataset_max']:,})"
 
+        # Inject content seeds for this dataset if available
+        content_seed_str = (content_seeds or {}).get(dataset_name, '')
+        if content_seed_str:
+            prompt_prefix = f'{content_seed_str}\n\n'
+        else:
+            prompt_prefix = ''
+
         # Build the per-dataset prompt
-        prompt = f"""Generate a single Python method that creates the '{dataset_name}' dataset.
+        prompt = f"""{prompt_prefix}Generate a single Python method that creates the '{dataset_name}' dataset.
 
 Company: {config["company_name"]}
 Industry: {config["industry"]}
@@ -1786,6 +1815,7 @@ CRITICAL RULES:
 - For geo_point fields: use dict with 'lat' and 'lon' keys
 - For semantic_text fields: generate ONLY that field (no separate text duplicate)
 - NEVER generate random vector/embedding arrays. Do NOT create fields like "embedding", "vector", or any dense_vector columns.
+- semantic_text fields MUST contain realistic natural-language text (3-6 sentences); Jina EIS (.jina-embeddings-v5-text-small) generates the embedding automatically at index time — do NOT create a vector column.
 - Generate rows as COMPLETE ENTITIES - all fields logically consistent
 - Every text/semantic_text value MUST be unique across all rows
 - When using .format(), ensure placeholder names EXACTLY match keyword arguments
@@ -2093,6 +2123,7 @@ Generate the corrected method:"""
 import pandas as pd
 import numpy as np
 import random
+import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List
 
@@ -2279,7 +2310,8 @@ class {company_class}DataGenerator(DataGeneratorModule):
                                                  module_path: Path,
                                                  data_requirements: Dict,
                                                  data_specifications: Optional[Dict[str, Any]] = None,
-                                                 progress_callback: Optional[callable] = None):
+                                                 progress_callback: Optional[callable] = None,
+                                                 content_seeds: Optional[Dict[str, str]] = None):
         """Generate data module based on query strategy requirements
 
         Args:
@@ -2336,7 +2368,7 @@ class {company_class}DataGenerator(DataGeneratorModule):
 
         # Determine if we should use per-dataset split approach
         # Split when: 2+ datasets AND data_specifications available (rich field specs per dataset)
-        MAX_DATASETS = 6  # Hard cap — more than 6 datasets creates files too large to reliably generate
+        MAX_DATASETS = 12  # Per-dataset split generation handles large counts safely (each dataset = separate LLM call)
         num_datasets = len(data_requirements)
         if num_datasets > MAX_DATASETS:
             logger.warning(f"Capping datasets from {num_datasets} to {MAX_DATASETS} to keep generated files manageable")
@@ -2371,7 +2403,8 @@ class {company_class}DataGenerator(DataGeneratorModule):
                     data_requirements=data_requirements,
                     size_preference=size_preference,
                     ranges=ranges,
-                    use_enhanced=use_enhanced
+                    use_enhanced=use_enhanced,
+                    content_seeds=content_seeds or {}
                 )
                 dataset_methods[ds_name] = method_code
                 logger.info(f"📥 Generated _generate_{ds_name}(): {len(method_code)} chars")
@@ -2409,7 +2442,14 @@ The module should:
 5. Create proper foreign key relationships as specified
 6. Include semantic_text fields where specified
 7. For fields with type "semantic_text" in the requirements, generate ONLY that field (do NOT create a separate "description" text field alongside a "semantic_description" semantic_text field — the semantic_text field IS the description)
-8. NEVER generate random vector/embedding arrays (e.g. np.random.rand(384).tolist()). Vector search uses semantic_text fields — Elasticsearch generates embeddings automatically via ELSER. Do NOT create dense_vector columns.
+8. NEVER generate random vector/embedding arrays (e.g. np.random.rand(384).tolist()). Vector search uses semantic_text fields — Elasticsearch generates embeddings automatically via Jina EIS (`.jina-embeddings-v5-text-small`, inference_id: `.jina-embeddings-v5-text-small`). Do NOT create dense_vector columns.
+
+CRITICAL - SEMANTIC_TEXT FIELDS (Search/RAG demos):
+- Any field listed in the query strategy's semantic_fields MUST be generated as a plain string column in the DataFrame — NOT as a vector or embedding array.
+- The field will be automatically embedded by Jina EIS (.jina-embeddings-v5-text-small) at index time.
+- Generate realistic, meaningful text (3-6 sentences for document body/content fields, 1-3 sentences for shorter description fields).
+- NEVER leave these fields as empty strings, None, or random numbers.
+- Example: if semantic_fields: ["content"], then DataFrame["content"] must contain real prose sentences.
 
 CRITICAL - SEARCH DATA QUALITY (if generating search/document data):
 - Generate rows as COMPLETE ENTITIES - all fields in a row must be logically consistent
@@ -2501,6 +2541,7 @@ from src.framework.base import DataGeneratorModule, DemoConfig
 import pandas as pd
 import numpy as np
 import random
+import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List
 
@@ -2891,6 +2932,9 @@ Generate the complete implementation with ALL required fields:"""
         # Validate syntax before saving (with auto-fix on failure)
         code = self._validate_python_syntax(code, 'data_generator.py')
 
+        # Inject missing standard imports that LLM may forget
+        code = self._inject_missing_imports(code)
+
         # Save the module
         module_file = module_path / 'data_generator.py'
         module_file.write_text(code)
@@ -2920,6 +2964,7 @@ Common causes of this error:
 Fix the error and regenerate the COMPLETE data_generator.py from scratch:"""
                 retry_code = self._call_llm(retry_prompt, max_tokens=16000)
                 retry_code = self._validate_python_syntax(retry_code, 'data_generator.py')
+                retry_code = self._inject_missing_imports(retry_code)
                 module_file.write_text(retry_code)
                 logger.info("Saved retried data_generator.py")
 
@@ -3585,7 +3630,7 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
             "inference_endpoints": {
                 "embedding_type": self._resolve_vector_type(),
                 "embedding_endpoint": self._resolve_embedding_endpoint(),
-                "rerank": self.inference_endpoints.get("rerank", ".rerank-v1-elasticsearch"),
+                "rerank": self.inference_endpoints.get("rerank", ".jina-reranker-v3"),
                 "completion": self.inference_endpoints.get("completion", "completion-vulcan"),
             }
         }
@@ -4420,6 +4465,50 @@ FROM index METADATA _score
 
         return code
 
+    def _inject_missing_imports(self, code: str) -> str:
+        """Inject standard imports that LLM-generated code uses but may forget to import.
+
+        Checks for common runtime NameErrors (uuid, hashlib, itertools, etc.) and
+        inserts the missing import statement right after the existing import block.
+        """
+        NEEDED = {
+            "uuid": "import uuid",
+            "hashlib": "import hashlib",
+            "itertools": "import itertools",
+            "collections": "import collections",
+            "string": "import string",
+            "math": "import math",
+            "re": "import re",
+            "json": "import json",
+            "os": "import os",
+        }
+        lines = code.splitlines()
+        # Find the last import line index
+        last_import_idx = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("import ") or stripped.startswith("from "):
+                last_import_idx = i
+
+        injected = []
+        for name, stmt in NEEDED.items():
+            # Only inject if the module is referenced but not yet imported
+            if name + "." in code or name + "(" in code:
+                already_imported = any(
+                    line.strip() == stmt or line.strip().startswith(f"import {name} ")
+                    or line.strip().startswith(f"from {name} ")
+                    for line in lines
+                )
+                if not already_imported:
+                    injected.append(stmt)
+                    logger.info(f"💉 Injected missing import: {stmt}")
+
+        if injected:
+            lines = lines[:last_import_idx + 1] + injected + lines[last_import_idx + 1:]
+            code = "\n".join(lines)
+
+        return code
+
     def _validate_python_syntax(self, code: str, module_name: str, auto_fix: bool = True) -> str:
         """Validate Python syntax, optionally auto-fixing via LLM retry
 
@@ -4548,6 +4637,27 @@ Return the COMPLETE fixed Python code. Fix ONLY the syntax error, do not change 
                         lines[lineno] = line + q
                         logger.info(f"Structural fix: closed unterminated string on line {lineno + 1}")
                         return '\n'.join(lines)
+
+        # Fix: "unexpected indent" caused by bare `import X` at column 0 inside an indented block.
+        # LLM sometimes injects imports mid-function at column 0, breaking indentation context.
+        # Solution: remove the bare import line (it gets re-injected at top by _inject_missing_imports).
+        if "unexpected indent" in msg or "indent" in msg:
+            import re as _re
+            bare_import_re = _re.compile(r'^(import \w+|from \w+ import .+)$')
+            removed = False
+            new_lines = []
+            for i, line in enumerate(lines):
+                # A bare import at column 0 with indented code on either side
+                if bare_import_re.match(line) and i > 0 and i < len(lines) - 1:
+                    prev_indented = lines[i - 1].startswith(' ') or lines[i - 1].startswith('\t')
+                    next_indented = lines[i + 1].startswith(' ') or lines[i + 1].startswith('\t')
+                    if prev_indented or next_indented:
+                        logger.info(f"Structural fix: removed misplaced bare import at line {i + 1}: {line!r}")
+                        removed = True
+                        continue  # drop the line
+                new_lines.append(line)
+            if removed:
+                return '\n'.join(new_lines)
 
         return ""
 

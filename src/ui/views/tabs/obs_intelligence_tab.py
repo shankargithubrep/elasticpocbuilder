@@ -167,6 +167,61 @@ def _render_service_health(svc: Any, tenant: str, region: str):
 
     _esql_expander("Service Health", data["esql"])
 
+    with st.expander("⚙️ How this works — technical deep dive", expanded=False):
+        st.markdown("""
+#### APM Data Model: Traces → Spans → Transactions
+
+```
+EDOT Agent (SDK)  ──instrumentation──►  your service code
+        │
+        │  HTTP/gRPC  (OTLP protocol)
+        ▼
+APM Server / OTLP Endpoint (Elastic Cloud managed)
+        │
+        ├─► traces-apm-*       (transactions + spans)
+        ├─► logs-apm.*         (application logs with trace correlation)
+        └─► metrics-apm.*      (runtime metrics: JVM heap, GC, CPU)
+```
+
+- **Transaction**: a single top-level request (e.g. `GET /api/users`)
+- **Span**: a unit of work within a transaction (e.g. DB query, HTTP call to downstream)
+- **Trace**: the full tree of spans across all services, linked by `trace.id`
+
+Health scores are derived by aggregating `transaction.result`, `transaction.duration.us`, and `event.outcome` per service over a rolling 5-minute window.
+""")
+        st.markdown("**How to set up APM Server (Elastic Cloud)**")
+        st.code("""\
+# 1. Elastic Cloud: APM Server is provisioned automatically.
+#    Find your APM endpoint in: Cloud console > Integrations > APM
+
+# 2. Set EDOT (Elastic Distribution of OpenTelemetry) env vars:
+OTEL_SERVICE_NAME=auth-service
+OTEL_EXPORTER_OTLP_ENDPOINT=https://your-apm-server.apm.us-east-1.aws.elastic.cloud
+OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <secret-token>"
+
+# 3. Add EDOT SDK to your app (Python example):
+pip install opentelemetry-distro elastic-opentelemetry
+opentelemetry-bootstrap -a install
+""", language="bash")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Build service health in your app**")
+            st.markdown("""
+- Query `metrics-apm.*` for error rate and throughput per service
+- Query `traces-apm-*` for P95 latency using `PERCENTILE(transaction.duration.us, 95)`
+- Set thresholds: error rate > 2% = degraded, > 5% = critical
+- Expose `/health` endpoint in your portal that calls this ES|QL in real-time
+""")
+        with col2:
+            st.markdown("**Explore in Kibana APM**")
+            st.markdown("""
+- **Observability > Services**: pre-built service health dashboard, no query needed
+- **Observability > Alerts**: create threshold rules on error rate and latency
+- **Stack Management > Index Management**: inspect `traces-apm-*` mappings and data retention
+- **APM > Service Map**: auto-generated topology from span `destination.service.resource`
+""")
+
 
 # ── Panel 2: APM Analytics ────────────────────────────────────────────────────
 
@@ -223,6 +278,74 @@ def _render_apm_analytics(svc: Any, tenant: str, region: str):
 
     _esql_expander("APM Analytics", data["esql"])
 
+    with st.expander("⚙️ How this works — technical deep dive", expanded=False):
+        st.markdown("""
+#### Latency Percentiles in ES|QL
+
+Percentile aggregations (`P50`, `P95`, `P99`) answer different questions:
+- **P50** (median): the typical user experience — half of requests are faster than this
+- **P95**: 95% of users are faster; the threshold for "acceptable" in most SLOs
+- **P99**: tail latency — what your slowest 1% of users experience; critical for SLA compliance
+
+`event.duration` in OpenTelemetry/EDOT is stored in **nanoseconds**. Divide by `1,000,000` to get milliseconds.
+""")
+        st.markdown("**ES|QL `PERCENTILE()` aggregation explained**")
+        st.code("""\
+FROM traces-apm-*
+| WHERE @timestamp >= NOW() - 1 hour
+  AND tenant_id == "genesys-us"
+  AND service.name == "auth-service"
+| STATS
+    p50_ms = PERCENTILE(transaction.duration.us, 50) / 1000,
+    p95_ms = PERCENTILE(transaction.duration.us, 95) / 1000,
+    p99_ms = PERCENTILE(transaction.duration.us, 99) / 1000,
+    throughput = COUNT(*),
+    error_rate = COUNT_CASE(event.outcome == "failure") * 100.0 / COUNT(*)
+  BY DATE_TRUNC(5 minutes, @timestamp)
+| SORT @timestamp ASC
+""", language="sql")
+
+        st.markdown("**Create a Kibana SLO from this latency data**")
+        st.code("""\
+POST kbn:/api/slos
+{
+  "name": "auth-service P95 latency < 500ms",
+  "description": "95th percentile response time SLO",
+  "indicator": {
+    "type": "sli.apm.transactionDuration",
+    "params": {
+      "service": "auth-service",
+      "environment": "production",
+      "transactionType": "request",
+      "transactionName": "*",
+      "threshold": 500,
+      "index": "traces-apm-*"
+    }
+  },
+  "timeWindow": { "duration": "30d", "type": "rolling" },
+  "budgetingMethod": "occurrences",
+  "objective": { "target": 0.99 }
+}
+""", language="json")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Build this in your app**")
+            st.markdown("""
+- Run the ES|QL query above on page load with a configurable time window
+- Plot P50/P95/P99 as a line chart — spikes in P99 but not P50 = tail latency problem
+- Alert when P95 crosses your SLA threshold using Kibana Alerting
+- Link each data point to Kibana APM traces for drill-down
+""")
+        with col2:
+            st.markdown("**Explore in Kibana**")
+            st.markdown("""
+- **APM > Services > [service] > Transactions**: pre-built latency distribution histogram
+- **APM > Services > [service] > Throughput**: requests per minute over time
+- **Observability > SLOs**: manage SLO targets, burn rate, and error budget in one place
+- **Dashboards**: clone the built-in APM dashboard and add your tenant filter
+""")
+
 
 # ── Panel 3: Log Intelligence ─────────────────────────────────────────────────
 
@@ -257,6 +380,77 @@ def _render_log_intelligence(svc: Any, tenant: str, region: str):
         cols[3].markdown(f"`{p['service']}`")
 
     _esql_expander("Log Intelligence", data["esql"])
+
+    with st.expander("⚙️ How this works — technical deep dive", expanded=False):
+        st.markdown("""
+#### Log Pipeline: EDOT → Elastic
+
+```
+Your application (any language)
+        │
+        │  OTLP / Filebeat / Logstash agent
+        ▼
+EDOT Collector  (OpenTelemetry collector, Elastic-managed distribution)
+        │
+        ├─► Enrichment: adds host.name, container.id, k8s.pod.name, trace.id
+        ├─► Parsing:    ingest pipelines extract structured fields from message
+        └─► Routing:    data stream routing by service.name + environment
+        │
+        ▼
+logs-{service}.{environment}-{namespace}   (data stream, hot-warm-cold ILM)
+        │
+        ├─► @timestamp, log.level, log.message (ECS fields)
+        ├─► trace.id, transaction.id           (APM correlation)
+        ├─► service.name, host.name, container.id
+        └─► labels.*  (custom tags from your app)
+```
+""")
+        st.markdown("**Full-text search on logs with ES|QL `MATCH`**")
+        st.code("""\
+FROM logs-*
+| WHERE @timestamp >= NOW() - 1 hour
+  AND tenant_id == "genesys-us"
+  AND log.level IN ("ERROR", "FATAL")
+  AND MATCH(log.message, "connection timeout OR pool exhausted")
+| STATS count = COUNT(*) BY log.message, service.name
+| SORT count DESC
+| LIMIT 20
+""", language="sql")
+
+        st.markdown("**Semantic log search with ELSER (finds similar errors, not just keywords)**")
+        st.code("""\
+POST /logs-*/_search
+{
+  "query": {
+    "semantic": {
+      "field": "log_message_semantic",
+      "query": "database connection failure"
+    }
+  },
+  "filter": [
+    { "range": { "@timestamp": { "gte": "now-1h" } } },
+    { "term": { "tenant_id": "genesys-us" } }
+  ]
+}
+""", language="json")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Build this in your app**")
+            st.markdown("""
+- Use `MATCH` for fast full-text keyword searches on `log.message`
+- Use `semantic_text` + ELSER for fuzzy concept matching (e.g. "auth failure" finds "token rejected")
+- Correlate logs to traces: join `logs-*` on `trace.id` to see the full request context
+- Feed error patterns to Claude for AI root cause summaries via Anthropic API
+""")
+        with col2:
+            st.markdown("**Explore in Kibana**")
+            st.markdown("""
+- **Observability > Logs Explorer**: stream live logs with KQL / ES|QL filter bar
+- **Observability > Logs > Anomalies**: ML-based unusual log rate detection per service
+- **APM > Services > [service] > Logs**: correlated logs for a specific trace
+- **Stack Management > Ingest Pipelines**: inspect the parsing pipeline for your log format
+""")
 
 
 # ── Panel 4: Incident Triage ──────────────────────────────────────────────────
@@ -315,6 +509,84 @@ def _render_incident_triage(svc: Any, tenant: str, region: str):
 
     _esql_expander("Incident Correlation", incident["esql"])
 
+    with st.expander("⚙️ How this works — technical deep dive", expanded=False):
+        st.markdown("""
+#### How Elastic Correlations Works
+
+Elastic Correlations (`_field_caps` + statistical analysis) scans all field values across failing vs successful requests and surfaces fields that appear disproportionately in failures. This is how "version 2.3.1 was deployed 10 minutes before error rate spiked" gets detected automatically.
+
+```
+Failing transactions sample (event.outcome == "failure")
+        │
+        ├─► Elastic computes field-value frequency distribution
+        │
+        └─► Compares against baseline (successful transactions)
+                │
+                ▼
+        Fields with high "impact score" (KS test statistic) surfaced
+        Example: { "field": "labels.version", "value": "2.3.1", "impact": 0.94 }
+```
+""")
+        st.markdown("**ES|QL query to find correlated fields during an incident**")
+        st.code("""\
+FROM traces-apm-*
+| WHERE @timestamp >= NOW() - 30 minutes
+  AND tenant_id == "genesys-us"
+  AND service.name == "auth-service"
+| EVAL is_failing = event.outcome == "failure"
+| STATS
+    fail_count = COUNT_CASE(is_failing == true),
+    total      = COUNT(*),
+    fail_rate  = COUNT_CASE(is_failing == true) * 100.0 / COUNT(*)
+  BY labels.version, labels.region, labels.deploy_id
+| WHERE fail_count > 5
+| SORT fail_rate DESC
+| LIMIT 20
+""", language="sql")
+
+        st.markdown("**Create a Kibana Alert to auto-detect incidents**")
+        st.code("""\
+POST kbn:/api/alerting/rule
+{
+  "name": "auth-service error rate > 5%",
+  "rule_type_id": "apm.error_rate",
+  "schedule": { "interval": "2m" },
+  "params": {
+    "serviceName": "auth-service",
+    "transactionType": "request",
+    "windowSize": 5,
+    "windowUnit": "m",
+    "threshold": 5,
+    "environment": "production"
+  },
+  "actions": [{
+    "id": "<slack-connector-id>",
+    "group": "threshold_met",
+    "params": {
+      "message": "auth-service error rate exceeded 5% for tenant genesys-us"
+    }
+  }]
+}
+""", language="json")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Build this in your app**")
+            st.markdown("""
+- Wire alert webhooks to your incident portal to create tickets automatically
+- Use the ES|QL query above to surface correlated labels (version, deploy_id, region)
+- Implement "Blast Radius" by querying all services with failing transactions in the same `trace.id` tree
+- Store incident timelines in a dedicated `incidents-*` index for post-mortem analysis
+""")
+        with col2:
+            st.markdown("**Explore in Kibana**")
+            st.markdown("""
+- **APM > Services > [service] > Correlations**: interactive correlation explorer (no ES|QL needed)
+- **Observability > Alerts**: manage all alerting rules across APM, logs, metrics, SLOs
+- **Stack Management > Connectors**: configure Slack, PagerDuty, Jira integrations for alert actions
+- **Cases**: Kibana built-in incident management, linked to alerts and investigations
+""")
+
 
 # ── Panel 5: Distributed Tracing ─────────────────────────────────────────────
 
@@ -357,6 +629,73 @@ def _render_distributed_tracing(svc: Any, tenant: str, region: str):
         c[3].markdown(f"{err_icon} {dep['err']}%")
 
     _esql_expander("Distributed Tracing", data["esql"])
+
+    with st.expander("⚙️ How this works — technical deep dive", expanded=False):
+        st.markdown("""
+#### Trace Context Propagation (W3C TraceContext)
+
+Every request carries two HTTP headers that link spans across services:
+
+```
+Client → api-gateway → auth-service → postgres
+
+Headers injected by EDOT agent automatically:
+  traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+               │  │                                │                │
+               │  └─ trace.id (128-bit hex)        │                └─ sampled flag
+               └─ version                          └─ span.id (64-bit hex)
+  tracestate:  vendor-specific key-value pairs
+
+Every span stores:
+  trace.id       = "4bf92f3577b34da6a3ce929d0e0e4736"  ← links ALL spans in this request
+  span.id        = "00f067aa0ba902b7"                   ← this span's unique ID
+  parent.span.id = "<caller span.id>"                   ← builds the call tree
+```
+
+This is how Elastic builds the waterfall view — by querying all spans with the same `trace.id` and ordering by `@timestamp`.
+""")
+        st.markdown("**ES|QL query to reconstruct a trace waterfall**")
+        st.code("""\
+FROM traces-apm-*
+| WHERE trace.id == "4bf92f3577b34da6a3ce929d0e0e4736"
+| EVAL duration_ms = transaction.duration.us / 1000
+| KEEP service.name, transaction.name, span.id, parent.id,
+       @timestamp, duration_ms, event.outcome
+| SORT @timestamp ASC
+""", language="sql")
+
+        st.markdown("**Query to find the dependency graph from span destination metadata**")
+        st.code("""\
+FROM traces-apm-*
+| WHERE @timestamp >= NOW() - 1 hour
+  AND tenant_id == "genesys-us"
+  AND span.destination.service.resource IS NOT NULL
+| STATS
+    call_count = COUNT(*),
+    p95_ms     = PERCENTILE(span.duration.us, 95) / 1000,
+    error_pct  = COUNT_CASE(event.outcome == "failure") * 100.0 / COUNT(*)
+  BY service.name, span.destination.service.resource
+| SORT call_count DESC
+| LIMIT 50
+""", language="sql")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Build this in your app**")
+            st.markdown("""
+- Pass `traceparent` header through all HTTP calls — EDOT handles this automatically
+- Store `trace.id` in your application logs to correlate log lines to specific traces
+- Build the waterfall by querying spans with the same `trace.id`, sorted by `@timestamp`
+- Highlight the critical path: the chain of spans that sum to the total transaction duration
+""")
+        with col2:
+            st.markdown("**Explore in Kibana APM**")
+            st.markdown("""
+- **APM > Traces**: search traces by `trace.id`, latency, error status, user ID
+- **APM > Services > [service] > Service Map**: visualize inter-service dependencies
+- **APM > Transactions > [transaction] > Trace sample**: full waterfall with span detail
+- **Discover**: filter `traces-apm-*` by `trace.id` to see raw span documents
+""")
 
 
 # ── Panel 6: SLO Dashboard ────────────────────────────────────────────────────
@@ -411,6 +750,95 @@ def _render_slo_dashboard(svc: Any, tenant: str, region: str):
 
     _esql_expander("SLO Dashboard", data["esql"])
 
+    with st.expander("⚙️ How this works — technical deep dive", expanded=False):
+        st.markdown("""
+#### SLO / SLI / Error Budget Math
+
+```
+SLO (Service Level Objective)  — the target: "99.9% of requests succeed"
+SLI (Service Level Indicator)  — the measurement: good_requests / total_requests
+Error Budget                   — allowed failures: 100% - 99.9% = 0.1%
+                                  Over 30 days: 0.1% × 30d × 24h × 60m = 43.2 minutes
+Burn Rate                      — how fast you're consuming the budget:
+                                  burn_rate = error_rate_now / (1 - SLO_target)
+                                  burn_rate = 1.0 → consuming at exactly budget pace
+                                  burn_rate = 2.0 → will exhaust budget in 15 days
+```
+
+A **burn rate alert at 2× over 1 hour** gives you enough warning to fix the issue before the error budget is exhausted within the SLO window.
+""")
+        st.markdown("**ES|QL SLI calculation**")
+        st.code("""\
+FROM traces-apm-*
+| WHERE @timestamp >= NOW() - 30 days
+  AND tenant_id == "genesys-us"
+  AND service.name == "auth-service"
+| STATS
+    good   = COUNT_CASE(event.outcome == "success"),
+    total  = COUNT(*)
+| EVAL
+    sli_pct       = ROUND(good * 100.0 / total, 4),
+    error_budget  = ROUND(100.0 - sli_pct, 4),
+    budget_spent  = ROUND((100.0 - sli_pct) / 0.1 * 100, 1)
+""", language="sql")
+
+        st.markdown("**Create an SLO via Kibana API**")
+        st.code("""\
+POST kbn:/api/slos
+{
+  "name": "auth-service availability 99.9%",
+  "description": "Monthly rolling 30-day SLO for authentication service",
+  "indicator": {
+    "type": "sli.apm.transactionErrorRate",
+    "params": {
+      "service":          "auth-service",
+      "environment":      "production",
+      "transactionType":  "request",
+      "transactionName":  "*",
+      "index":            "traces-apm-*",
+      "filter":           "tenant_id: \"genesys-us\""
+    }
+  },
+  "timeWindow":      { "duration": "30d", "type": "rolling" },
+  "budgetingMethod": "occurrences",
+  "objective":       { "target": 0.999 }
+}
+""", language="json")
+
+        st.markdown("**Burn rate alert (fires when budget will be exhausted in < 2 hours)**")
+        st.code("""\
+POST kbn:/api/alerting/rule
+{
+  "name": "auth-service SLO burn rate critical",
+  "rule_type_id": "slo.rules.burnRate",
+  "params": {
+    "sloId": "<slo-id-from-above>",
+    "windows": [
+      { "id": "short",  "burnRateThreshold": 14.4, "maxBurnRateThreshold": 720, "longWindow": "1h",  "shortWindow": "5m",  "actionGroup": "slo.burnRate.alert" },
+      { "id": "medium", "burnRateThreshold": 6.0,  "maxBurnRateThreshold": 720, "longWindow": "6h",  "shortWindow": "30m", "actionGroup": "slo.burnRate.alert" }
+    ]
+  }
+}
+""", language="json")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Build this in your app**")
+            st.markdown("""
+- Surface the SLO compliance percentage and remaining error budget per tenant on a status page
+- Calculate burn rate in real-time: `burn_rate = current_error_rate / (1 - target)`
+- Trigger escalations when burn rate > 2× for > 5 minutes (means error budget gone in < 2.5 days)
+- Store SLO history in `slos-*` index for trend analysis and quarterly reviews
+""")
+        with col2:
+            st.markdown("**Explore in Kibana**")
+            st.markdown("""
+- **Observability > SLOs**: create, manage, and monitor all SLOs with burn rate charts
+- **Observability > Alerts**: burn rate alerts with configurable multi-window detection
+- **Dashboards > [SLO] Overview**: clone the built-in SLO dashboard and filter by tenant
+- **Stack Management > Rules**: view all SLO-related alerting rules and connector actions
+""")
+
 
 # ── Panel 7: Anomaly Detection ────────────────────────────────────────────────
 
@@ -449,6 +877,98 @@ def _render_anomaly_detection(svc: Any, tenant: str, region: str):
                     st.info("Switch to **Incident Triage** panel to drill down.")
 
     _esql_expander("ML Anomaly Detection", data["esql"])
+
+    with st.expander("⚙️ How this works — technical deep dive", expanded=False):
+        st.markdown("""
+#### How Elastic ML Anomaly Detection Jobs Work
+
+Elastic ML uses a **time-series modelling approach** (not neural networks):
+
+```
+Historical data (≥ 2× the bucket span)
+        │
+        ▼
+Bucket span (e.g. 15 minutes)
+  Model learns: typical value for this metric at this time-of-day / day-of-week
+        │
+        ▼
+Real-time scoring
+  anomaly_score = f(actual_value, expected_value, confidence_interval)
+  Range: 0–100   (> 75 = critical, 50–75 = major, 25–50 = minor)
+        │
+        ▼
+Influencers
+  Fields that correlate with the anomaly (e.g. service.name, host.name)
+  Useful for blast-radius: "which services drove the spike?"
+        │
+        ▼
+Results stored in: .ml-anomalies-* indices
+```
+
+Key configuration parameters:
+- **Bucket span**: granularity of analysis (15m = balance of sensitivity vs noise)
+- **Detectors**: which metric function to analyse (e.g. `mean(transaction.duration.us)`, `count`)
+- **Influencers**: fields that partition the model (e.g. `service.name`, `tenant_id`)
+""")
+        st.markdown("**Create an ML anomaly detection job via API**")
+        st.code("""\
+PUT _ml/anomaly_detectors/apm-latency-anomaly
+{
+  "description": "Detect unusual latency spikes per service per tenant",
+  "analysis_config": {
+    "bucket_span": "15m",
+    "detectors": [{
+      "function": "mean",
+      "field_name": "transaction.duration.us",
+      "by_field_name": "service.name",
+      "partition_field_name": "tenant_id"
+    }],
+    "influencers": ["service.name", "tenant_id", "host.name"]
+  },
+  "data_description": {
+    "time_field": "@timestamp",
+    "time_format": "epoch_ms"
+  },
+  "datafeed_config": {
+    "indices": ["traces-apm-*"],
+    "query": {
+      "bool": {
+        "filter": [{ "term": { "processor.event": "transaction" } }]
+      }
+    }
+  }
+}
+""", language="json")
+
+        st.markdown("**Query anomaly results with ES|QL**")
+        st.code("""\
+FROM .ml-anomalies-*
+| WHERE @timestamp >= NOW() - 24 hours
+  AND job_id == "apm-latency-anomaly"
+  AND record_score >= 50
+| KEEP timestamp, record_score, actual, typical, influencers,
+       by_field_value, partition_field_value
+| SORT record_score DESC
+| LIMIT 20
+""", language="sql")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Build this in your app**")
+            st.markdown("""
+- Create one ML job per key metric (latency, error rate, throughput, log rate)
+- Use `partition_field_name: "tenant_id"` to get per-tenant anomaly baselines — critical for multi-tenant SaaS
+- Map anomaly scores to alert severity: > 75 → PagerDuty, 50–75 → Slack, < 50 → dashboard only
+- Link anomaly records to APM traces via the influencer `service.name` for fast drill-down
+""")
+        with col2:
+            st.markdown("**Explore in Kibana**")
+            st.markdown("""
+- **Machine Learning > Anomaly Detection**: create and manage jobs with a wizard UI
+- **Machine Learning > Anomaly Explorer**: interactive anomaly swimlane per service
+- **Machine Learning > Single Metric Viewer**: deep-dive into one detector's model and anomalies
+- **Observability > Logs > Anomalies**: ML job automatically created for log rate per service
+""")
 
 
 # ── Main render function ───────────────────────────────────────────────────────

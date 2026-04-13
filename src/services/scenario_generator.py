@@ -31,6 +31,8 @@ NORMAL_SCENARIO = {
     "severity": "low",
     "field_overrides": {},
     "expected_alerts": [],
+    "expected_errors": 0,
+    "evidence_bundle": {},
 }
 
 
@@ -95,7 +97,7 @@ class ScenarioGenerator:
             if isinstance(ds, dict):
                 available_fields.update(ds.get("required_fields", {}))
 
-        pillar_guidance = self._pillar_guidance(pillar, sub_category, available_fields)
+        pillar_guidance = self._pillar_guidance(pillar, sub_category, available_fields, company=company)
 
         return f"""You are an Elastic demo expert designing live replay scenarios for Elastic Demo Builder.
 
@@ -114,7 +116,7 @@ to fire alerts but realistic enough to be credible in a customer presentation.
 
 {pillar_guidance}
 
-**Return ONLY a valid JSON array of scenario objects:**
+**Return ONLY a valid JSON array of scenario objects. Each must include ALL of these fields:**
 ```json
 [
   {{
@@ -126,11 +128,24 @@ to fire alerts but realistic enough to be credible in a customer presentation.
     "affected_service": "all",
     "severity": "low",
     "field_overrides": {{}},
-    "expected_alerts": []
+    "expected_alerts": [],
+    "expected_errors": 0,
+    "evidence_bundle": {{
+      "inputs": {{"key": "value describing what is being demonstrated"}},
+      "expected_outcome": "One sentence describing the pass/fail criteria.",
+      "es_queries": [
+        {{
+          "label": "Short label for the query",
+          "index": "index_name",
+          "body": "ES|QL or JSON query body (copy-paste ready for Dev Tools)"
+        }}
+      ],
+      "metrics": {{"metric_name": "expected_value"}}
+    }}
   }},
   {{
-    "name": "Checkout Latency Spike",
-    "description": "P99 latency on checkout-service jumps to 8s — triggers SLO breach alert",
+    "name": "Proof Point: What Is Being Proved",
+    "description": "Detailed description with step-by-step actions for the presenter.",
     "trigger_after_seconds": 30,
     "duration_seconds": 120,
     "anomaly_type": "latency_spike",
@@ -141,23 +156,41 @@ to fire alerts but realistic enough to be credible in a customer presentation.
       "transaction.result": "HTTP 5xx",
       "http.response.status_code": 503
     }},
-    "expected_alerts": ["P99 Latency > 2s", "SLO Burn Rate Critical", "Error Rate > 5%"]
+    "expected_alerts": ["P99 Latency > 2s", "SLO Burn Rate Critical", "Error Rate > 5%"],
+    "expected_errors": 15,
+    "evidence_bundle": {{
+      "inputs": {{"service": "checkout-service", "latency_ns": 8000000000}},
+      "expected_outcome": "P99 alert fires within 60s. Error rate exceeds 5% threshold.",
+      "es_queries": [
+        {{
+          "label": "P99 latency by service",
+          "index": "traces-apm*",
+          "body": "FROM traces-apm*\\n| STATS p99 = PERCENTILE(event.duration, 99) BY service.name\\n| SORT p99 DESC"
+        }}
+      ],
+      "metrics": {{"p99_latency_ms": "> 8000", "expected_errors": "15", "unexpected_errors": "0"}}
+    }}
   }}
 ]
 ```
 
 RULES:
 - Always include "Normal Operations" as the first scenario (anomaly_type: "normal")
-- Generate 3-5 additional anomaly scenarios specific to {company}'s pain points
+- Generate 3-5 additional scenarios: include AT LEAST ONE happy-path "proof" scenario and AT LEAST TWO failure scenarios
+- Proof scenarios: name starts with "Proof:" — show the platform working correctly, no anomaly
+- Failure scenarios: show what breaks without Elastic, then the audience understands the value
 - trigger_after_seconds: 20-60 (time before anomaly starts after selecting scenario)
 - duration_seconds: 60-300 (how long the anomaly lasts)
 - field_overrides must use the EXACT field names from the available data fields above
 - expected_alerts must be realistic Kibana alert rule names for this use case
 - severity: "low" | "medium" | "high" | "critical"
 - anomaly_type: one of "normal" | "latency_spike" | "error_surge" | "slo_breach" | "attack" | "db_slowdown" | "cascade_failure"
+- expected_errors: integer count of INTENTIONAL errors the scenario produces (so presenter knows 15 errors = expected, not a bug)
+- evidence_bundle.es_queries: write ES|QL using FROM/WHERE/STATS syntax OR Dev Tools JSON — whichever is more readable
+- evidence_bundle.metrics: 3-5 key numbers the presenter should read out loud during the scenario
 """
 
-    def _pillar_guidance(self, pillar: str, sub_category: str, fields: Dict) -> str:
+    def _pillar_guidance(self, pillar: str, sub_category: str, fields: Dict, company: str = "Customer") -> str:
         if pillar == "observability":
             return f"""**Observability Scenario Guidance ({sub_category.upper()}):**
 Generate scenarios that demonstrate APM/tracing value:
@@ -184,11 +217,60 @@ For security: field_overrides should target ECS fields: event.outcome, event.act
 user.name, source.ip, process.name, process.parent.name, network.bytes, file.path
 """
         else:
-            return f"""**Search Scenario Guidance ({sub_category.upper()}):**
-Generate scenarios that show search quality and performance:
-1. "Normal Operations" — healthy search baseline
-2. "Query Surge" — sudden spike in search requests
-3. "Relevance Drop" — search results quality degrades
+            return f"""**Search / Knowledge Base / RAG Scenario Guidance ({sub_category.upper()}):**
+
+FRAMING RULE: Every scenario must be told from the perspective of a support rep (agent) on a call.
+Start each description with "A [role] is on a call…" or "You're watching live support queries…"
+The audience is watching a live support centre, not an admin console.
+
+Three things to prove:
+  1. Retrieval quality — an agent finds the right article on the first query (hybrid wins, dense fails)
+  2. Access control — two reps from different tenants see different results from the same query
+  3. Citation trust — the result comes with source_url, doc_id, last_synced_at the agent can show
+
+Generate these scenario types for {company}:
+
+HAPPY PATH (anomaly_type: "normal") — REQUIRED, at least 2:
+
+1. "Live: Agent Query Feed — Hybrid Search Healthy"
+   Description: "You're watching live support rep queries hitting the KB right now. Each row is an agent
+   mid-call, typing a question. Hybrid BM25 + semantic returns the right article on the first try —
+   confidence 0.91, p95 < 40ms, zero escalations."
+   field_overrides: retrieval_method="hybrid", top_result_confidence="0.91", escalated_to_human="false",
+                    result_count=8, response_latency_ms="38"
+   evidence es_queries: FROM knowledge_retrieval_events showing live agent queries by tenant
+
+2. "Live: Rep Finds [relevant item] — Hybrid Wins, Dense Fails"
+   Pick something concrete from {company}'s domain (invoice number, policy code, product ID).
+   Description: "A [role] is on a call. The customer mentions [specific ID]. Agent types it into the assistant.
+   Hybrid: found in 38ms. Dense-only: 0 results. Agent either closes the call or escalates."
+   field_overrides: hybrid version = result_count=5, confidence=0.93, escalated_to_human="false"
+   evidence: side-by-side Dev Tools queries — semantic-only vs RRF hybrid
+
+FAILURE SCENARIOS (anomaly_type != "normal") — at least 2:
+
+3. "Failure: Rep Gets Zero Results — Dense-Only Active Mid-Call"
+   field_overrides: retrieval_method="dense", is_zero_result="true", result_count=0,
+                    escalated_to_human="true", retrieval_failure_count=realistic (25-60)
+   Description: "Agents searching for [specific IDs] get 0 results. Confidence: 0.02. Escalation rate climbing."
+   expected_alerts: ["Zero-Result Rate > 30%", "Human Escalation Rate Elevated"]
+   expected_errors: 25-60
+
+4. One more failure from: connector sync staleness (agents citing 48h-old docs),
+   multilingual breakdown (LATAM/EU reps getting 0 results),
+   or cross-tenant ACL drift (rep sees another customer's confidential docs) —
+   whichever fits {company}'s industry and pain points best.
+
+EVIDENCE BUNDLE requirements:
+- inputs: frame as "agent role", "what they searched for", "index"
+- expected_outcome: describe what the rep sees and what happens to the call
+- es_queries: at least one FROM/WHERE/STATS query on live streaming data (knowledge_retrieval_events or retrieval_logs)
+- metrics: zero_result_rate, escalation_rate, p95_latency_ms, unexpected_errors
+
+For field_overrides use the EXACT field names from available_fields above.
+If none given, use: retrieval_method, result_count, is_zero_result, query_matched,
+top_result_confidence, retrieval_confidence_score, escalated_to_human, fallback_triggered,
+response_latency_ms, retrieval_failure_count
 """
 
     # ------------------------------------------------------------------
@@ -207,6 +289,9 @@ Generate scenarios that show search quality and performance:
             "severity": "medium",
             "field_overrides": {},
             "expected_alerts": [],
+            "expected_errors": 0,
+            "evidence_bundle": {},
+            "recommended_dataset": "",
         }
         normalised = []
         for s in scenarios:
@@ -217,15 +302,27 @@ Generate scenarios that show search quality and performance:
             # Type coercions
             s["trigger_after_seconds"] = int(s["trigger_after_seconds"])
             s["duration_seconds"] = int(s["duration_seconds"])
+            s["expected_errors"] = int(s.get("expected_errors", 0))
             if not isinstance(s["field_overrides"], dict):
                 s["field_overrides"] = {}
             if not isinstance(s["expected_alerts"], list):
                 s["expected_alerts"] = []
+            if not isinstance(s["evidence_bundle"], dict):
+                s["evidence_bundle"] = {}
+            # Ensure evidence_bundle sub-keys are correct types
+            eb = s["evidence_bundle"]
+            if not isinstance(eb.get("inputs"), dict):
+                eb["inputs"] = {}
+            if not isinstance(eb.get("es_queries"), list):
+                eb["es_queries"] = []
+            if not isinstance(eb.get("metrics"), dict):
+                eb["metrics"] = {}
             normalised.append(s)
         return normalised
 
     def _fallback_scenarios(self, pillar: str, sub_category: str) -> List[Dict]:
         """Return minimal hardcoded scenarios if LLM fails."""
+        _empty_bundle: Dict = {"inputs": {}, "expected_outcome": "", "es_queries": [], "metrics": {}}
         scenarios = [dict(NORMAL_SCENARIO)]
         if pillar == "observability":
             scenarios.append({
@@ -238,6 +335,13 @@ Generate scenarios that show search quality and performance:
                 "severity": "high",
                 "field_overrides": {"event.duration": 5_000_000_000},
                 "expected_alerts": ["P99 Latency > 2s"],
+                "expected_errors": 0,
+                "evidence_bundle": {
+                    "inputs": {"service": "primary-service", "latency_ns": 5000000000},
+                    "expected_outcome": "P99 alert fires within 60s of scenario start.",
+                    "es_queries": [{"label": "P99 by service", "index": "traces-apm*", "body": "FROM traces-apm*\n| STATS p99 = PERCENTILE(event.duration, 99) BY service.name\n| SORT p99 DESC"}],
+                    "metrics": {"p99_latency_ms": "> 5000", "expected_errors": "0"},
+                },
             })
             scenarios.append({
                 "name": "Error Storm",
@@ -252,6 +356,8 @@ Generate scenarios that show search quality and performance:
                     "http.response.status_code": 503,
                 },
                 "expected_alerts": ["Error Rate > 5%"],
+                "expected_errors": 20,
+                "evidence_bundle": dict(_empty_bundle),
             })
         elif pillar == "security":
             scenarios.append({
@@ -267,6 +373,46 @@ Generate scenarios that show search quality and performance:
                     "event.action": "failed-login",
                 },
                 "expected_alerts": ["Brute Force Login Detected"],
+                "expected_errors": 0,
+                "evidence_bundle": dict(_empty_bundle),
+            })
+        else:
+            # Search/RAG fallback
+            scenarios.append({
+                "name": "Proof: Hybrid Retrieval — BM25 + Semantic",
+                "description": "Show hybrid RRF finding results that dense-only misses.",
+                "trigger_after_seconds": 0,
+                "duration_seconds": 3600,
+                "anomaly_type": "normal",
+                "affected_service": "retrieval-pipeline",
+                "severity": "low",
+                "field_overrides": {"retrieval_method": "hybrid", "result_count": 5, "top_result_confidence": "0.90"},
+                "expected_alerts": [],
+                "expected_errors": 0,
+                "evidence_bundle": {
+                    "inputs": {"retrieval_method": "hybrid (BM25 + semantic RRF)"},
+                    "expected_outcome": "Top-5 results contain both exact-match and semantic matches.",
+                    "es_queries": [],
+                    "metrics": {"p95_latency_ms": "< 50", "zero_result_rate": "< 1%"},
+                },
+            })
+            scenarios.append({
+                "name": "Dense-Only Retrieval Failure — Exact ID Queries",
+                "description": "Dense-only mode returns zero results for exact alphanumeric identifiers.",
+                "trigger_after_seconds": 30,
+                "duration_seconds": 180,
+                "anomaly_type": "error_surge",
+                "affected_service": "retrieval-pipeline",
+                "severity": "high",
+                "field_overrides": {
+                    "retrieval_method": "dense",
+                    "is_zero_result": "true",
+                    "result_count": 0,
+                    "escalated_to_human": "true",
+                },
+                "expected_alerts": ["Zero-Result Rate > 30%", "Human Escalation Rate Elevated"],
+                "expected_errors": 30,
+                "evidence_bundle": dict(_empty_bundle),
             })
         return scenarios
 

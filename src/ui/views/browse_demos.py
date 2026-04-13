@@ -24,6 +24,13 @@ from .tabs import (
     render_search_stack_tab,
     render_revenue_engine_tab,
     render_obs_intelligence_tab,
+    render_devworkbench_tab,
+    render_persona_dashboards_tab,
+    render_hunter_workbench_tab,
+    render_eval_workbench_tab,
+    render_ai_endpoint_security_tab,
+    render_genesys_qa_tab,
+    render_esrally_tab,
 )
 from ..components.progress_tracker import render_progress_header
 
@@ -67,14 +74,25 @@ def render_browse_demos_view():
 
             if demo_pillar == "security":
                 TAB_OPTIONS.insert(3, "🛡️ Detection Rules")   # after Queries, before Tools
+                TAB_OPTIONS.insert(4, "🤖 AI Endpoints")       # after Detection Rules
             elif demo_pillar == "observability":
                 TAB_OPTIONS.insert(3, "📡 Service Map")        # after Queries, before Tools
                 TAB_OPTIONS.insert(4, "🔭 Reliability Engine") # after Service Map
+                TAB_OPTIONS.insert(5, "🖥️ Dev WorkBench")      # after Reliability Engine
+                TAB_OPTIONS.insert(6, "👤 Persona Dashboards") # after Dev WorkBench
+                TAB_OPTIONS.insert(7, "🔬 Hunter WorkBench")   # after Persona Dashboards
             elif demo_pillar in ("search", ""):
                 TAB_OPTIONS.insert(3, "🔍 Search Stack")       # after Queries, before Tools
                 TAB_OPTIONS.insert(4, "⚡ Revenue Engine")     # after Search Stack
 
+            # Genesys-specific: inject Live Q&A tab (detected by module name)
+            is_genesys = "genesys" in st.session_state.current_demo_module.lower()
+            if is_genesys:
+                TAB_OPTIONS.insert(3, "💬 Live Q&A")           # after Queries, before Tools
+
             TAB_OPTIONS.append("▶ Live Replay")
+            TAB_OPTIONS.append("🧪 Eval Workbench")
+            TAB_OPTIONS.append("⚡ ESRally")
             TAB_OPTIONS.append("📝 Guide")
 
             # Session-state-backed tab selector so active tab survives reruns
@@ -119,8 +137,14 @@ def render_browse_demos_view():
             elif active_tab == "🔍 Queries":
                 render_queries_tab(loader)
 
+            elif active_tab == "💬 Live Q&A":
+                render_genesys_qa_tab(loader)
+
             elif active_tab == "🛡️ Detection Rules":
                 render_detection_rules_tab(loader)
+
+            elif active_tab == "🤖 AI Endpoints":
+                render_ai_endpoint_security_tab(loader)
 
             elif active_tab == "📡 Service Map":
                 render_service_map_tab(loader)
@@ -147,8 +171,23 @@ def render_browse_demos_view():
             elif active_tab == "🔭 Reliability Engine":
                 render_obs_intelligence_tab(loader)
 
+            elif active_tab == "🖥️ Dev WorkBench":
+                render_devworkbench_tab(loader)
+
+            elif active_tab == "👤 Persona Dashboards":
+                render_persona_dashboards_tab(loader)
+
+            elif active_tab == "🔬 Hunter WorkBench":
+                render_hunter_workbench_tab(loader)
+
             elif active_tab == "▶ Live Replay":
                 render_replay_tab(loader)
+
+            elif active_tab == "🧪 Eval Workbench":
+                render_eval_workbench_tab(loader)
+
+            elif active_tab == "⚡ ESRally":
+                render_esrally_tab(loader)
 
             elif active_tab == "📝 Guide":
                 render_guide_tab()

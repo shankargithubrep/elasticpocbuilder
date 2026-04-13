@@ -54,8 +54,8 @@ class SearchPreflightService:
 
     ELSER_MODEL_ID = ".elser-2-elasticsearch"
     E5_MODEL_ID = ".multilingual-e5-small"
-    JINA_ENDPOINT_ID = "jina-embeddings-v3"
-    RERANK_MODEL_ID = ".rerank-v1-elasticsearch"
+    JINA_ENDPOINT_ID = ".jina-embeddings-v5-text-small"  # EIS built-in endpoint
+    JINA_RERANKER_ID = ".jina-reranker-v3"  # EIS built-in reranker (no ML nodes needed)
 
     def __init__(self, es_client: Optional[Elasticsearch] = None):
         self.kibana_url = os.getenv("ELASTICSEARCH_KIBANA_URL", "").rstrip("/")
@@ -77,7 +77,7 @@ class SearchPreflightService:
                 endpoint = os.getenv("ELASTIC_ENDPOINT", "")
                 self.es = Elasticsearch(endpoint, api_key=self.api_key)
 
-    def run_all(self, embedding_model: str = "elser") -> PreflightReport:
+    def run_all(self, embedding_model: str = "jina") -> PreflightReport:
         """
         Run all preflight checks and return a consolidated report.
         embedding_model: 'elser' (default) or 'e5' — determines which ML model is checked.
@@ -94,7 +94,7 @@ class SearchPreflightService:
         else:
             checks["elser"] = self._check_ml_model(self.ELSER_MODEL_ID, "ELSER")
 
-        checks["rerank"] = self._check_ml_model(self.RERANK_MODEL_ID, "Rerank")
+        checks["rerank"] = self._check_jina_reranker_endpoint()
         checks["slack"] = self._check_slack()
 
         all_passed = all(c.passed for c in checks.values())
@@ -187,49 +187,74 @@ class SearchPreflightService:
                 detail=str(e),
             )
 
-    def _check_jina_endpoint(self) -> PreflightCheck:
-        """Check if the Jina inference endpoint exists in Elasticsearch."""
-        import os
-        jina_key = os.getenv("JINA_API_KEY", "")
-        if not jina_key:
-            return PreflightCheck(
-                name="Jina",
-                passed=False,
-                message="JINA_API_KEY not set — add it to .env or paste it in Settings",
-            )
+    def _check_jina_reranker_endpoint(self) -> PreflightCheck:
+        """
+        Check if the Jina Reranker v3 EIS endpoint is available.
+
+        Jina Reranker v3 runs on EIS — no ML nodes needed.
+        Listwise reranker that processes 64 docs simultaneously.
+        """
         try:
-            resp = self.es.inference.get(inference_id=self.JINA_ENDPOINT_ID)
+            self.es.inference.get(inference_id=self.JINA_RERANKER_ID)
             return PreflightCheck(
-                name="Jina",
+                name="Jina Reranker EIS",
                 passed=True,
-                message=f"Inference endpoint '{self.JINA_ENDPOINT_ID}' ready",
+                message=f"Jina Reranker v3 endpoint '{self.JINA_RERANKER_ID}' ready (no ML nodes needed)",
             )
-        except Exception:
-            # Endpoint doesn't exist yet — try to create it
-            try:
-                self.es.inference.put(
-                    task_type="text_embedding",
-                    inference_id=self.JINA_ENDPOINT_ID,
-                    body={
-                        "service": "jinaai",
-                        "service_settings": {
-                            "api_key": jina_key,
-                            "model_id": "jina-embeddings-v3",
-                        },
-                    },
-                )
+        except Exception as e:
+            err = str(e).lower()
+            if "resource_not_found" in err or "404" in err:
                 return PreflightCheck(
-                    name="Jina",
-                    passed=True,
-                    message=f"Created Jina inference endpoint '{self.JINA_ENDPOINT_ID}'",
-                )
-            except Exception as e:
-                return PreflightCheck(
-                    name="Jina",
+                    name="Jina Reranker EIS",
                     passed=False,
-                    message="Could not create Jina inference endpoint",
+                    message=(
+                        "Jina Reranker v3 EIS endpoint not available. "
+                        "On Elastic Cloud this should be auto-available. "
+                        "Self-managed: enable Cloud Connect in Kibana > Stack Management."
+                    ),
                     detail=str(e),
                 )
+            return PreflightCheck(
+                name="Jina Reranker EIS",
+                passed=False,
+                message="Could not check Jina Reranker v3 endpoint",
+                detail=str(e),
+            )
+
+    def _check_jina_endpoint(self) -> PreflightCheck:
+        """
+        Check if the Jina EIS inference endpoint is available.
+
+        Jina models run on Elastic Inference Service (EIS) — no API key or ML nodes needed.
+        Available on Elastic Cloud by default. Self-managed requires ES 9.3+ Enterprise
+        with Cloud Connect enabled in Kibana > Stack Management > Cloud Connect.
+        """
+        try:
+            self.es.inference.get(inference_id=self.JINA_ENDPOINT_ID)
+            return PreflightCheck(
+                name="Jina EIS",
+                passed=True,
+                message=f"Jina EIS endpoint '{self.JINA_ENDPOINT_ID}' ready (no ML nodes needed)",
+            )
+        except Exception as e:
+            err = str(e).lower()
+            if "resource_not_found" in err or "404" in err:
+                return PreflightCheck(
+                    name="Jina EIS",
+                    passed=False,
+                    message=(
+                        "Jina EIS endpoint not available. "
+                        "On Elastic Cloud this should be auto-available. "
+                        "Self-managed: enable Cloud Connect in Kibana > Stack Management."
+                    ),
+                    detail=str(e),
+                )
+            return PreflightCheck(
+                name="Jina EIS",
+                passed=False,
+                message="Could not check Jina EIS endpoint",
+                detail=str(e),
+            )
 
     def _check_slack(self) -> PreflightCheck:
         if not self.slack_webhook:

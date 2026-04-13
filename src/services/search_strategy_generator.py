@@ -129,6 +129,9 @@ class SearchQueryStrategyGenerator:
 
             strategy_json = self._extract_json(strategy_text)
 
+            # Post-generation validation/repair: ensure semantic_fields are populated
+            strategy_json = self._repair_semantic_fields(strategy_json, context)
+
             # Add search narrative and custom library to strategy
             strategy_json["search_narrative"] = search_narrative
             strategy_json["custom_domain_library"] = custom_library
@@ -336,8 +339,43 @@ Example dataset fields:
 - Do NOT prefix or suffix field names with "semantic_" — just use the natural field name
 - Elasticsearch automatically handles BOTH text storage AND embedding generation for semantic_text fields
 - The data generator will create ONE column with text data
-- Elasticsearch will auto-generate embeddings using ELSER v2 (.elser-2-elasticsearch)
+- Elasticsearch will auto-generate embeddings using Jina EIS (`.jina-embeddings-v5-text-small`) — 119 languages, 32K token context, no ML nodes required
 - Reference: https://www.elastic.co/search-labs/blog/semantic-search-simplified-semantic-text
+
+**⚠️ CRITICAL: semantic_fields Array MUST Be Populated**
+
+The `semantic_fields` array in each dataset specification MUST list every field that has type `semantic_text`.
+- If a dataset has `"content": "semantic_text"` in required_fields → `"semantic_fields": ["content"]`
+- If a dataset has `"body": "semantic_text"` in required_fields → `"semantic_fields": ["body"]`
+- NEVER leave `semantic_fields` as `[]` for a dataset that has ANY `semantic_text` field in required_fields
+- Reference datasets with no semantic_text fields may have `"semantic_fields": []`
+
+**Example (MANDATORY — follow this exactly):**
+```json
+{{
+  "name": "knowledge_base_articles",
+  "required_fields": {{
+    "article_id": "keyword",
+    "title": "text",
+    "content": "semantic_text"
+  }},
+  "semantic_fields": ["content"]
+}}
+```
+NOT:
+```json
+{{
+  "semantic_fields": []
+}}
+```
+That is WRONG and will break semantic search for the demo.
+
+**⚠️ CRITICAL: Multi-Tenant Demos — acl.principals Field**
+
+If the customer context mentions ANY of these: multi-tenant, tenant isolation, document-level security, DLS, ACL, entitlements, access control, acl.principals, role-based access — then:
+- The primary content/document dataset MUST include `"acl.principals": "keyword"` in required_fields
+- This field stores an array of principals: `["user:alice@example.com", "group:HR", "tenant:acme"]`
+- Do NOT name it anything else (e.g. "access_list", "allowed_users") — use exactly `acl.principals`
 
 **Good candidates for semantic_text:**
 - Descriptions, summaries, bios, overviews
@@ -778,6 +816,95 @@ ES|QL Search Commands:
 - LOOKUP JOIN: Enrich search results with reference data
 - semantic_text: Field type for vector search (requires ELSER)
 """
+
+    def _repair_semantic_fields(self, strategy: Dict, context: Dict) -> Dict:
+        """Post-generation repair: ensure semantic_fields are populated for all Search demos.
+
+        If the LLM left semantic_fields as [] for a dataset that contains semantic_text fields
+        in required_fields, this method auto-populates semantic_fields from required_fields.
+
+        Also enforces acl.principals for multi-tenant demos.
+
+        Args:
+            strategy: The generated strategy JSON dict
+            context: Customer context (used to detect multi-tenant signals)
+
+        Returns:
+            Repaired strategy dict
+        """
+        # Keyword signals that indicate a multi-tenant / DLS demo
+        MULTITENANT_SIGNALS = {
+            "multi-tenant", "multitenant", "multi tenant",
+            "document level security", "document-level security", "dls",
+            "acl.principals", "acl_principals", "entitlement",
+            "access control", "role-based access", "tenant isolation",
+            "tenant", "principals",
+        }
+
+        # Determine if this is a multi-tenant demo by scanning all context fields
+        context_text = " ".join([
+            str(context.get("company_name", "")),
+            str(context.get("department", "")),
+            " ".join(context.get("pain_points", [])),
+            " ".join(context.get("use_cases", [])),
+            str(context.get("full_technical_context", "")),
+        ]).lower()
+
+        is_multitenant = any(signal in context_text for signal in MULTITENANT_SIGNALS)
+        if is_multitenant:
+            logger.info("Multi-tenant signals detected — will enforce acl.principals on primary content dataset")
+
+        datasets = strategy.get("datasets", [])
+        if not datasets:
+            return strategy
+
+        # Identify the primary content dataset (largest, most semantic_text fields, or content-named)
+        CONTENT_KEYWORDS = {"document", "content", "article", "knowledge", "policy", "ticket", "record"}
+        primary_dataset = None
+        primary_score = -1
+
+        for ds in datasets:
+            required_fields = ds.get("required_fields", {})
+            semantic_text_fields = [f for f, t in required_fields.items() if t == "semantic_text"]
+            name_lower = ds.get("name", "").lower()
+            name_score = sum(1 for kw in CONTENT_KEYWORDS if kw in name_lower)
+            score = len(semantic_text_fields) * 10 + name_score
+            if score > primary_score:
+                primary_score = score
+                primary_dataset = ds
+
+        for ds in datasets:
+            ds_name = ds.get("name", "unnamed")
+            required_fields = ds.get("required_fields", {})
+
+            # --- Fix A: auto-populate semantic_fields from required_fields ---
+            semantic_text_fields = [f for f, t in required_fields.items() if t == "semantic_text"]
+            current_semantic_fields = ds.get("semantic_fields", [])
+
+            if semantic_text_fields and not current_semantic_fields:
+                logger.warning(
+                    f"Auto-populated semantic_fields for '{ds_name}' — LLM left them empty. "
+                    f"Populating with: {semantic_text_fields}"
+                )
+                ds["semantic_fields"] = semantic_text_fields
+            elif not current_semantic_fields:
+                ds["semantic_fields"] = []
+
+            # --- Fix C: enforce acl.principals for primary content dataset in multi-tenant demos ---
+            if is_multitenant and ds is primary_dataset:
+                if "acl.principals" not in required_fields:
+                    logger.warning(
+                        f"Multi-tenant demo: auto-adding 'acl.principals' keyword field to primary dataset '{ds_name}'"
+                    )
+                    required_fields["acl.principals"] = "keyword"
+                    ds["required_fields"] = required_fields
+                    # Also add to acl_fields if not present
+                    acl_fields = ds.get("acl_fields", [])
+                    if "acl.principals" not in acl_fields:
+                        acl_fields.append("acl.principals")
+                        ds["acl_fields"] = acl_fields
+
+        return strategy
 
     def _extract_json(self, text: str) -> Dict:
         """Extract JSON from LLM response with robust error handling"""

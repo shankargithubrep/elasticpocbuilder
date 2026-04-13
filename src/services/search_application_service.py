@@ -37,7 +37,7 @@ class SearchApplicationService:
         rrf_rank_constant: int = 60,
         bm25_boost: float = 1.0,
         semantic_boost: float = 1.0,
-        embedding_model: str = "elser",
+        embedding_model: str = "jina",
     ) -> str:
         """
         Create an Elastic Search Application with an RRF-based hybrid search
@@ -84,7 +84,7 @@ class SearchApplicationService:
         rrf_rank_constant: int,
         bm25_boost: float,
         semantic_boost: float,
-        embedding_model: str = "elser",
+        embedding_model: str = "jina",
     ) -> Dict[str, Any]:
         """
         Build an RRF hybrid search template that combines:
@@ -173,7 +173,7 @@ class SearchApplicationService:
         bm25_boost: float,
         semantic_boost: float,
         rrf_rank_constant: int = 60,
-        embedding_model: str = "elser",
+        embedding_model: str = "jina",
     ) -> str:
         """Update the hybrid search weights for an existing Search Application."""
         return self.ensure_search_application(

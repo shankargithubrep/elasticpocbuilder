@@ -40,6 +40,12 @@ class Scenario:
     severity: str              # low | medium | high | critical
     field_overrides: Dict[str, Any] = field(default_factory=dict)
     expected_alerts: List[str] = field(default_factory=list)
+    # Evidence bundle: proof artifacts emitted at the end of each scenario
+    evidence_bundle: Dict[str, Any] = field(default_factory=dict)
+    # Expected errors (intentional) vs unexpected (real failures)
+    expected_errors: int = 0
+    # Recommended CSV dataset to stream for this scenario (empty = user picks)
+    recommended_dataset: str = ""
 
 
 # ---------------------------------------------------------------------------

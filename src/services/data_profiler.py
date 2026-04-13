@@ -132,6 +132,15 @@ class DataProfiler:
             "sample_combinations": []
         }
 
+        # Fetch actual ES field types — critical for query generation
+        es_field_types = self._get_es_field_types(dataset_name)
+        if es_field_types:
+            profile["es_field_types"] = es_field_types
+            # Flag fields that are text (need MATCH) vs keyword (can use ==)
+            profile["keyword_fields"] = [f for f, t in es_field_types.items() if t == 'keyword']
+            profile["text_fields"] = [f for f, t in es_field_types.items() if t == 'text']
+            profile["semantic_fields"] = [f for f, t in es_field_types.items() if t == 'semantic_text']
+
         # Get field types from DataFrame
         field_types = {
             col: str(df[col].dtype)
@@ -180,6 +189,42 @@ class DataProfiler:
             logger.warning(f"Could not generate threshold suggestions for {dataset_name}: {e}")
 
         return profile
+
+    def _get_es_field_types(self, index_name: str) -> Dict[str, str]:
+        """Fetch actual Elasticsearch field types from index mapping.
+
+        Returns flat dict of field_name -> es_type (keyword, text, date, etc.)
+        Critical for query generation — keyword fields use ==, text fields use MATCH().
+        """
+        try:
+            if self._is_tuple_response:
+                # ElasticsearchIndexer — access .es or .client attribute
+                es_client = getattr(self.es_client, 'client', getattr(self.es_client, 'es', None))
+            else:
+                es_client = self.es_client
+
+            if es_client is None:
+                return {}
+
+            mapping = es_client.indices.get_mapping(index=index_name)
+            properties = mapping[index_name]['mappings'].get('properties', {})
+
+            flat = {}
+            self._flatten_mapping(properties, '', flat)
+            return flat
+        except Exception as e:
+            logger.warning(f"Could not fetch ES mapping for {index_name}: {e}")
+            return {}
+
+    def _flatten_mapping(self, properties: Dict, prefix: str, result: Dict):
+        """Recursively flatten nested mapping properties"""
+        for field_name, field_config in properties.items():
+            full_name = f"{prefix}{field_name}" if not prefix else f"{prefix}.{field_name}"
+            es_type = field_config.get('type', 'object')
+            result[full_name] = es_type
+            # Recurse into nested objects
+            if 'properties' in field_config:
+                self._flatten_mapping(field_config['properties'], full_name, result)
 
     def _profile_field(
         self,

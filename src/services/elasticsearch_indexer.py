@@ -3,8 +3,9 @@ Elasticsearch Indexer Service
 Handles indexing of demo datasets into Elasticsearch with support for:
 - Data streams (timeseries data)
 - Lookup indices (dimension tables)
-- Semantic text fields with ELSER
-- ELSER pre-flight checks and deployment
+- Semantic text fields with Jina EIS (default) or ELSER
+- Jina: runs on Elastic Inference Service, no ML nodes needed
+- ELSER: legacy sparse model, requires ML nodes
 """
 
 import os
@@ -114,7 +115,7 @@ class FieldMapper:
                 if avg_length > 50 and col not in semantic_field_set:
                     # Long text might be semantic
                     auto_semantic_mapping = {"type": "semantic_text"}
-                    auto_semantic_mapping["inference_id"] = inference_id or ".elser-2-elasticsearch"
+                    auto_semantic_mapping["inference_id"] = inference_id or ".jina-embeddings-v5-text-small"
                     mappings["properties"][col] = auto_semantic_mapping
                     detected_semantic_fields.append(col)
                 else:
@@ -289,6 +290,36 @@ class ElasticsearchIndexer:
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
 
+    def _ensure_demo_pipeline(
+        self,
+        demo_slug: str,
+        semantic_fields: List[str],
+        progress_callback: Optional[callable] = None,
+    ) -> Optional[str]:
+        """Ensure the ELSER ingest pipeline for this demo exists, creating it if missing.
+
+        Returns the pipeline name, or None if no pipeline is needed.
+        """
+        pipeline_name = f"{demo_slug}-elser-pipeline"
+        try:
+            self.client.ingest.get_pipeline(id=pipeline_name)
+            logger.info(f"Pipeline already exists: {pipeline_name}")
+            return pipeline_name
+        except Exception:
+            # Pipeline missing — recreate it
+            logger.warning(f"Pipeline '{pipeline_name}' not found — recreating...")
+            if progress_callback:
+                progress_callback(0.05, f"Recreating ELSER pipeline...")
+            try:
+                from src.services.ingest_pipeline_service import IngestPipelineService
+                svc = IngestPipelineService(self.client)
+                created = svc.ensure_elser_pipeline(demo_slug, semantic_fields or [])
+                logger.info(f"Recreated pipeline: {created}")
+                return created
+            except Exception as exc:
+                logger.error(f"Could not recreate pipeline {pipeline_name}: {exc}")
+                return None
+
     def index_dataset(
         self,
         df: pd.DataFrame,
@@ -299,7 +330,8 @@ class ElasticsearchIndexer:
         progress_callback: Optional[callable] = None,
         stop_callback: Optional[callable] = None,
         inference_id: Optional[str] = None,
-        ilm_policy: Optional[str] = None
+        ilm_policy: Optional[str] = None,
+        demo_slug: Optional[str] = None,
     ) -> IndexingResult:
         """
         Index a dataset into Elasticsearch
@@ -314,6 +346,7 @@ class ElasticsearchIndexer:
             progress_callback: optional callback(progress, message)
             inference_id: optional inference endpoint ID for semantic_text field mappings
             stop_callback: optional callback() that returns True to stop indexing
+            demo_slug: optional demo module name used to auto-recreate the ELSER pipeline if missing
 
         Returns:
             IndexingResult with details
@@ -322,9 +355,23 @@ class ElasticsearchIndexer:
         errors = []
 
         try:
-            # Update progress
-            if progress_callback:
-                progress_callback(0.05, "Checking ELSER deployment...")
+            # Ensure the ELSER ingest pipeline exists before attempting to index.
+            # The pipeline is set as index.default_pipeline during Search Stack provisioning.
+            # If the cluster was cleaned or the pipeline was accidentally deleted it must be
+            # recreated here — otherwise every bulk document will fail with a 400.
+            if demo_slug:
+                self._ensure_demo_pipeline(demo_slug, semantic_fields or [], progress_callback)
+            else:
+                # No demo_slug provided — derive from index settings if the index already exists
+                try:
+                    settings = self.client.indices.get_settings(index=dataset_name)
+                    idx_settings = settings.get(dataset_name, {}).get("settings", {}).get("index", {})
+                    default_pipeline = idx_settings.get("default_pipeline")
+                    if default_pipeline and default_pipeline.endswith("-elser-pipeline"):
+                        slug = default_pipeline[: -len("-elser-pipeline")]
+                        self._ensure_demo_pipeline(slug, semantic_fields or [], progress_callback)
+                except Exception:
+                    pass  # Index may not exist yet — that's fine
 
             # Ensure ILM policy exists if requested (security / observability pillars)
             if ilm_policy:
@@ -333,16 +380,36 @@ class ElasticsearchIndexer:
             # Analyze DataFrame with LLM-specified semantic and text fields
             mapping_info = FieldMapper.analyze_dataframe(df, semantic_fields, text_fields, inference_id)
 
-            # Pre-flight check: Ensure ELSER is ready if semantic fields are used
+            # Pre-flight check for semantic fields.
+            # Jina via EIS needs no ML node — just verify the EIS endpoint exists.
+            # ELSER requires an ML node to be deployed.
             if mapping_info["semantic_fields"]:
-                elser_ready, elser_msg = self.ensure_elser_ready(progress_callback)
-                if not elser_ready:
-                    raise ValueError(
-                        f"Cannot index with semantic_text fields: {elser_msg}\n\n"
-                        f"Semantic fields specified: {', '.join(mapping_info['semantic_fields'])}\n\n"
-                        f"Please deploy ELSER through Kibana > Machine Learning > Trained Models, "
-                        f"or remove semantic fields from your data generator."
-                    )
+                effective_inference_id = inference_id or ".jina-embeddings-v5-text-small"
+                if effective_inference_id.startswith(".jina"):
+                    # Jina EIS — check endpoint reachability, no ML node required
+                    try:
+                        self.client.inference.get(inference_id=effective_inference_id)
+                        if progress_callback:
+                            progress_callback(0.08, f"Jina EIS endpoint ready ({effective_inference_id})")
+                    except Exception as e:
+                        raise ValueError(
+                            f"Jina EIS endpoint '{effective_inference_id}' not found.\n\n"
+                            f"On Elastic Cloud this is auto-available. "
+                            f"Self-managed: enable Cloud Connect in Kibana > Stack Management > Cloud Connect "
+                            f"(requires ES 9.3+ Enterprise).\n\nDetail: {e}"
+                        )
+                else:
+                    # ELSER — requires ML node deployment
+                    if progress_callback:
+                        progress_callback(0.05, "Checking ELSER deployment...")
+                    elser_ready, elser_msg = self.ensure_elser_ready(progress_callback)
+                    if not elser_ready:
+                        raise ValueError(
+                            f"Cannot index with semantic_text fields: {elser_msg}\n\n"
+                            f"Semantic fields specified: {', '.join(mapping_info['semantic_fields'])}\n\n"
+                            f"Please deploy ELSER through Kibana > Machine Learning > Trained Models, "
+                            f"or switch to Jina EIS (no ML nodes required)."
+                        )
 
             if progress_callback:
                 progress_callback(0.1, "Analyzed dataset structure")

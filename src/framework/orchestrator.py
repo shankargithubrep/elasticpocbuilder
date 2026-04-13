@@ -582,7 +582,7 @@ class ModularDemoOrchestrator:
             # Don't fail the entire generation if profiling fails
 
         # Schema validation gate 2: Verify indexed field names match strategy (search only)
-        if demo_type == 'search' and data_profile and data_profile.get('datasets'):
+        if data_profile and data_profile.get('datasets'):
             try:
                 from src.services.schema_contract import SchemaContract
                 canonical = SchemaContract.extract_canonical_fields(query_strategy)
@@ -592,6 +592,53 @@ class ModularDemoOrchestrator:
                         logger.warning(f"[SchemaContract] profile: {w}")
             except Exception as e:
                 logger.debug(f"Schema contract profile validation skipped: {e}")
+
+        # Phase 4.6: Content Alignment Validation
+        timer.start("4.6_content_alignment")
+        if indexing_results and data_profile:
+            if progress_callback:
+                progress_callback(0.63, "🎯 Validating content alignment with query intents...")
+
+            content_alignment_report = None
+            try:
+                from src.services.content_alignment_validator import ContentAlignmentValidator
+                from src.services.elasticsearch_indexer import ElasticsearchIndexer
+
+                successful_indices = {
+                    name: result['index_name']
+                    for name, result in indexing_results.items()
+                    if result.get('status') == 'success'
+                }
+
+                if successful_indices:
+                    es_raw = ElasticsearchIndexer().client
+                    validator = ContentAlignmentValidator(es_raw, self.llm_client)
+                    content_alignment_report = validator.validate(
+                        indexed_datasets=successful_indices,
+                        query_strategy=query_strategy,
+                        config=config
+                    )
+
+                    results['phases']['content_alignment'] = content_alignment_report
+
+                    score = content_alignment_report.get('alignment_score', 1.0)
+                    passed = content_alignment_report.get('passed', True)
+                    gaps = content_alignment_report.get('content_gaps', [])
+
+                    if progress_callback:
+                        status = '✅' if passed else '⚠️'
+                        progress_callback(0.64, f"{status} Content alignment score: {score:.0%} — {len(gaps)} gaps found")
+
+                    if not passed:
+                        logger.warning(f"Content alignment below threshold: {score:.2f}")
+                        for gap in gaps:
+                            logger.warning(f"  Content gap: {gap}")
+                    else:
+                        logger.info(f"Content alignment passed: {score:.2f}")
+
+            except Exception as e:
+                logger.warning(f"Content alignment validation failed (non-blocking): {e}")
+                results['phases']['content_alignment'] = {'status': 'skipped', 'error': str(e)}
 
         # Phase 5: Generate Query Module (NOW with data profile!)
         timer.start("5_query_module_generation")
@@ -638,7 +685,7 @@ class ModularDemoOrchestrator:
                        f"{len(rag_queries)} RAG")
 
             # Schema validation gate 3: Verify query field references exist in data (search only)
-            if demo_type == 'search' and all_queries:
+            if all_queries:
                 try:
                     from src.services.schema_contract import SchemaContract
                     canonical = SchemaContract.extract_canonical_fields(query_strategy)
@@ -699,6 +746,15 @@ class ModularDemoOrchestrator:
 
                 # Save test results to module
                 self._save_query_test_results(module_path, query_test_results)
+
+                # Test parameterized queries structurally
+                if successful_indices and parameterized_queries:
+                    param_test_results = test_runner.test_parameterized_queries(
+                        parameterized_queries,
+                        successful_indices
+                    )
+                    results['phases']['parameterized_query_testing'] = param_test_results
+                    logger.info(f"Parameterized query structural test: {param_test_results['structurally_valid']}/{param_test_results['total_queries']} valid")
             else:
                 logger.warning("No successful indices, skipping query testing")
                 results['phases']['query_testing'] = {'status': 'skipped', 'reason': 'no_indexed_data'}

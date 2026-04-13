@@ -115,16 +115,16 @@ class SearchProvisioner:
         assets["indices"] = index_names
 
         # Resolve embedding model — from query_strategy, then session_state, then default
-        embedding_model = query_strategy.get("embedding_model", "elser")
+        embedding_model = query_strategy.get("embedding_model", "jina")
         try:
             import streamlit as st
-            sidebar_type = st.session_state.get("inference_endpoints", {}).get("embedding_type", "elser")
+            sidebar_type = st.session_state.get("inference_endpoints", {}).get("embedding_type", "jina")
             if sidebar_type in ("elser", "e5", "jina"):
                 embedding_model = sidebar_type
             elif sidebar_type == "dense":
                 embedding_model = "e5"
             elif sidebar_type == "sparse":
-                embedding_model = "elser"
+                embedding_model = "jina"
         except Exception:
             pass
         assets["embedding_model"] = embedding_model
@@ -143,7 +143,7 @@ class SearchProvisioner:
             assets["provisioning_errors"].append(f"preflight: {e}")
 
         # --- Step 2: ILM + Index Template + Ingest Pipeline ---
-        _progress(0.89, f"Creating index templates and {'E5' if embedding_model == 'e5' else 'ELSER'} pipeline...")
+        _progress(0.89, f"Creating index templates and {'E5' if embedding_model == 'e5' else 'Jina EIS' if embedding_model == 'jina' else 'ELSER'} pipeline...")
         try:
             pipeline_name = self.pipeline_svc.ensure_embedding_pipeline(
                 demo_slug, semantic_fields, embedding_model=embedding_model

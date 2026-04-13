@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 ELSER_MODEL_ID = ".elser-2-elasticsearch"
 E5_MODEL_ID = ".multilingual-e5-small"
 E5_DIMS = 384  # multilingual-e5-small output dimensions
-JINA_ENDPOINT_ID = "jina-embeddings-v3"
-JINA_DIMS = 1024  # jina-embeddings-v3 output dimensions
+JINA_ENDPOINT_ID = ".jina-embeddings-v5-text-small"  # EIS built-in, no API key needed
+JINA_DIMS = 1024  # jina-embeddings-v5-text-small output dimensions (Matryoshka-reducible)
 
 
 def _vector_field_name(source_field: str) -> str:
@@ -37,12 +37,13 @@ class IngestPipelineService:
         self,
         demo_slug: str,
         semantic_fields: List[str],
-        embedding_model: str = "elser",
+        embedding_model: str = "jina",
         pii_fields: Optional[List[str]] = None,
     ) -> str:
         """
-        Unified entry point — delegates to ELSER, E5, or Jina pipeline creation
-        based on the embedding_model parameter ('elser', 'e5', or 'jina').
+        Unified entry point — delegates to Jina EIS, ELSER, or E5 pipeline creation
+        based on the embedding_model parameter ('jina' default, 'elser', or 'e5').
+        Jina uses Elastic Inference Service (no ML nodes, no API key required).
         """
         if embedding_model == "e5":
             return self.ensure_e5_pipeline(demo_slug, semantic_fields, pii_fields)
@@ -57,7 +58,9 @@ class IngestPipelineService:
         pii_fields: Optional[List[str]] = None,
     ) -> str:
         """
-        Create an ingest pipeline using the Jina v3 inference endpoint.
+        Create an ingest pipeline using the Jina v5-text-small inference endpoint (Elastic EIS).
+        Runs on Elastic Inference Service — no ML nodes or API key required on Elastic Cloud.
+        Self-managed users need ES 9.3+ Enterprise with Cloud Connect enabled.
         Outputs dense vectors (1024 dims) to {field}_vector for each semantic field.
 
         Returns the pipeline name.

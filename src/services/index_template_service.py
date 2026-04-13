@@ -65,7 +65,7 @@ class IndexTemplateService:
         field_mappings: Dict[str, Any],
         semantic_fields: List[str],
         pipeline_name: Optional[str] = None,
-        embedding_model: str = "elser",
+        embedding_model: str = "jina",
     ) -> Dict[str, Any]:
         """
         Create full index template stack for a Search demo.
@@ -135,7 +135,7 @@ class IndexTemplateService:
         template_name: str,
         field_mappings: Dict[str, Any],
         semantic_fields: List[str],
-        embedding_model: str = "elser",
+        embedding_model: str = "jina",
     ) -> str:
         try:
             self.es.cluster.get_component_template(name=template_name)

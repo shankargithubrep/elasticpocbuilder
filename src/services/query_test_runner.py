@@ -467,6 +467,103 @@ class QueryTestRunner:
 
         return {'valid': True}
 
+    def _substitute_sample_values_in_query(self, esql: str, indexed_datasets: Dict[str, str]) -> Optional[str]:
+        """
+        Substitute ES|QL ?parameters with real sample values from the data.
+        Used to structurally test parameterized queries.
+
+        Returns substituted query string, or None if substitution failed.
+        """
+        # Find all ?param_name patterns
+        params = re.findall(r'\?(\w+)', esql)
+        if not params:
+            return esql
+
+        substituted = esql
+        for param in params:
+            # Get a sample value for this parameter from the indexed data
+            sample_val = self.sample_extractor.get_value_for_field(
+                list(indexed_datasets.values()),
+                param,
+                field_type="keyword"
+            )
+            if sample_val is None:
+                # Try numeric
+                sample_val = self.sample_extractor.get_value_for_field(
+                    list(indexed_datasets.values()),
+                    param,
+                    field_type="numeric"
+                )
+            if sample_val is None:
+                logger.warning(f"No sample value found for parameter ?{param} — skipping substitution")
+                return None
+
+            if isinstance(sample_val, str):
+                substituted = substituted.replace(f'?{param}', f'"{sample_val}"')
+            else:
+                substituted = substituted.replace(f'?{param}', str(sample_val))
+
+        return substituted
+
+    def test_parameterized_queries(
+        self,
+        queries: List[Dict],
+        indexed_datasets: Dict[str, str]
+    ) -> Dict:
+        """
+        Structurally test parameterized queries by substituting sample values.
+        Detects field-not-found errors and schema mismatches.
+
+        Returns summary dict compatible with test_all_queries output.
+        """
+        results = {
+            'total_queries': len(queries),
+            'structurally_valid': 0,
+            'schema_errors': 0,
+            'substitution_failed': 0,
+            'query_results': []
+        }
+
+        for query in queries:
+            esql = query.get('esql', query.get('query', ''))
+            name = query.get('name', 'unknown')
+
+            # Substitute sample values
+            substituted = self._substitute_sample_values_in_query(esql, indexed_datasets)
+            if substituted is None:
+                results['substitution_failed'] += 1
+                results['query_results'].append({
+                    'name': name,
+                    'status': 'substitution_failed',
+                    'error': 'Could not find sample values for parameters'
+                })
+                continue
+
+            # Replace dataset names with index names
+            executed = self._replace_index_names(substituted, indexed_datasets)
+
+            # Run the substituted query
+            success, response, error = self.indexer.execute_esql(executed)
+
+            if success:
+                results['structurally_valid'] += 1
+                results['query_results'].append({'name': name, 'status': 'valid'})
+            else:
+                results['schema_errors'] += 1
+                results['query_results'].append({
+                    'name': name,
+                    'status': 'schema_error',
+                    'error': error,
+                    'substituted_esql': substituted
+                })
+                logger.warning(f"Parameterized query '{name}' failed structural test: {error}")
+
+        logger.info(
+            f"Parameterized query test: {results['structurally_valid']}/{results['total_queries']} valid, "
+            f"{results['schema_errors']} schema errors"
+        )
+        return results
+
     def get_summary_stats(self, results: Dict) -> Dict[str, Any]:
         """Get summary statistics from test results
 

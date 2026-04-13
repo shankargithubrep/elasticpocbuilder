@@ -105,6 +105,7 @@ def render_replay_tab(loader):
 
     st.divider()
     _render_scenario_details(scenarios)
+    _render_regenerate_button(loader, module_name)
 
 
 # ---------------------------------------------------------------------------
@@ -141,13 +142,24 @@ def _render_controls(module_name: str, scenarios, pillar: str, kibana_url: str):
         st.error("No data files found. Index data first via the Data tab.")
         return
 
-    dataset_name = list(dfs.keys())[0]
+    dataset_keys = list(dfs.keys())
+    dataset_name = dataset_keys[0]
     if len(dfs) > 1:
+        # Auto-select the recommended dataset for this scenario
+        recommended = getattr(selected_scenario, "recommended_dataset", "")
+        default_idx = 0
+        if recommended and recommended in dataset_keys:
+            default_idx = dataset_keys.index(recommended)
         dataset_name = st.selectbox(
             "Dataset to replay",
-            options=list(dfs.keys()),
+            options=dataset_keys,
+            index=default_idx,
             key=f"replay_dataset_{module_name}",
         )
+        if recommended and recommended in dataset_keys and dataset_name == recommended:
+            st.caption(f"Auto-selected for **{selected_scenario.name.split(':')[0].strip()}** scenario")
+        elif recommended and recommended in dataset_keys:
+            st.caption(f"Recommended for this scenario: **{recommended}**")
 
     df = dfs[dataset_name]
     st.caption(f"Dataset: **{dataset_name}** · {len(df):,} rows · replaying in loop")
@@ -277,14 +289,24 @@ def _render_status(module_name: str):
 
     m3, m4 = st.columns(2)
     with m3:
-        elapsed = int(time.time() - (
-            time.mktime(time.strptime(stats["start_time"][:19], "%Y-%m-%dT%H:%M:%S"))
-            if stats.get("start_time") else time.time()
-        ))
-        mins, secs = divmod(elapsed, 60)
+        start_ts = stats.get("start_time")
+        if start_ts:
+            from datetime import timezone as _tz
+            import datetime as _dt
+            try:
+                start_dt = _dt.datetime.fromisoformat(start_ts.replace("Z", "+00:00"))
+                elapsed = int((_dt.datetime.now(_tz.utc) - start_dt).total_seconds())
+            except Exception:
+                elapsed = 0
+        else:
+            elapsed = 0
+        mins, secs = divmod(max(elapsed, 0), 60)
         st.metric("Elapsed", f"{mins:02d}:{secs:02d}")
     with m4:
-        st.metric("Errors", stats.get("total_errors", 0))
+        total_errors = stats.get("total_errors", 0)
+        # Show expected vs unexpected errors when evidence bundle is available
+        current_sc_name = stats.get("current_scenario")
+        st.metric("Errors", total_errors)
 
     # Active scenario
     current_sc = stats.get("current_scenario")
@@ -337,6 +359,38 @@ def _render_scenario_details(scenarios):
                 for alert in sc.expected_alerts:
                     st.markdown(f"  🔔 {alert}")
 
+            # Evidence bundle — proof artifacts per scenario
+            eb = sc.evidence_bundle
+            if eb:
+                st.divider()
+                st.markdown("**Evidence Bundle**")
+                ec1, ec2 = st.columns(2)
+                with ec1:
+                    st.caption("**Inputs**")
+                    inputs = eb.get("inputs", {})
+                    if inputs:
+                        for k, v in inputs.items():
+                            st.markdown(f"- `{k}`: {v}")
+                with ec2:
+                    st.caption("**Pass/Fail Criteria**")
+                    outcome = eb.get("expected_outcome", "")
+                    if outcome:
+                        st.markdown(outcome)
+
+                queries = eb.get("es_queries", [])
+                if queries:
+                    st.caption("**Elasticsearch Proof Queries (copy to Dev Tools)**")
+                    for q in queries:
+                        st.markdown(f"*{q.get('label', 'Query')}* — `{q.get('index', '')}`")
+                        st.code(q.get("body", ""), language="json")
+
+                metrics = eb.get("metrics", {})
+                if metrics:
+                    st.caption("**Expected Metrics**")
+                    mc = st.columns(len(metrics))
+                    for i, (k, v) in enumerate(metrics.items()):
+                        mc[i].metric(k.replace("_", " ").title(), v)
+
 
 # ---------------------------------------------------------------------------
 # Engine lifecycle
@@ -372,7 +426,7 @@ def _start_replay(module_name: str, df: pd.DataFrame, index_name: str,
 
 
 # ---------------------------------------------------------------------------
-# Generate scenarios button (for demos without scenarios.json)
+# Generate scenarios button (for demos WITHOUT scenarios.json)
 # ---------------------------------------------------------------------------
 
 def _render_generate_scenarios_button(loader, module_name: str):
@@ -384,28 +438,52 @@ def _render_generate_scenarios_button(loader, module_name: str):
     )
 
     if st.button("🤖 Generate Scenarios", type="primary", key=f"gen_scenarios_{module_name}"):
-        with st.spinner("Generating scenarios..."):
-            try:
-                from src.services.scenario_generator import ScenarioGenerator
-                from src.services.llm_proxy_service import UnifiedLLMClient
+        _run_scenario_generation(loader, module_name)
 
-                config = {**loader.config.get("customer_context", {}), **loader.config}
-                strategy = {}
-                strategy_path = Path("demos") / module_name / "query_strategy.json"
-                if strategy_path.exists():
-                    import json as _json
-                    strategy = _json.loads(strategy_path.read_text())
 
-                config["datasets"] = strategy.get("datasets", [])
+def _render_regenerate_button(loader, module_name: str):
+    """Shown at the bottom of existing scenarios — requires explicit confirmation before overwriting."""
+    with st.expander("⚠️ Regenerate Scenarios with AI", expanded=False):
+        st.warning(
+            "This will **replace all existing scenarios** with AI-generated ones. "
+            "Any hand-curated scenarios (including evidence bundles and proof-point scenarios) will be lost."
+        )
+        confirmed = st.checkbox(
+            "I understand — replace my existing scenarios.json",
+            key=f"regen_confirm_{module_name}",
+        )
+        if st.button(
+            "🤖 Regenerate Scenarios",
+            key=f"regen_scenarios_{module_name}",
+            disabled=not confirmed,
+        ):
+            _run_scenario_generation(loader, module_name)
 
-                gen = ScenarioGenerator(UnifiedLLMClient())
-                scenarios = gen.generate(config)
 
-                out_path = Path("demos") / module_name / "scenarios.json"
+def _run_scenario_generation(loader, module_name: str):
+    """Shared generation logic used by both generate and regenerate paths."""
+    with st.spinner("Generating scenarios..."):
+        try:
+            from src.services.scenario_generator import ScenarioGenerator
+            from src.services.llm_proxy_service import UnifiedLLMClient
+
+            config = {**loader.config.get("customer_context", {}), **loader.config}
+            strategy = {}
+            strategy_path = Path("demos") / module_name / "query_strategy.json"
+            if strategy_path.exists():
                 import json as _json
-                out_path.write_text(_json.dumps(scenarios, indent=2))
+                strategy = _json.loads(strategy_path.read_text())
 
-                st.success(f"✅ Generated {len(scenarios)} scenarios — reload the tab to see them.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Scenario generation failed: {e}")
+            config["datasets"] = strategy.get("datasets", [])
+
+            gen = ScenarioGenerator(UnifiedLLMClient())
+            scenarios = gen.generate(config)
+
+            out_path = Path("demos") / module_name / "scenarios.json"
+            import json as _json
+            out_path.write_text(_json.dumps(scenarios, indent=2))
+
+            st.success(f"✅ Generated {len(scenarios)} scenarios — reload the tab to see them.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ Scenario generation failed: {e}")

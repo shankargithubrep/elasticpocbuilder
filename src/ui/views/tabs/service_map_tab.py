@@ -242,3 +242,81 @@ def render_service_map_tab(loader):
             )
         else:
             st.info("No SLO queries were generated for this demo.")
+
+    st.divider()
+    with st.expander("⚙️ How Service Maps work — technical deep dive", expanded=False):
+        st.markdown("""
+#### How APM Agents Auto-Discover Service Dependencies
+
+APM agents (EDOT / OpenTelemetry) instrument outbound calls automatically — no manual configuration needed:
+
+```
+auth-service makes an HTTP call to user-service
+        │
+        ▼
+EDOT agent intercepts the outbound HTTP client (monkey-patching)
+        │
+        ├─► Creates a child span: span.type = "external", span.subtype = "http"
+        ├─► Injects W3C traceparent header into the outbound request
+        └─► Records: span.destination.service.resource = "user-service:8080"
+        │
+        ▼
+user-service receives the request
+        │
+        ▼
+EDOT agent on user-service extracts traceparent header
+        └─► Creates a transaction linked to the same trace.id
+
+Result in Elasticsearch:
+  span.destination.service.resource = "user-service:8080"
+  span.destination.service.name     = "user-service"
+  trace.id                           = "4bf92f3577b34da6a3ce929d0e0e4736"
+```
+
+The service map is built by aggregating all unique `(service.name → span.destination.service.name)` pairs from the `traces-apm-*` index.
+""")
+        st.markdown("**ES|QL query to extract the dependency graph**")
+        st.code("""\
+FROM traces-apm-*
+| WHERE @timestamp >= NOW() - 1 hour
+  AND span.destination.service.resource IS NOT NULL
+| STATS
+    call_count = COUNT(*),
+    p95_ms     = PERCENTILE(span.duration.us, 95) / 1000,
+    error_pct  = COUNT_CASE(event.outcome == "failure") * 100.0 / COUNT(*)
+  BY
+    upstream   = service.name,
+    downstream = span.destination.service.resource
+| SORT call_count DESC
+| LIMIT 100
+""", language="sql")
+
+        st.markdown("**How the service map is built from span destination metadata**")
+        st.markdown("""
+Each row in the query above is one **directed edge** in the dependency graph:
+- `upstream` = the service that made the outbound call
+- `downstream` = the resource that was called (service name, DB host, or queue name)
+- `p95_ms` = how slow that dependency is (hot path identification)
+- `error_pct` = how often calls to this dependency fail (blast radius analysis)
+
+Entry points (services with no `parent.span.id` in any transaction) are the roots of the graph — typically API gateways or load balancers.
+""")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Build this in your app**")
+            st.markdown("""
+- Run the dependency graph ES|QL query on page load
+- Render the edges as a force-directed graph (D3.js, Cytoscape.js, or Mermaid)
+- Colour nodes by health status: green / amber / red based on error rate thresholds
+- Size nodes by throughput (call_count) to highlight critical services visually
+- Click a node → drill into APM traces for that service in the selected time window
+""")
+        with col2:
+            st.markdown("**Explore in Kibana APM**")
+            st.markdown("""
+- **APM > Service Map**: interactive service topology built automatically from span data
+- **APM > Service Map > [node]**: click any service or external dependency to see health KPIs
+- **APM > Service Map > [edge]**: click any connection to see throughput, latency, error rate
+- **Stack Management > Index Management**: inspect `traces-apm-*` mappings to see span fields
+""")

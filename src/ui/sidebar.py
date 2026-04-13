@@ -10,7 +10,7 @@ from .context_display import display_context_summary
 from .components.help_chat import render_chat_sidebar
 
 # Defaults for inference endpoints
-_RERANK_DEFAULT = ".rerank-v1-elasticsearch"
+_RERANK_DEFAULT = ".jina-reranker-v3"
 _COMPLETION_DEFAULT = "completion-vulcan"
 
 
@@ -79,7 +79,7 @@ def _render_settings_expander():
                     st.error(f"❌ {e}")
 
         # Embedding model status check (context-aware)
-        selected_embedding = st.session_state.inference_endpoints.get("embedding_model_name", "ELSER")
+        selected_embedding = st.session_state.inference_endpoints.get("embedding_model_name", "Jina")
         if selected_embedding in ("E5 Multilingual", "Jina"):
             btn_label = f"🌍 Check {selected_embedding} model"
             if st.button(btn_label, key="test_embedding_model_btn", use_container_width=True):
@@ -125,19 +125,9 @@ def _render_settings_expander():
         )
         st.session_state.ai_expansion_enabled = expansion_enabled
 
-        # Embedding Model selector
+        # Embedding Model selector — Jina only (EIS, no ML nodes required)
         st.caption("**Embedding Model**")
         EMBEDDING_OPTIONS = {
-            "ELSER": {
-                "model_key": "elser",
-                "label": "ELSER  —  Sparse · English optimized",
-                "help": "`.elser-2-elasticsearch` — Sparse semantic search, keyword-aware, best for English demos.",
-            },
-            "E5 Multilingual": {
-                "model_key": "e5",
-                "label": "E5 Multilingual  —  Dense · 100+ languages",
-                "help": "`.multilingual-e5-small` — Dense embeddings (384 dims), multilingual support. Best for global demos (Genesys, international KB search).",
-            },
             "Jina": {
                 "model_key": "jina",
                 "label": "Jina  —  Dense · Long-context multilingual",
@@ -145,21 +135,11 @@ def _render_settings_expander():
             },
         }
 
-        current_key = st.session_state.inference_endpoints.get("embedding_model_name", "ELSER")
-        if current_key not in EMBEDDING_OPTIONS:
-            current_key = "ELSER"
-        current_index = list(EMBEDDING_OPTIONS.keys()).index(current_key)
-
-        selected_model_name = st.radio(
-            "Embedding Model",
-            options=list(EMBEDDING_OPTIONS.keys()),
-            index=current_index,
-            key="embedding_model_radio",
-            horizontal=False,
-            label_visibility="collapsed",
-        )
-        cfg = EMBEDDING_OPTIONS[selected_model_name]
-        st.caption(f"ℹ️ {cfg['help']}")
+        # Always default to Jina — never fall back to ELSER
+        selected_model_name = "Jina"
+        st.session_state.inference_endpoints["embedding_model_name"] = "Jina"
+        cfg = EMBEDDING_OPTIONS["Jina"]
+        st.info("✅ Jina EIS  —  Dense · Multilingual · Long-context")
 
         st.session_state.inference_endpoints["embedding_model_name"] = selected_model_name
         st.session_state.inference_endpoints["embedding_type"] = cfg["model_key"]
@@ -542,7 +522,7 @@ def render_sidebar():
         st.session_state.help_chat_visible = False
 
     # Mode toggle buttons + Help toggle
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         create_selected = st.session_state.view_mode == "create"
@@ -567,6 +547,18 @@ def render_sidebar():
             st.rerun()
 
     with col3:
+        pb_selected = st.session_state.view_mode == "prompt_builder"
+        if st.button(
+            "✨ Prompts",
+            use_container_width=True,
+            type="primary" if pb_selected else "secondary",
+            key="prompt_builder_mode_btn",
+            help="Prompt Builder — guided form to generate Create Demo prompts",
+        ):
+            st.session_state.view_mode = "prompt_builder"
+            st.rerun()
+
+    with col4:
         help_selected = st.session_state.view_mode == "help"
         if st.button(
             "Help",
@@ -576,6 +568,24 @@ def render_sidebar():
         ):
             st.session_state.view_mode = "help"
             st.rerun()
+
+    # What's New — full-width button below the mode row
+    try:
+        from src.services.feature_curator import load_feature_stats
+        stats = load_feature_stats()
+        new_count = stats.get("total", 0)
+        badge = f" · {new_count} this week" if new_count else ""
+    except Exception:
+        badge = ""
+    whats_new_selected = st.session_state.view_mode == "whats_new"
+    if st.button(
+        f"🆕 What's New in Elastic{badge}",
+        use_container_width=True,
+        type="primary" if whats_new_selected else "secondary",
+        key="whats_new_btn",
+    ):
+        st.session_state.view_mode = "whats_new"
+        st.rerun()
 
     # If help is visible, show chat at top of sidebar
     if st.session_state.help_chat_visible:
@@ -870,22 +880,78 @@ def render_sidebar():
                                 key=f"download_{demo['name']}",
                                 use_container_width=True
                             )
-                            if st.button("🗑️ Delete", key=f"delete_{demo['name']}", use_container_width=True):
+                            if st.button("🗑️ Delete Project & Clear Elastic Cluster", key=f"delete_{demo['name']}", use_container_width=True):
                                 st.session_state.confirm_delete = demo['name']
                                 st.rerun()
 
-                    # Confirmation row
+                    # Confirmation row — with Elastic asset teardown
                     if st.session_state.get("confirm_delete") == demo['name']:
-                        st.warning(f"Delete **{demo.get('customer', 'Unknown')}**?", icon="⚠️")
+                        st.error(
+                            f"**⚠️ You are about to permanently delete this project and all its Elastic assets.**\n\n"
+                            f"This will remove the local project folder **and** purge everything provisioned "
+                            f"in your Elastic cluster — indices, pipelines, dashboards, data views, search "
+                            f"applications, alerting rules, and any deployed Agent Builder tools or agents. "
+                            f"**This action cannot be undone.**",
+                            icon="🚨"
+                        )
+
+                        # Show asset preview
+                        _LABELS = {
+                            "indices":           "📦 Elasticsearch Indices",
+                            "data_streams":      "🌊 Data Streams",
+                            "pipelines":         "⚙️ Ingest Pipelines",
+                            "index_templates":   "📋 Index Templates",
+                            "ilm_policies":      "📅 ILM Policies",
+                            "search_apps":       "🔍 Search Applications",
+                            "query_rules":       "📐 Query Rules",
+                            "kibana_dashboards": "📊 Kibana Dashboards",
+                            "kibana_data_views": "👁️ Kibana Data Views",
+                            "kibana_alerts":     "🔔 Alerting Rules",
+                            "agent_tools":       "🔧 Agent Builder Tools",
+                            "agent":             "🤖 Agents",
+                        }
+                        try:
+                            from src.services.demo_teardown_service import DemoTeardownService
+                            svc = DemoTeardownService()
+                            preview = svc.preview(demo['name'])
+                            if preview:
+                                total = sum(len(v) for v in preview.values())
+                                with st.expander(f"🗂️ {total} Elastic assets that will be permanently deleted", expanded=True):
+                                    for key, items in preview.items():
+                                        label = _LABELS.get(key, key)
+                                        st.markdown(
+                                            f"**{label}** ({len(items)}):  "
+                                            + "  ".join(f"`{i}`" for i in items)
+                                        )
+                                    st.caption(
+                                        "The local project folder will also be deleted from the `demos/` directory."
+                                    )
+                            else:
+                                st.info("No Elastic assets were provisioned — only the local project folder will be removed.", icon="ℹ️")
+                        except Exception:
+                            preview = {}
+                            st.caption("Could not load asset preview — Elastic cluster may not be reachable.")
+
                         yes_col, no_col = st.columns(2)
                         with yes_col:
-                            if st.button("Yes, delete", key=f"confirm_yes_{demo['name']}", type="primary", use_container_width=True):
+                            btn_label = "🗑️ Yes, Delete Everything" if preview else "🗑️ Yes, Delete Project"
+                            if st.button(btn_label, key=f"confirm_yes_{demo['name']}", type="primary", use_container_width=True):
+                                # Run Elastic teardown first
+                                if preview:
+                                    with st.spinner("Deleting Elastic assets…"):
+                                        try:
+                                            from src.services.demo_teardown_service import DemoTeardownService
+                                            result = DemoTeardownService().teardown(demo['name'])
+                                            st.toast(result.summary, icon="🗑️")
+                                        except Exception as exc:
+                                            st.toast(f"Teardown error: {exc}", icon="⚠️")
+                                # Delete local folder
                                 manager.delete_module(demo['name'])
                                 if st.session_state.current_demo_module == demo['name']:
                                     st.session_state.current_demo_module = None
                                 st.session_state.confirm_delete = None
                                 st.rerun()
                         with no_col:
-                            if st.button("Cancel", key=f"confirm_no_{demo['name']}", use_container_width=True):
+                            if st.button("↩️ Keep Project", key=f"confirm_no_{demo['name']}", use_container_width=True):
                                 st.session_state.confirm_delete = None
                                 st.rerun()

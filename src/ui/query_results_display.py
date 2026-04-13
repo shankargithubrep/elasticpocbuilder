@@ -85,7 +85,7 @@ class QueryResultsDisplay:
                 else:
                     edited_query = query_text
             else:
-                # Use read-only code display
+                # Use read-only code display (native copy icon appears top-right on hover)
                 st.code(query_text, language='sql')
 
             # Show parameters if they exist

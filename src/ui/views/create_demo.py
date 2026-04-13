@@ -129,7 +129,7 @@ def render_create_demo_view():
 
             # STEP 3: Show expanded content with generate instructions
             with st.chat_message("assistant"):
-                generate_instruction = "Type **generate** and press Enter to create your demo."
+                generate_instruction = "Click **Generate Demo** below (or type `generate`) to create your demo."
                 st.markdown(f"### 📝 Expanded Technical Context\n\n{generate_instruction}")
                 with st.expander("View comprehensive technical plan", expanded=False):
                     _copy_button(expanded_content, key="copy_plan_live")
@@ -174,6 +174,14 @@ def render_create_demo_view():
         if st.button("▶ Use this prompt now", type="primary", key="use_prefilled_btn"):
             # Inject into messages as if user typed it
             st.session_state.messages.append({"role": "user", "content": prefilled})
+            st.session_state.needs_processing = True
+            st.rerun()
+
+    # Generate Demo button — shown only when context is ready
+    if st.session_state.get("conversation_phase") == "ready_to_generate":
+        st.markdown("---")
+        if st.button("🚀 Generate Demo", type="primary", use_container_width=True, key="generate_demo_btn"):
+            st.session_state.messages.append({"role": "user", "content": "generate"})
             st.session_state.needs_processing = True
             st.rerun()
 
