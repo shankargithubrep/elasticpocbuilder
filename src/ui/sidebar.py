@@ -131,7 +131,7 @@ def _render_settings_expander():
             "Jina": {
                 "model_key": "jina",
                 "label": "Jina  —  Dense · Long-context multilingual",
-                "help": "`jina-embeddings-v3` via Elastic Inference Endpoint. Supports 8K token context, ideal for PDF / long-document demos. Requires `JINA_API_KEY` in `.env`.",
+                "help": "`.jina-embeddings-v5-text-small` via Elastic Inference Endpoint (9.4 default). 119 languages, 32K token context, no ML nodes or API key required. Ideal for multilingual PDF / long-document demos.",
             },
         }
 

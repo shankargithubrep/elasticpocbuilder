@@ -97,7 +97,7 @@ class SearchApplicationService:
             model_id = ".multilingual-e5-small"
             knn_fields = [f"{sf}_vector" for sf in semantic_fields]
         elif embedding_model == "jina":
-            model_id = "jina-embeddings-v3"
+            model_id = ".jina-embeddings-v5-text-small"
             knn_fields = [f"{sf}_vector" for sf in semantic_fields]
         else:
             # ELSER: kNN targets the semantic_text fields directly

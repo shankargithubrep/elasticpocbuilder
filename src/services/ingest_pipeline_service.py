@@ -17,6 +17,8 @@ E5_MODEL_ID = ".multilingual-e5-small"
 E5_DIMS = 384  # multilingual-e5-small output dimensions
 JINA_ENDPOINT_ID = ".jina-embeddings-v5-text-small"  # EIS built-in, no API key needed
 JINA_DIMS = 1024  # jina-embeddings-v5-text-small output dimensions (Matryoshka-reducible)
+JINA_CLIP_ENDPOINT_ID = ".jina-clip-v2"  # 9.4 EIS built-in — multimodal (text + image) in one vector space
+JINA_CLIP_DIMS = 1024  # jina-clip-v2 output dimensions (shared text/image space)
 
 
 def _vector_field_name(source_field: str) -> str:

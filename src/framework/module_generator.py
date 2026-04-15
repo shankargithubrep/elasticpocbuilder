@@ -592,6 +592,7 @@ Generate the complete implementation:"""
 
         # Get centralized ES|QL rules
         esql_rules = self._get_esql_strict_rules()
+        esql_94_hint = self._get_esql_94_features_hint()
 
         # Get tool metadata instructions
         tool_metadata_prompt = self._get_tool_metadata_instructions(config)
@@ -642,6 +643,8 @@ product (OpenSearch, Solr, Splunk, etc.) must instead use "Elasticsearch" or a n
 ✅ CORRECT: "Elasticsearch ACL Audit", source_system = "Elasticsearch-Security-Plugin"
 
 {esql_rules}
+
+{esql_94_hint}
 
 🚨🚨🚨 CRITICAL - INTEGER DIVISION ANTI-PATTERN 🚨🚨🚨
 ALWAYS use TO_DOUBLE() when dividing aggregated fields! Integer division truncates to 0!
@@ -701,6 +704,7 @@ Access data via self.datasets. Use EXACT field names from the schema. ALWAYS use
 
         # Get centralized ES|QL rules
         esql_rules = self._get_esql_strict_rules()
+        esql_94_hint = self._get_esql_94_features_hint()
 
         # Get tool metadata instructions
         tool_metadata_prompt = self._get_tool_metadata_instructions(config)
@@ -759,6 +763,8 @@ Every parameter MUST include a `suggested_values` list with 2-3 realistic exampl
 - Examples should demonstrate the parameter's purpose and produce meaningful results
 
 {esql_rules}
+
+{esql_94_hint}
 
 🚨🚨🚨 CRITICAL - @timestamp ANTI-PATTERN 🚨🚨🚨
 NEVER EVER parameterize @timestamp! This is the #1 most common mistake!
@@ -837,6 +843,7 @@ Access data via self.datasets. Use ?parameter syntax for Agent Builder tools. Us
 
         # Get centralized ES|QL rules
         esql_rules = self._get_esql_strict_rules()
+        esql_94_hint = self._get_esql_94_features_hint()
 
         # Get tool metadata instructions
         tool_metadata_prompt = self._get_tool_metadata_instructions(config)
@@ -939,6 +946,7 @@ queries.append({{
 - RERANK: `{rerank_endpoint}`
 - COMPLETION: `{completion_endpoint}`
 - DENSE EMBEDDING: `.jina-embeddings-v5-text-small` (default for semantic_text fields — Jina EIS, 119 languages, 32K tokens, no ML nodes)
+- MULTIMODAL EMBEDDING (9.4+): `.jina-clip-v2` — use ONLY when the demo involves **image + text** search (e.g. product catalog by photo, insurance claim images, visual search). Text and image queries share the same vector space, so the same semantic_text field can be queried with either. Do NOT use for text-only demos.
 
 8. **Semantic Text Fields**: Fields used in MATCH must be text or semantic_text type
 
@@ -4039,6 +4047,12 @@ This is the full RAG pipeline running entirely inside Elasticsearch — no exter
 - "Works with existing Elasticsearch indices"
 - "Agent automatically selects right tools"
 
+### **On Natural Language Dashboards (Kibana 9.4+):**
+- "You don't need to know Lens, ES|QL, or panel configuration to build a dashboard anymore"
+- "In 9.4, the Kibana AI Assistant can create a full dashboard from a single natural-language request — 'show me ticket volume by region over the last 30 days' generates the panels, queries, and layout"
+- "The same queries we just built as Agent Builder tools can power NL-generated dashboards — one corpus, two consumption surfaces"
+- "This closes the loop: business users ask questions in chat, data teams get self-service dashboards, both grounded in the same indexed data"
+
 ### **On RAG & COMPLETION:**
 - "Full RAG pipeline runs natively inside Elasticsearch — no external orchestration needed"
 - "LLM answers are grounded in actual indexed data, not hallucinated"
@@ -4315,6 +4329,42 @@ Feel free to ask questions about your data, request specific analyses, or explor
             # Fallback to minimal rules if import fails
             return self._get_minimal_esql_reference()
 
+    def _get_esql_94_features_hint(self) -> str:
+        """Short hint about 9.4-specific ES|QL features the generator should consider.
+
+        Injected into query-generation prompts so Views and Subqueries stay top-of-mind
+        for the LLM even when the full reference docs get truncated.
+        """
+        return """
+🆕 **ES|QL 9.4 features available — consider them when useful:**
+
+**VIEWS** — save a reusable named query, then reference it in FROM:
+```esql
+CREATE VIEW active_enterprise_deals AS
+FROM sales-* | WHERE status == "active" AND tier == "enterprise"
+
+FROM active_enterprise_deals | STATS total = SUM(amount) BY region
+```
+Use views for tenant-scoped datasets, repeated enrichment, and clean dashboard panels.
+Views CANNOT wrap COMPLETION / RERANK / INLINE STATS.
+
+**SUBQUERIES** — inline query in IN() or scalar position:
+```esql
+// Cohort filter
+FROM tickets
+| WHERE customer_id IN (FROM customers | WHERE tier == "enterprise" | KEEP customer_id)
+
+// "Above average" in a single query
+FROM orders
+| WHERE amount > (FROM orders | STATS a = AVG(amount) | KEEP a)
+```
+Subqueries must return a single column (end with `KEEP <field>`).
+
+When to use: cohort filters, "above-average" analytics, per-tenant reusable views,
+anywhere a repeated WHERE/ENRICH block would otherwise appear in every query.
+Prefer views for structural reuse; prefer subqueries for one-off dynamic filtering.
+"""
+
     def _get_minimal_esql_reference(self) -> str:
         """Get minimal ES|QL reference as fallback"""
         return """
@@ -4346,6 +4396,7 @@ Parameters are ALWAYS required when used.
         - rerank.md (RERANK command)
         - completion.md (COMPLETION command)
         - metadata-fields.md (METADATA _score)
+        - views_and_subqueries.md (9.4 — VIEW + subquery composition)
         """
         try:
             from pathlib import Path
@@ -4356,7 +4407,8 @@ Parameters are ALWAYS required when used.
                 'search-match.md',
                 'rerank.md',
                 'completion.md',
-                'metadata-fields.md'
+                'metadata-fields.md',
+                'views_and_subqueries.md',
             ]
 
             for doc_file in doc_files:
@@ -4418,6 +4470,29 @@ FROM index METADATA _score
 ```
 ?param_name  (for Agent Builder tools)
 ```
+
+**VIEWS (9.4+) — Reusable named queries:**
+```
+CREATE VIEW tenant_acme AS
+FROM kb_content | WHERE tenant_id == "acme-support"
+
+FROM tenant_acme | WHERE MATCH(body, "billing escalation") | LIMIT 10
+```
+Use views to hide repeated filter / enrich / normalize logic behind a clean name.
+Views are read-only — do NOT wrap COMPLETION, RERANK, or INLINE STATS in a view.
+
+**SUBQUERIES (9.4+) — Inline query in IN / scalar context:**
+```
+// IN (subquery) — dynamic filter
+FROM tickets
+| WHERE customer_id IN (FROM customers | WHERE tier == "enterprise" | KEEP customer_id)
+
+// Scalar subquery — inject aggregated value
+FROM orders
+| WHERE amount > (FROM orders | STATS avg_amount = AVG(amount) | KEEP avg_amount)
+```
+Subqueries must return a single column (end with `KEEP <field>`). Use for cohort filters
+and "above-average" style analytics in a single statement.
 
 **CRITICAL:** Use INLINE STATS not STATS before COMPLETION!
 """
