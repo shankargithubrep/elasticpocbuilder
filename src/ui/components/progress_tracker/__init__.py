@@ -1,5 +1,5 @@
 """
-Progress Tracker component for Vulcan.
+Progress Tracker component for the Elastic Demo Generator.
 
 Tracks user progress through demo module completion tasks:
 - Data indexing

@@ -286,7 +286,7 @@ def render_esrally_tab(loader: Any = None) -> None:
     with adv_c1:
         race_id = st.text_input(
             "Race ID (optional)",
-            value=f"vulcan-{st.session_state.rally_challenge}",
+            value=f"edg-{st.session_state.rally_challenge}",
             key="rally_race_id",
             help="Identifier for this run — used in ESRally's internal datastore.",
         )

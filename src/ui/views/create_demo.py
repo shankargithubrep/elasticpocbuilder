@@ -411,7 +411,7 @@ def render_create_demo_view():
                         # Pass inference endpoints from sidebar configuration
                         inference_endpoints = st.session_state.get("inference_endpoints", {
                             "rerank": ".rerank-v1-elasticsearch",
-                            "completion": "completion-vulcan"
+                            "completion": "completion-edg"
                         })
                         orchestrator = ModularDemoOrchestrator(inference_endpoints=inference_endpoints)
 
@@ -483,13 +483,13 @@ You can now refine the generated modules or start a new demo!"""
                     except Exception as e:
                         # Use error display utility for consistent error formatting
                         from src.ui.error_display import display_error
-                        from src.exceptions import VulcanException
+                        from src.exceptions import DemoGeneratorError
                         
                         # Display the error in a user-friendly way
                         display_error(e, title="Demo Generation Failed")
                         
                         # Get user message for chat history
-                        if isinstance(e, VulcanException):
+                        if isinstance(e, DemoGeneratorError):
                             error_msg = e.user_message
                         else:
                             error_msg = f"Error generating demo: {str(e)}"
@@ -529,13 +529,13 @@ You can now refine the generated modules or start a new demo!"""
                 except Exception as e:
                     # Handle errors in conversation processing
                     from src.ui.error_display import display_error
-                    from src.exceptions import VulcanException
+                    from src.exceptions import DemoGeneratorError
                     
                     # Display the error
                     display_error(e, title="Message Processing Failed")
                     
                     # Add error message to chat history
-                    if isinstance(e, VulcanException):
+                    if isinstance(e, DemoGeneratorError):
                         error_msg = e.user_message
                     else:
                         error_msg = f"Error processing message: {str(e)}"

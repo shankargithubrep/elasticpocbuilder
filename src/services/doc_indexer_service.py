@@ -7,7 +7,7 @@ Provides:
 - Semantic search for help chat RAG
 - Index status checking
 
-Index: vulcan-help-docs
+Index: edg-help-docs
 Field: content (semantic_text with .elser-2-elastic inference)
 """
 
@@ -57,7 +57,7 @@ class DocIndexerService:
     Chunks documents by markdown headings for semantic coherence.
     """
 
-    INDEX_NAME = "vulcan-help-docs"
+    INDEX_NAME = "edg-help-docs"
     BATCH_SIZE = 16  # ELSER limit for semantic_text batches
 
     # Directories to index (relative to project root)

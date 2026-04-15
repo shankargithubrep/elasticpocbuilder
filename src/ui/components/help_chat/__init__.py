@@ -1,5 +1,5 @@
 """
-Help Chat Widget - Contextual LLM-powered assistance for Vulcan.
+Help Chat Widget - Contextual LLM-powered assistance for the Elastic Demo Generator.
 """
 
 from .widget import render_chat_sidebar

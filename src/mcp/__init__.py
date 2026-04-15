@@ -1,1 +1,1 @@
-"""Vulcan MCP (Model Context Protocol) package."""
+"""Elastic Demo Generator — MCP (Model Context Protocol) package."""

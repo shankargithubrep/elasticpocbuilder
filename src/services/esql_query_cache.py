@@ -7,7 +7,7 @@ the most similar ones via Jaccard similarity over ES|QL tokens.
 Retrieved entries are injected as few-shot examples into the eval scenario
 generator prompt, improving generation quality over time as the cache grows.
 
-Cache persists at ~/.vulcan/esql_query_cache.json (global across all demos).
+Cache persists at ~/.elastic-demo-generator/esql_query_cache.json (global across all demos).
 """
 
 import json
@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CACHE_PATH = Path.home() / ".vulcan" / "esql_query_cache.json"
+DEFAULT_CACHE_PATH = Path.home() / ".elastic-demo-generator" / "esql_query_cache.json"
 
 # ES|QL keywords that carry no discriminative signal for similarity
 _ESQL_STOP_TOKENS = {

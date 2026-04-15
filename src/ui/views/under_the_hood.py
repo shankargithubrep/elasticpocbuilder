@@ -239,8 +239,7 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
                 "**Observability & Analytics** demos, one for **Search & Retrieval** demos. "
                 "The result is a rich, domain-specific context document that drives all "
                 "downstream pipeline stages.\n\n"
-                "📄 [View the full expansion prompts on GitHub]"
-                "(https://github.com/elastic/vulcan/blob/main/docs/EXPANSION_PROMPTS.md)"
+                "📄 See `docs/EXPANSION_PROMPTS.md` for the full prompt text."
             )
 
     with st.expander("**Stage 3 — Generate & Index Data** (shaped to the strategy)"):
@@ -318,8 +317,8 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
                 "- Parameters: `?name` syntax only; no NULL checks; string literals only"
             )
             st.markdown(
-                "📄 [ES|QL patterns & rules](https://github.com/elastic/vulcan/blob/main/src/prompts/esql_strict_rules.py) · "
-                "[Command reference docs](https://github.com/elastic/vulcan/tree/main/docs/esql)",
+                "📄 ES|QL patterns & rules: `src/prompts/esql_strict_rules.py` · "
+                "Command reference docs: `docs/esql/`",
                 unsafe_allow_html=False
             )
 
@@ -501,7 +500,7 @@ vocabulary, reflects realistic patterns in their domain, and is ready to run liv
             "    \"3) One concrete asset to create.\"\n"
             "  )\n"
             "| COMPLETION gap_analysis = prompt\n"
-            "    WITH {\"inference_id\": \"completion-vulcan\"}\n"
+            "    WITH {\"inference_id\": \"completion-edg\"}\n"
             "| KEEP session_outcome, industry_vertical,\n"
             "       filters_applied, result_count,\n"
             "       gap_analysis, _score",

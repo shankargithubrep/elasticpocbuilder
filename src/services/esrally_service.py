@@ -198,7 +198,7 @@ def build_command(
     challenge: str,
     target_host: str,
     api_key: str,
-    race_id: str = "vulcan-bench",
+    race_id: str = "edg-bench",
     pipeline: str = "benchmark-only",
 ) -> list[str]:
     """

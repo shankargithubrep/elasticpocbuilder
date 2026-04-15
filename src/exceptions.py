@@ -1,18 +1,18 @@
 """
-Custom exceptions for Vulcan demo generation
+Custom exceptions for the Elastic Demo Generator.
 
 These exceptions provide user-friendly error messages and actionable guidance
 for common failure scenarios.
 """
 
 
-class VulcanException(Exception):
-    """Base exception for all Vulcan errors"""
-    
-    def __init__(self, message: str, user_message: str = None, 
+class DemoGeneratorError(Exception):
+    """Base exception for all Elastic Demo Generator errors"""
+
+    def __init__(self, message: str, user_message: str = None,
                  suggestion: str = None, technical_details: str = None):
         """
-        Initialize a Vulcan exception
+        Initialize a Demo Generator exception
         
         Args:
             message: Technical error message
@@ -38,7 +38,7 @@ class VulcanException(Exception):
         return "\n".join(parts)
 
 
-class LLMTimeoutError(VulcanException):
+class LLMTimeoutError(DemoGeneratorError):
     """LLM request timed out"""
     
     def __init__(self, timeout_seconds: int, prompt_length: int = None):
@@ -64,7 +64,7 @@ class LLMTimeoutError(VulcanException):
         super().__init__(message, user_message, suggestion, technical_details)
 
 
-class LLMAPIError(VulcanException):
+class LLMAPIError(DemoGeneratorError):
     """LLM API returned an error"""
     
     def __init__(self, status_code: int = None, error_message: str = None, provider: str = None):
@@ -131,7 +131,7 @@ class LLMAPIError(VulcanException):
         super().__init__(message, user_message, suggestion, technical_details)
 
 
-class LLMModelNotFoundError(VulcanException):
+class LLMModelNotFoundError(DemoGeneratorError):
     """Requested LLM model not found"""
     
     def __init__(self, model_name: str, provider: str = None, available_models: list = None):
@@ -165,7 +165,7 @@ class LLMModelNotFoundError(VulcanException):
         super().__init__(message, user_message, suggestion, technical_details)
 
 
-class ConfigurationError(VulcanException):
+class ConfigurationError(DemoGeneratorError):
     """Configuration error"""
     
     def __init__(self, missing_config: str, config_type: str = "environment variable"):
@@ -206,7 +206,7 @@ class ConfigurationError(VulcanException):
         super().__init__(message, user_message, suggestion, technical_details)
 
 
-class DataGenerationError(VulcanException):
+class DataGenerationError(DemoGeneratorError):
     """Error during data generation"""
     
     def __init__(self, dataset_name: str, error_message: str):
@@ -227,7 +227,7 @@ class DataGenerationError(VulcanException):
         super().__init__(message, user_message, suggestion, technical_details)
 
 
-class IndexingError(VulcanException):
+class IndexingError(DemoGeneratorError):
     """Error during Elasticsearch indexing"""
     
     def __init__(self, index_name: str, error_message: str):
@@ -267,7 +267,7 @@ class IndexingError(VulcanException):
         super().__init__(message, user_message, suggestion, technical_details)
 
 
-class QueryGenerationError(VulcanException):
+class QueryGenerationError(DemoGeneratorError):
     """Error during query generation"""
     
     def __init__(self, error_message: str, phase: str = None):

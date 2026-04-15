@@ -1,15 +1,15 @@
 """
 POC Script Generator
 
-Generates a standalone, self-contained Python setup script from a Vulcan demo module.
-The output script:
-  - Has zero Vulcan dependencies
+Generates a standalone, self-contained Python setup script from a demo module
+produced by the Elastic Demo Generator. The output script:
+  - Has zero Elastic Demo Generator dependencies
   - Reads ES_URL / ES_API_KEY / KIBANA_URL from environment / .env
   - Works with Elastic Cloud Hosted, Cloud Serverless, and self-hosted
   - Creates index templates + ELSER pipeline + bulk-indexes data + Search App + Data Views
   - Optionally creates Agent Builder tools + agent
 
-Usage (from Vulcan):
+Usage:
     gen = POCScriptGenerator()
     script_path = gen.generate(loader, module_name, options)
 """
@@ -34,7 +34,7 @@ _SEMANTIC_FIELD_HINTS = {
 
 
 class POCScriptGenerator:
-    """Generates a standalone Python POC setup script from a Vulcan demo."""
+    """Generates a standalone Python POC setup script from an Elastic Demo Generator module."""
 
     # ── public API ────────────────────────────────────────────────────────────
 

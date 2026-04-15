@@ -11,7 +11,7 @@ from .components.help_chat import render_chat_sidebar
 
 # Defaults for inference endpoints
 _RERANK_DEFAULT = ".jina-reranker-v3"
-_COMPLETION_DEFAULT = "completion-vulcan"
+_COMPLETION_DEFAULT = "completion-edg"
 
 
 def _get_default_llm_model() -> str:

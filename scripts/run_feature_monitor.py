@@ -8,7 +8,7 @@ Usage:
     python scripts/run_feature_monitor.py --dry-run   # fetch only, no LLM, no save
 
 Run daily via GitHub Actions or local cron:
-    0 8 * * * cd /path/to/vulcan && python scripts/run_feature_monitor.py >> logs/monitor.log 2>&1
+    0 8 * * * cd /path/to/elastic-demo-generator && python scripts/run_feature_monitor.py >> logs/monitor.log 2>&1
 """
 
 import argparse

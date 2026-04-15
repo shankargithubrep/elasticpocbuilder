@@ -6,7 +6,7 @@ Provides consistent, user-friendly error messages across the application.
 
 import streamlit as st
 import logging
-from src.exceptions import VulcanException
+from src.exceptions import DemoGeneratorError
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def display_error(error: Exception, title: str = "Error", show_technical_details
     st.error(f"🚨 {title}")
     
     # Check if it's one of our custom exceptions
-    if isinstance(error, VulcanException):
+    if isinstance(error, DemoGeneratorError):
         # Use the formatted display message
         st.markdown(error.get_display_message())
         

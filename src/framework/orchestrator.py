@@ -14,7 +14,7 @@ from .module_generator import ModuleGenerator
 from .module_loader import ModuleLoader, DemoModuleManager
 from .base import DemoConfig
 from src.exceptions import (
-    QueryGenerationError, DataGenerationError, IndexingError, VulcanException
+    QueryGenerationError, DataGenerationError, IndexingError, DemoGeneratorError
 )
 
 logger = logging.getLogger(__name__)
@@ -696,7 +696,7 @@ class ModularDemoOrchestrator:
                 except Exception as e:
                     logger.debug(f"Schema contract query validation skipped: {e}")
 
-        except VulcanException:
+        except DemoGeneratorError:
             # Re-raise our custom exceptions as-is
             raise
         except Exception as e:

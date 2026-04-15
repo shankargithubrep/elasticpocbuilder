@@ -1,6 +1,6 @@
-# Elastic Demo Builder: AI-Powered POC Generator for Elastic
+# Elastic Demo Generator: AI-Powered POC Generator for Elastic
 
-Generate complete Elastic Agent Builder demos from a single prompt. Elastic Demo Builder uses LLM code generation to create custom data, ES|QL queries, and demo narratives tailored to any industry or use case. Each demo is a standalone Python module you can version control, share, and refine.
+Generate complete Elastic Agent Builder demos from a single prompt. Elastic Demo Generator uses LLM code generation to create custom data, ES|QL queries, and demo narratives tailored to any industry or use case. Each demo is a standalone Python module you can version control, share, and refine.
 
 ---
 
@@ -16,8 +16,8 @@ Generate complete Elastic Agent Builder demos from a single prompt. Elastic Demo
 ### Installation
 
 ```bash
-git clone https://github.com/elastic/vulcan.git
-cd vulcan
+git clone <your-repo-url> elastic-demo-generator
+cd elastic-demo-generator
 
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
@@ -187,7 +187,7 @@ Modules are self-contained — you can copy a `demos/` folder to share a complet
 
 ### LLM Providers
 
-Elastic Demo Builder checks for LLM credentials in this order:
+Elastic Demo Generator checks for LLM credentials in this order:
 
 | Priority | Provider | Env Vars |
 |----------|----------|----------|
@@ -211,7 +211,7 @@ The app sidebar provides runtime configuration:
 ## Project Structure
 
 ```
-vulcan/
+elastic-demo-generator/
 ├── app.py                          # Streamlit application
 ├── src/
 │   ├── framework/                  # Core generation framework

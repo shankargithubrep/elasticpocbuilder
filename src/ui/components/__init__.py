@@ -1,5 +1,5 @@
 """
-UI Components package for Vulcan demo-builder.
+UI Components package for the Elastic Demo Generator.
 Contains reusable Streamlit components.
 """
 

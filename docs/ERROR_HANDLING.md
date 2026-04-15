@@ -12,9 +12,9 @@ The error handling system consists of:
 
 ## Custom Exception Classes
 
-### Base Exception: `VulcanException`
+### Base Exception: `DemoGeneratorError`
 
-All custom exceptions inherit from `VulcanException` and include:
+All custom exceptions inherit from `DemoGeneratorError` and include:
 
 - `user_message`: User-friendly error description
 - `suggestion`: Actionable steps to resolve the issue
@@ -138,7 +138,7 @@ The orchestrator wraps phase-specific errors:
 ```python
 try:
     self.module_generator.generate_query_module_with_profile(...)
-except VulcanException:
+except DemoGeneratorError:
     # Re-raise custom exceptions as-is
     raise
 except Exception as e:
@@ -152,7 +152,7 @@ except Exception as e:
 
 ```python
 from src.ui.error_display import display_error
-from src.exceptions import VulcanException
+from src.exceptions import DemoGeneratorError
 
 try:
     results = orchestrator.generate_new_demo_with_strategy(...)
@@ -162,7 +162,7 @@ except Exception as e:
     display_error(e, title="Demo Generation Failed")
     
     # Add to chat history
-    if isinstance(e, VulcanException):
+    if isinstance(e, DemoGeneratorError):
         error_msg = e.user_message
     else:
         error_msg = f"Error generating demo: {str(e)}"
@@ -178,7 +178,7 @@ Gracefully falls back to basic extraction when LLM errors occur:
 try:
     # LLM-powered extraction
     response = client.messages.create(...)
-except VulcanException as e:
+except DemoGeneratorError as e:
     # Show user-friendly error
     display_error(e, title="Message Processing Issue", show_technical_details=False)
     st.info("💡 Falling back to basic text extraction...")
@@ -212,7 +212,7 @@ To add a new error type:
 1. **Create exception class in `src/exceptions.py`:**
 
 ```python
-class MyCustomError(VulcanException):
+class MyCustomError(DemoGeneratorError):
     """Description of when this occurs"""
     
     def __init__(self, context_info: str):

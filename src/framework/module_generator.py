@@ -36,7 +36,7 @@ class ModuleGenerator:
         Args:
             llm_client: LLM client for code generation
             inference_endpoints: Dict with 'rerank' and 'completion' endpoint IDs
-                Default: {'rerank': '.jina-reranker-v3', 'completion': 'completion-vulcan'}
+                Default: {'rerank': '.jina-reranker-v3', 'completion': 'completion-edg'}
         """
         self.llm_client = llm_client
         self.base_path = Path("demos")  # Where demo modules are stored
@@ -45,7 +45,7 @@ class ModuleGenerator:
         if inference_endpoints is None:
             inference_endpoints = {
                 "rerank": ".jina-reranker-v3",
-                "completion": "completion-vulcan"
+                "completion": "completion-edg"
             }
         self.inference_endpoints = inference_endpoints
 
@@ -3350,7 +3350,7 @@ This may result in field name mismatches or typos. Use extreme care with field n
             "  ✅ CORRECT: 'query': '''FROM index | WHERE MATCH(field, \"term\")'''",
             "  ❌ WRONG:  'query': \"\"\"FROM index | WHERE MATCH(field, \"term\")\"\"\"  ← breaks on inner quotes!",
             "- ES|QL queries with JSON parameters use SINGLE curly braces: MATCH(field, \"term\", {\"boost\": 0.75})",
-            "- Inside ''' strings, use double quotes freely: {\"inference_id\": \"completion-vulcan\"}",
+            "- Inside ''' strings, use double quotes freely: {\"inference_id\": \"completion-edg\"}",
             "- Do NOT use f-strings for queries — no variable interpolation needed",
             "- IMPORTANT: The final ES|QL syntax must always have SINGLE braces {} in the query string",
             "",
@@ -3639,7 +3639,7 @@ class {company_class_name}QueryGenerator(QueryGeneratorModule):
                 "embedding_type": self._resolve_vector_type(),
                 "embedding_endpoint": self._resolve_embedding_endpoint(),
                 "rerank": self.inference_endpoints.get("rerank", ".jina-reranker-v3"),
-                "completion": self.inference_endpoints.get("completion", "completion-vulcan"),
+                "completion": self.inference_endpoints.get("completion", "completion-edg"),
             }
         }
 

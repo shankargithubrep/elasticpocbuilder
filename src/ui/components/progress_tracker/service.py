@@ -1,5 +1,5 @@
 """
-Progress Tracking Service for Vulcan demo modules.
+Progress Tracking Service for Elastic Demo Generator modules.
 
 Handles:
 - Progress persistence (progress.json in each module)

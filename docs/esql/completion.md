@@ -147,7 +147,7 @@ ROW question = "What is Elasticsearch?"
 
 Summarize the top 10 highest-rated movies using a prompt:
 
-> **Note (Vulcan):** The official docs example below uses `\n` in CONCAT strings.
+> **Note:** The official docs example below uses `\n` in CONCAT strings.
 > In practice, ES|QL string literals do NOT support escape sequences — `\n` causes
 > `parsing_exception: token recognition error`. Use spaces between separate CONCAT
 > arguments instead: `CONCAT("Title: ", title, " Synopsis: ", synopsis)`

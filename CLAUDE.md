@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Elastic Demo Builder** is a full-stack Elastic demo generation platform. From a single customer description it generates realistic data, ES|QL queries, a demo guide, and automatically provisions the complete Elastic stack — ELSER pipelines, index templates, Search Applications, Kibana dashboards, alerting rules, Slack connectors, and AI Agents.
+**Elastic Demo Generator** is a full-stack Elastic demo generation platform. From a single customer description it generates realistic data, ES|QL queries, a demo guide, and automatically provisions the complete Elastic stack — ELSER pipelines, index templates, Search Applications, Kibana dashboards, alerting rules, Slack connectors, and AI Agents.
 
 **Architecture**: Streamlit UI + Modular Plugin Framework + LLM Code Generation + Elastic Stack Auto-Provisioning
 
@@ -394,7 +394,7 @@ guide = guide_gen.generate_guide()
 ## Project Structure
 
 ```
-vulcan/
+elastic-demo-generator/
 ├── app.py                          # Unified Streamlit interface
 ├── src/
 │   ├── framework/                  # Modular architecture

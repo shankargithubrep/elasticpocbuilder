@@ -364,7 +364,7 @@ def render_config_tab(loader, assets_key: str):
     st.caption(
         "Generate a self-contained Python script your customer can run against "
         "their own Elastic environment (Cloud Hosted, Serverless, or self-hosted). "
-        "Zero Vulcan dependencies — just `pip install elasticsearch`."
+        "Zero Elastic Demo Generator dependencies — just `pip install elasticsearch`."
     )
 
     poc_col1, poc_col2 = st.columns([2, 1])

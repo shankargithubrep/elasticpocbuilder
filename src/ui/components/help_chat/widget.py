@@ -1,5 +1,5 @@
 """
-Help Chat Widget - Contextual assistant for Vulcan.
+Help Chat Widget - Contextual assistant for the Elastic Demo Generator.
 
 Renders as a sidebar mode (alongside Create and Browse).
 """

@@ -247,7 +247,7 @@ While addressing the customer's pain points, ALWAYS include sophisticated querie
 3. **COMPLETION** - LLM text generation for RAG answers/summaries
    ```esql
    | EVAL prompt = CONCAT("Summarize this document. ", "Title: ", title, " Content: ", content)
-   | COMPLETION summary = prompt WITH {{ "inference_id": "completion-vulcan" }}
+   | COMPLETION summary = prompt WITH {{ "inference_id": "completion-edg" }}
    ```
    Use after retrieval to generate answers, summaries, or insights.
    **CRITICAL:** ES|QL does NOT support newlines or escape sequences in string literals.
@@ -647,7 +647,7 @@ You MUST use these EXACT row_count ranges in your output:
       }},
       "description": "Retrieve relevant documents and generate a synthesized answer using LLM",
       "complexity": "expert",
-      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'password reset procedure') | SORT _score DESC | LIMIT 5 | EVAL prompt = CONCAT(\\"Based on this article, summarize the password reset steps. \\", \\"Title: \\", title, \\\" \\\", \\"Content: \\", content) | COMPLETION summary = prompt WITH {{ \\"inference_id\\": \\"completion-vulcan\\" }} | KEEP title, summary, _score"
+      "example_esql": "FROM knowledge_base_articles METADATA _score | WHERE MATCH(content, 'password reset procedure') | SORT _score DESC | LIMIT 5 | EVAL prompt = CONCAT(\\"Based on this article, summarize the password reset steps. \\", \\"Title: \\", title, \\\" \\\", \\"Content: \\", content) | COMPLETION summary = prompt WITH {{ \\"inference_id\\": \\"completion-edg\\" }} | KEEP title, summary, _score"
     }},
     {{
       "name": "Fuzzy Search for Typo Tolerance",

@@ -241,7 +241,7 @@ class ObsDataStreamService:
             "_meta": {
                 "namespace":  namespace,
                 "data_type":  data_type,
-                "managed_by": "vulcan-obs-provisioner",
+                "managed_by": "edg-obs-provisioner",
             },
         }
         try:

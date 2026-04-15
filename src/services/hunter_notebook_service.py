@@ -49,7 +49,7 @@ def _code(lines: str, outputs: Optional[List] = None) -> Dict:
 
 def _setup_cells(tenant_id: str, region: str) -> List[Dict]:
     return [
-        _md(f"""# 🔭 Vulcan Hunter WorkBench
+        _md(f"""# 🔭 Elastic Demo Generator · Hunter WorkBench
 **Tenant:** `{tenant_id}` | **Region:** `{region}` | **Generated:** {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
 
 ---
